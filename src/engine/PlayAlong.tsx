@@ -54,6 +54,10 @@ export interface PlayAlongProps {
   /** Guitar: fret window & context marks (e.g. a scale shape) */
   fretRange?: [number, number];
   contextMarks?: FretMark[];
+  /** Marks for the moment being played (e.g. the whole shape of the current chord). */
+  contextAt?: (tick: number) => { frets?: FretMark[]; keys?: KeyMark[] };
+  /** Always mark the notes to play (no hint button). */
+  alwaysHint?: boolean;
   onDone: (r: ActivityResult) => void;
   /** label of the run, e.g. "Passage 2 of 3" */
   badge?: string;
@@ -452,27 +456,35 @@ export function PlayAlong(props: PlayAlongProps) {
   const range = useMemo(() => pianoRangeFor([lo, hi]), [lo, hi]);
 
   const mallets = isMallet(instrument);
+  const showHint = hint || !!props.alwaysHint;
+  const tickNow = mode === 'wait' ? current?.tick : playheadTick ?? undefined;
+  const context = useMemo(() => (props.contextAt && tickNow !== undefined ? props.contextAt(tickNow) : null), [props.contextAt, tickNow]); // eslint-disable-line react-hooks/exhaustive-deps
   const keyMarks: KeyMark[] = useMemo(() => {
-    if (!hint || !currentRt) return [];
+    const ctxKeys = context?.keys ?? [];
+    if (!showHint || !currentRt) return ctxKeys;
+    const withContext = (cur: KeyMark[]) => [...ctxKeys.filter(k => !cur.some(c => c.midi === k.midi)), ...cur];
     if (mallets) {
-      return currentRt.required.map(n => ({
-        midi: n.midi,
-        color: (n.finger ? (malletHand(n.finger) === 'L' ? 'lh' : 'rh') : 'gold') as MarkColor,
-        label: n.finger ? malletLabel(n.finger, rawScore.mallets ?? 2) : undefined,
-        pulse: true,
-      }));
+      return withContext(
+        currentRt.required.map(n => ({
+          midi: n.midi,
+          color: (n.finger ? (malletHand(n.finger) === 'L' ? 'lh' : 'rh') : 'gold') as MarkColor,
+          label: n.finger ? malletLabel(n.finger, rawScore.mallets ?? 2) : undefined,
+          pulse: true,
+        })),
+      );
     }
-    return currentRt.required.map(n => ({ midi: n.midi, color: (n.hand === 'L' ? 'lh' : 'rh') as MarkColor, finger: n.finger, pulse: true }));
-  }, [hint, currentRt, mallets, rawScore.mallets]);
+    return withContext(currentRt.required.map(n => ({ midi: n.midi, color: (n.hand === 'L' ? 'lh' : 'rh') as MarkColor, finger: n.finger, pulse: true })));
+  }, [showHint, currentRt, mallets, rawScore.mallets, context]);
 
   const fretMarks: FretMark[] = useMemo(() => {
-    const ctxMarks = props.contextMarks ?? [];
+    const ctxMarks = [...(props.contextMarks ?? []), ...(context?.frets ?? [])];
+    const hasContext = ctxMarks.length > 0;
     if (!currentRt || !fretted) return ctxMarks;
     const cur = currentRt.required
       .filter(n => n.string !== undefined)
       .map(n => ({ string: n.string!, fret: n.midi - tuning[n.string! - 1], color: 'gold' as MarkColor, finger: n.finger, pulse: true }));
-    return hint || props.contextMarks ? [...ctxMarks.filter(m => !cur.some(c => c.string === m.string && c.fret === m.fret)), ...(hint || props.contextMarks ? cur : [])] : ctxMarks;
-  }, [currentRt, fretted, hint, props.contextMarks, tuning]);
+    return showHint || hasContext ? [...ctxMarks.filter(m => !cur.some(c => c.string === m.string && c.fret === m.fret)), ...(showHint || hasContext ? cur : [])] : ctxMarks;
+  }, [currentRt, fretted, showHint, props.contextMarks, context, tuning]);
 
   const fretRange = useMemo<[number, number]>(() => {
     if (props.fretRange) return props.fretRange;
@@ -523,7 +535,7 @@ export function PlayAlong(props: PlayAlongProps) {
         <button className="btn btn-sm" onClick={preview} disabled={phase === 'countin' || (mode === 'tempo' && phase === 'playing')}>
           {phase === 'preview' ? <Square size={14} /> : <Ear size={15} />} {phase === 'preview' ? 'Stop' : 'Listen'}
         </button>
-        {mode === 'wait' && (
+        {mode === 'wait' && !props.alwaysHint && (
           <button className="btn btn-sm" onClick={() => setHint(true)} disabled={hint || phase !== 'playing'}>
             <Lightbulb size={15} /> Hint
           </button>

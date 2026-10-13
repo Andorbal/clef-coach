@@ -149,7 +149,7 @@ function ChordVisual({ chords, instrument, prefs, compact }: { chords: string[];
         try {
           const ref = parseChordRef(sym);
           const c = parseChordSymbol(ref.symbol);
-          return { sym, name: chordName(c), view: chordViews(c, instrument, prefs, { chart: ref.chart })[0] };
+          return { sym, name: chordName(c), view: chordViews(c, instrument, prefs, { chart: ref.chart, fingers: ref.fingers })[0] };
         } catch {
           return { sym, name: sym, view: undefined };
         }

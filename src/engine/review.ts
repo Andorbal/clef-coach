@@ -1,10 +1,12 @@
 /**
  * Adaptive practice sessions built from the learner's own statistics.
- *  review  – the notes/frets you find hardest (spaced repetition)
- *  endless – fresh sight-reading at the level you've reached, getting gradually harder
+ *  review  – the notes/frets/chords you find hardest (spaced repetition)
+ *  endless – fresh sight-reading at the level you've reached, getting gradually harder;
+ *            on a chord track, changes between the chords you've learned, getting faster
  */
 import type { ActivityDef, LessonDef, MelodyGen, TrackDef } from '../curriculum/types';
 import { allLessons } from '../curriculum';
+import { makeRng } from '../curriculum/generate';
 import { midiOf, parsePitch } from '../music/pitch';
 import type { Clef } from '../music/score';
 import { reviewPriority } from '../state/srs';
@@ -78,12 +80,58 @@ export function buildReviewLesson(track: TrackDef, tp?: TrackProgress): LessonDe
     const clef: Clef = track.clef === 'grand' || track.clef === 'fretboard' || track.clef === 'chords' ? (track.instrument === 'bass' ? 'bass8vb' : track.instrument === 'guitar' ? 'treble8vb' : 'treble') : track.clef;
     steps.push({ type: 'keysig', clef, keys: keyItems.slice(0, 6).map(x => x.k.slice(4)), count: 6 });
   }
+  const chordItems = entries
+    .filter(([k]) => k.startsWith(`chord:${track.instrument}:`))
+    .map(([k, s]) => ({ c: k.slice(`chord:${track.instrument}:`.length), pr: reviewPriority(s, now) }))
+    .sort((a, b) => b.pr - a.pr);
+  if (chordItems.length >= 2) {
+    const weak = chordItems.slice(0, 6).map(x => x.c);
+    steps.push({ type: 'chord-quiz', chords: weak, count: 8, title: 'Your trickiest chords' });
+    steps.push({ type: 'chord-play', chords: weak.slice(0, 4), pattern: 'strum', mode: 'wait', repeat: 2, title: 'Change between them' });
+  }
   if (!steps.length) return null;
   return { id: `${track.id}-review`, title: 'Smart Review', kind: 'practice', goal: 'Practise what you find hardest, right when you’re about to forget it', steps };
 }
 
 /** Endless sight-reading at (and a little beyond) the learner's level. */
+/** Chords met in the lessons passed so far (or the first lesson's), in order. */
+export function learnedChords(track: TrackDef, tp?: TrackProgress): string[] {
+  const passed = passedLessons(track, tp);
+  const pool = passed.length ? passed : allLessons(track).slice(0, 1);
+  const out: string[] = [];
+  for (const { lesson } of pool)
+    for (const s of lesson.steps) {
+      const list = s.type === 'chord-play' ? s.chords ?? [] : s.type === 'chord-quiz' ? s.chords : [];
+      for (const c of list) if (!out.includes(c)) out.push(c);
+    }
+  return out;
+}
+
 export function buildEndlessLesson(track: TrackDef, tp: TrackProgress | undefined, round: number): LessonDef | null {
+  if (track.clef === 'chords') {
+    const known = learnedChords(track, tp);
+    if (!known.length) return null;
+    const rng = makeRng(round * 7919 + known.length);
+    // the newest chords most often, mixed with older ones
+    const pick: string[] = [];
+    const want = Math.min(known.length, 2 + Math.min(2, Math.floor(round / 2)));
+    while (pick.length < want) {
+      const i = Math.min(known.length - 1, Math.floor(known.length * Math.sqrt(rng())));
+      if (!pick.includes(known[i])) pick.push(known[i]);
+    }
+    const tempo = 60 + Math.min(50, round * 5);
+    return {
+      id: `${track.id}-endless`,
+      title: `Chord Gym · Round ${round + 1}`,
+      kind: 'challenge',
+      goal: 'Changes between the chords you know, a little faster each round',
+      steps: [
+        { type: 'chord-play', chords: pick, pattern: 'strum', mode: 'wait', repeat: 2, title: 'Warm up' },
+        { type: 'chord-play', chords: pick, pattern: 'strum', mode: 'tempo', tempo, rhythm: round > 3 ? 'q q q q' : 'h h', repeat: 2, title: `In time · ${tempo} bpm` },
+        ...(known.length > 1 ? [{ type: 'chord-quiz', chords: known.slice(-8), count: 6 } as ActivityDef] : []),
+      ],
+    };
+  }
   const gen = latestReadGen(track, tp);
   if (!gen) return null;
   const tempo = 66 + Math.min(60, round * 4);

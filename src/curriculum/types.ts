@@ -233,6 +233,8 @@ export type ActivityDef =
       /** times through the chord list (default 1; strum default 2) */
       repeat?: number;
       song?: string;
+      /** preferred shapes for a song's chords, e.g. ["F:xx3211"] (the small F) */
+      shapes?: string[];
       mode: 'wait' | 'tempo';
       tempo?: number;
       time?: TimeSig;

@@ -64,10 +64,10 @@ function HeroDemo() {
 /** Tracks picked for you when you choose an instrument (the ones that exist). */
 const DEFAULT_TRACKS: Record<InstrumentId, TrackId[]> = {
   piano: ['piano-treble', 'piano-bass'],
-  guitar: ['guitar-treble', 'guitar-fretboard'],
-  ukulele: ['ukulele-treble', 'ukulele-chords'],
-  bass: ['bass-lines'],
-  mallets: ['mallets-two'],
+  guitar: ['guitar-treble', 'guitar-chords', 'guitar-fretboard'],
+  ukulele: ['ukulele-chords', 'ukulele-treble'],
+  bass: ['bass-lines', 'bass-fretboard'],
+  mallets: ['mallets-two', 'mallets-four'],
 };
 
 function defaultPicks(instrs: Set<InstrumentId>): Set<TrackId> {

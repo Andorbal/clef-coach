@@ -76,6 +76,7 @@ export function ChordPicture({
   size = 'md',
   leftHanded,
   onPlay,
+  interactive = true,
 }: {
   view: ChordView;
   instrument: InstrumentId;
@@ -84,17 +85,20 @@ export function ChordPicture({
   size?: CellSize;
   leftHanded?: boolean;
   onPlay?: () => void;
+  /** false: just the picture (e.g. inside another button) */
+  interactive?: boolean;
 }) {
   const play = () => {
     void playView(view, instrument, prefs);
     onPlay?.();
   };
+  const tap = interactive ? { onClick: play, role: 'button', tabIndex: 0, 'aria-label': `Play ${view.label}`, onKeyDown: (e: React.KeyboardEvent) => e.key === 'Enter' && play() } : {};
   if (view.kind === 'fretted') {
     const dots = view.notes.filter(n => n.fret > 0).map(n => ({ string: n.string, fret: n.fret, root: n.degree === 'R', label: fretLabel(n, mode) }));
     const open = view.notes.filter(n => n.fret === 0);
     const openLabels = mode === 'fingers' ? undefined : Object.fromEntries(open.map(n => [n.string, fretLabel(n, mode) ?? '']));
     return (
-      <button className={`chord-pic chord-pic-fretted size-${size}`} onClick={play} aria-label={`Play ${view.label}`}>
+      <div className={`chord-pic chord-pic-fretted size-${size}`} {...tap}>
         <ChordDiagram
           strings={view.strings}
           dots={dots}
@@ -110,7 +114,7 @@ export function ChordPicture({
           width={Math.round(DIAGRAM_W[size] * (0.55 + 0.075 * view.strings))}
           title={view.label}
         />
-      </button>
+      </div>
     );
   }
   const marks = view.notes.map(n => keyMark(n, mode, view.mallets));
@@ -118,14 +122,14 @@ export function ChordPicture({
     const v = malletVariant(prefs);
     const [lo, hi] = keyRange(view.midis, v.low, v.high);
     return (
-      <div className={`chord-pic chord-pic-keys size-${size}`} onClick={play} role="button" tabIndex={0} aria-label={`Play ${view.label}`} onKeyDown={e => e.key === 'Enter' && play()}>
+      <div className={`chord-pic chord-pic-keys size-${size}`} {...tap}>
         <MalletKeyboard low={lo} high={hi} metal={v.metal} marks={marks} interactive={false} minBarWidth={size === 'sm' ? 8 : 11} height={KEYS_H[size] + 14} />
       </div>
     );
   }
   const [lo, hi] = keyRange(view.midis, 21, 108);
   return (
-    <div className={`chord-pic chord-pic-keys size-${size}`} onClick={play} role="button" tabIndex={0} aria-label={`Play ${view.label}`} onKeyDown={e => e.key === 'Enter' && play()}>
+    <div className={`chord-pic chord-pic-keys size-${size}`} {...tap}>
       <PianoKeyboard low={lo} high={hi} marks={marks} interactive={false} minWhiteKeyWidth={size === 'sm' ? 8 : 11} height={KEYS_H[size]} markMiddleC />
     </div>
   );

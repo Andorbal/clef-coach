@@ -4,7 +4,7 @@
  * mallets — with finger, interval and note-name labels and the notes to play back.
  */
 import { type ChordSymbol, chordDegreeLabels, parseChordSymbol, rootLabel, rootPc, spellChordTone } from './chords';
-import { bassShapes, chartString, frettedVoicings, malletVoicings, pianoVoicings } from './chordbook';
+import { type FrettedVoicing, bassShapes, chartString, frettedVoicings, malletVoicings, parseChart, pianoVoicings } from './chordbook';
 import { type InstrumentId, type InstrumentPrefs, isFretted, malletVariant, tuningFor } from './instruments';
 import { spellMidi, stepLabel } from './pitch';
 
@@ -86,21 +86,53 @@ function stringNamesOf(tuning: readonly number[]): string[] {
  * "F:xx3211" is the small F, "F" the engine's first choice. The chart applies when the
  * player's tuning has that shape among its voicings.
  */
-export function parseChordRef(ref: string): { symbol: string; chart?: string } {
-  const i = ref.indexOf(':');
-  return i < 0 ? { symbol: ref } : { symbol: ref.slice(0, i), chart: ref.slice(i + 1) };
+export function parseChordRef(ref: string): { symbol: string; chart?: string; fingers?: string } {
+  const [symbol, chart, fingers] = ref.split(':');
+  return { symbol, chart: chart || undefined, fingers: fingers || undefined };
+}
+
+/**
+ * A voicing written as a chart ("320033", lowest string first) with optional fingers
+ * ("210034"; 0 open). Used when a lesson asks for a shape the chord book didn't list.
+ */
+export function voicingFromChart(chord: ChordSymbol, tuning: readonly number[], chart: string, fingerChart?: string): FrettedVoicing | null {
+  const frets = parseChart(chart);
+  if (frets.length !== tuning.length || frets.some(f => f !== null && (Number.isNaN(f) || f < 0))) return null;
+  const given = fingerChart ? parseChart(fingerChart) : null;
+  const fretted = frets.filter((f): f is number => f !== null && f > 0);
+  const lo = fretted.length ? Math.min(...fretted) : 1;
+  const hi = fretted.length ? Math.max(...fretted) : 1;
+  const fingers = frets.map((f, i) => (f === null ? null : f === 0 ? 0 : given?.[i] ?? Math.min(4, f - lo + 1)));
+  const midis = frets.flatMap((f, i) => (f === null ? [] : [tuning[i] + f])).sort((a, b) => a - b);
+  const r = rootPc(chord.root);
+  const lowest = frets.reduce<{ i: number; m: number } | null>((best, f, i) => (f === null ? best : !best || tuning[i] + f < best.m ? { i, m: tuning[i] + f } : best), null);
+  return {
+    frets,
+    fingers,
+    barres: [],
+    baseFret: hi <= 4 ? 1 : lo,
+    midis,
+    degrees: frets.map((f, i) => (f === null ? null : toneInfo(chord, mod12(tuning[i] + f)).degree)),
+    bassIsRoot: !!lowest && mod12(lowest.m) === r,
+    ease: 0.5,
+    label: 'Chart',
+  };
 }
 
 /** Fretted voicings, with the one matching `chart` (if any) first. */
-export function frettedVoicingsFor(chord: ChordSymbol, tuning: readonly number[], instrument: 'guitar' | 'ukulele' | 'bass', max: number, chart?: string) {
+export function frettedVoicingsFor(chord: ChordSymbol, tuning: readonly number[], instrument: 'guitar' | 'ukulele' | 'bass', max: number, chart?: string, fingers?: string): FrettedVoicing[] {
   const list = frettedVoicings(chord, tuning, { max: chart ? Math.max(max, 16) : max, instrument });
   if (!chart) return list;
   const i = list.findIndex(v => chartString(v.frets) === chart);
   if (i > 0) list.unshift(...list.splice(i, 1));
-  return list.slice(0, Math.max(max, i + 1));
+  if (i < 0) {
+    const v = voicingFromChart(chord, tuning, chart, fingers);
+    if (v) list.unshift(v);
+  }
+  return list.slice(0, Math.max(max, 1));
 }
 
-function frettedViews(chord: ChordSymbol, instrument: InstrumentId, prefs: InstrumentPrefs, chart?: string): FrettedView[] {
+function frettedViews(chord: ChordSymbol, instrument: InstrumentId, prefs: InstrumentPrefs, chart?: string, fingers?: string): FrettedView[] {
   const tuning = tuningFor(instrument, prefs).open;
   const names = stringNamesOf(tuning);
   const n = tuning.length;
@@ -125,7 +157,7 @@ function frettedViews(chord: ChordSymbol, instrument: InstrumentId, prefs: Instr
       });
     }
   }
-  const voicings = frettedVoicingsFor(chord, tuning, instrument as 'guitar' | 'ukulele' | 'bass', instrument === 'bass' ? 4 : 8, chart);
+  const voicings = frettedVoicingsFor(chord, tuning, instrument as 'guitar' | 'ukulele' | 'bass', instrument === 'bass' ? 4 : 8, chart, fingers);
   for (const v of voicings) {
     const notes: FretNote[] = [];
     const muted: number[] = [];
@@ -177,10 +209,10 @@ function malletViews(chord: ChordSymbol, prefs: InstrumentPrefs): KeysView[] {
 }
 
 /** Every voicing of a chord for an instrument, most useful first. */
-export function chordViews(chord: ChordSymbol, instrument: InstrumentId, prefs: InstrumentPrefs, opts: { hand?: PianoHand; chart?: string } = {}): ChordView[] {
+export function chordViews(chord: ChordSymbol, instrument: InstrumentId, prefs: InstrumentPrefs, opts: { hand?: PianoHand; chart?: string; fingers?: string } = {}): ChordView[] {
   try {
     if (isFretted(instrument)) {
-      const views = frettedViews(chord, instrument, prefs, opts.chart);
+      const views = frettedViews(chord, instrument, prefs, opts.chart, opts.fingers);
       // a chosen chord shape comes before the bass guitar's arpeggio boxes
       if (opts.chart && instrument === 'bass') {
         const i = views.findIndex(v => !v.arpeggio);

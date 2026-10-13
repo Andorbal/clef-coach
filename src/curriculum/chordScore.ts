@@ -31,6 +31,7 @@ export interface ShapeNote {
   name: string;
   finger?: number;
   string?: number;
+  root?: boolean;
 }
 
 export interface ChordShape {
@@ -62,14 +63,14 @@ export function chordNoteName(chord: ChordSymbol, midi: number): string {
 
 /** The first (easiest) voicing of a chord on an instrument, as notes with fingers and strings. */
 export function chordShape(ref: string, instrument: InstrumentId, prefs: InstrumentPrefs = {}): ChordShape | null {
-  const { symbol, chart } = parseChordRef(ref);
+  const { symbol, chart, fingers } = parseChordRef(ref);
   let chord: ChordSymbol;
   try {
     chord = parseChordSymbol(symbol);
   } catch {
     return null;
   }
-  const note = (midi: number, extra: Partial<ShapeNote> = {}): ShapeNote => ({ midi, name: chordNoteName(chord, midi), ...extra });
+  const note = (midi: number, extra: Partial<ShapeNote> = {}): ShapeNote => ({ midi, name: chordNoteName(chord, midi), root: mod12(midi) === rootPc(chord.root), ...extra });
   if (instrument === 'bass') {
     const tuning = tuningFor('bass', prefs).open;
     const shape = bassShapes(chord, tuning)[0];
@@ -78,7 +79,7 @@ export function chordShape(ref: string, instrument: InstrumentId, prefs: Instrum
   }
   if (isFretted(instrument)) {
     const tuning = tuningFor(instrument, prefs).open;
-    const v = frettedVoicingsFor(chord, tuning, instrument as 'guitar' | 'ukulele', 1, chart)[0];
+    const v = frettedVoicingsFor(chord, tuning, instrument as 'guitar' | 'ukulele', 1, chart, fingers)[0];
     if (!v) return null;
     const notes: ShapeNote[] = [];
     // low string first: the order of a down-strum
@@ -140,7 +141,14 @@ function scoreOf(def: { title: string; time: TimeSig; tempo: number; staves: Son
 }
 
 /** Build the score for a chord-play activity (the chord staff is the last staff). */
-export function chordPlayScore(def: ChordPlayDef, instrument: InstrumentId, prefs: InstrumentPrefs = {}): { score: Score; chordStaff: number; song?: SongDef } | null {
+export interface ChordSegment {
+  tick: number;
+  ticks: number;
+  shape: ChordShape;
+}
+
+/** Build the score for a chord-play activity (the chord staff is the last staff), and which chord sounds when. */
+export function chordPlayScore(def: ChordPlayDef, instrument: InstrumentId, prefs: InstrumentPrefs = {}): { score: Score; chordStaff: number; song?: SongDef; segments: ChordSegment[] } | null {
   const clef = clefFor(instrument);
   const mallets = instrument === 'mallets' ? (4 as const) : undefined;
   if (def.song) {
@@ -150,9 +158,11 @@ export function chordPlayScore(def: ChordPlayDef, instrument: InstrumentId, pref
     const { events } = parseChordTimeline(song.chords, melody);
     const shapes = new Map<string, ChordShape | null>();
     const shapeOf = (sym: string) => {
-      if (!shapes.has(sym)) shapes.set(sym, chordShape(sym, instrument, prefs));
+      const ref = def.shapes?.find(r => parseChordRef(r).symbol === sym) ?? sym;
+      if (!shapes.has(sym)) shapes.set(sym, chordShape(ref, instrument, prefs));
       return shapes.get(sym) ?? null;
     };
+    const segments: ChordSegment[] = [];
     const beat = beatTicks(melody.time);
     const beatDur = splitTicks(beat).map(d => durText(d.base, d.dots))[0];
     // bar lengths as the tune has them (a pickup, and a last bar shortened to match)
@@ -175,6 +185,7 @@ export function chordPlayScore(def: ChordPlayDef, instrument: InstrumentId, pref
         const ev = events.find(e => at >= e.tick && at < e.tick + e.ticks);
         const shape = ev?.symbol ? shapeOf(ev.symbol) : null;
         toks.push(shape ? chordToken(shape, beatDur) : `r/${beatDur}`);
+        if (shape) segments.push({ tick: at, ticks: beat, shape });
       }
       bars.push(toks.join(' '));
     }
@@ -194,7 +205,7 @@ export function chordPlayScore(def: ChordPlayDef, instrument: InstrumentId, pref
       instrument,
       prefs,
     );
-    return { score, chordStaff: 1, song };
+    return { score, chordStaff: 1, song, segments };
   }
 
   const chords = (def.chords ?? []).map(s => chordShape(s, instrument, prefs)).filter((s): s is ChordShape => !!s);
@@ -202,6 +213,9 @@ export function chordPlayScore(def: ChordPlayDef, instrument: InstrumentId, pref
   const time: TimeSig = def.time ?? [4, 4];
   const bar = measureTicks(time);
   const bars: string[] = [];
+  const segments: ChordSegment[] = [];
+  // the score starts at tick 0 with no pickup: bar i starts at i × bar
+  const mark = (shape: ChordShape) => segments.push({ tick: bars.length * bar, ticks: bar, shape });
   if (def.pattern === 'pick') {
     const beat = beatTicks(time);
     const beatDur = splitTicks(beat).map(d => durText(d.base, d.dots))[0];
@@ -214,18 +228,23 @@ export function chordPlayScore(def: ChordPlayDef, instrument: InstrumentId, pref
           const toks = c.notes.slice(i, i + perBar).map(n => chordToken(c, beatDur, n));
           const used = toks.length * beat;
           if (used < bar) toks.push(...restTokens(bar - used));
+          mark(c);
           bars.push(toks.join(' '));
         }
         // … then all together
+        mark(c);
         bars.push(whole.map(d => chordToken(c, d)).join(' '));
       }
     }
   } else {
     const rhythm = strumRhythm(time, def.rhythm, def.mode);
     for (let r = 0; r < (def.repeat ?? 2); r++) {
-      for (const c of chords) bars.push(rhythm.map(d => chordToken(c, d)).join(' '));
+      for (const c of chords) {
+        mark(c);
+        bars.push(rhythm.map(d => chordToken(c, d)).join(' '));
+      }
     }
   }
   const score = scoreOf({ title: def.title ?? chords.map(c => c.symbol).join(' – '), time, tempo: def.tempo ?? 70, mallets, staves: [{ clef, voices: [bars.join(' | ') + ' |'] }] }, instrument, prefs);
-  return { score, chordStaff: 0 };
+  return { score, chordStaff: 0, segments };
 }

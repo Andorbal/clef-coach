@@ -6,13 +6,15 @@ import { pianoGrand } from './tracks/pianoGrand';
 import { guitarTreble } from './tracks/guitarTreble';
 import { guitarBass } from './tracks/guitarBass';
 import { guitarFretboard } from './tracks/guitarFretboard';
+import { guitarChords } from './tracks/guitarChords';
+import { ukuleleChords } from './tracks/ukuleleChords';
 import { ukuleleTreble } from './tracks/ukuleleTreble';
 import { bassLines } from './tracks/bassLines';
 import { bassFretboard } from './tracks/bassFretboard';
 import { malletsTwo } from './tracks/malletsTwo';
 import { malletsFour } from './tracks/malletsFour';
 
-export const TRACKS: TrackDef[] = [pianoTreble, pianoBass, pianoGrand, guitarTreble, guitarBass, guitarFretboard, ukuleleTreble, bassLines, bassFretboard, malletsTwo, malletsFour];
+export const TRACKS: TrackDef[] = [pianoTreble, pianoBass, pianoGrand, guitarTreble, guitarBass, guitarFretboard, guitarChords, ukuleleTreble, ukuleleChords, bassLines, bassFretboard, malletsTwo, malletsFour];
 
 const byId = new Map(TRACKS.map(t => [t.id, t]));
 

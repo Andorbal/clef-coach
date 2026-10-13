@@ -468,7 +468,7 @@ export default function ChordChart() {
                     <div className={`cc-thumbs ${views[0]?.kind === 'keys' ? 'keys' : ''}`}>
                       {views.map((v, i) => (
                         <div key={i} className={`cc-thumb ${i === sel ? 'on' : ''}`} onClick={() => setPick(chords[focusIdx], inst, i)}>
-                          <ChordPicture view={v} instrument={inst} prefs={prefs} mode={mode} size="sm" leftHanded={left} />
+                          <ChordPicture view={v} instrument={inst} prefs={prefs} mode={mode} size="sm" leftHanded={left} interactive={false} />
                           <span className="faint">{v.label}</span>
                         </div>
                       ))}

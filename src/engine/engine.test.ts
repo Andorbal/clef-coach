@@ -68,3 +68,19 @@ describe('chord naming', () => {
     expect(describeNotes([55, 59, 62, 65])).toBe('G7');
   });
 });
+
+describe('chord track practice', () => {
+  it('builds a chord gym from the chords learned so far, and a chord review', async () => {
+    const { getTrack } = await import('../curriculum');
+    const { buildEndlessLesson, buildReviewLesson, learnedChords } = await import('./review');
+    const track = getTrack('ukulele-chords')!;
+    expect(learnedChords(track)).toEqual(['C']);
+    const tp = { lessons: { 'uc1-1': { passed: true }, 'uc1-2': { passed: true } }, items: { 'chord:ukulele:C': { n: 3, ok: 3, ms: 900, box: 2, due: 0, last: 0 }, 'chord:ukulele:Am': { n: 3, ok: 1, ms: 2000, box: 0, due: 0, last: 0 } } } as never;
+    expect(learnedChords(track, tp)).toEqual(['C', 'Am']);
+    const gym = buildEndlessLesson(track, tp, 3)!;
+    expect(gym.title).toContain('Chord Gym');
+    expect(gym.steps[0].type).toBe('chord-play');
+    const review = buildReviewLesson(track, tp)!;
+    expect(review.steps.map(s => s.type)).toEqual(['chord-quiz', 'chord-play']);
+  });
+});

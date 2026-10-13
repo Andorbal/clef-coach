@@ -10,9 +10,16 @@ import { measureTicks } from '../music/rhythm';
 import { getSong } from '../content/songs';
 import type { ActivityDef, Insight } from './types';
 import { buildSteps } from '../music/score';
+import { chordPlayScore, chordShape } from './chordScore';
+import { chordViews, parseChordRef, tryChord } from '../music/chordViews';
+import { chordPcs, parseChordSymbol } from '../music/chords';
 
 function visualNotes(v: Insight['visual']) {
   if (!v) return;
+  if (v.kind === 'chord') {
+    v.chords.forEach(c => expect(tryChord(c), `chord ${c}`).toBeTruthy());
+    return;
+  }
   if ('notes' in v && v.kind !== 'keys') {
     const text = v.notes.join(' ');
     parseVoice(/\//.test(text) ? text : text.replace(/^(\[[^\]]*\]|\S+)/, '$1/w'), v.kind === 'staff' && v.time ? v.time : [4, 4], 0, 'visual', true);
@@ -110,6 +117,42 @@ function checkActivity(a: ActivityDef, instrument: InstrumentId, where: string) 
       expect(isFretted(instrument), `${where}: fret activity needs a fretted instrument`).toBe(true);
       // CAGED shapes are guitar chord shapes
       if (a.shape.kind === 'caged') expect(instrument, `${where}: CAGED shape`).toBe('guitar');
+      break;
+    case 'chord-play': {
+      if (a.song) {
+        const song = getSong(a.song);
+        expect(song, `${where}: missing song ${a.song}`).toBeTruthy();
+        expect(song?.chords, `${where}: song has no chords`).toBeTruthy();
+      } else {
+        expect(a.chords?.length, `${where}: chords`).toBeGreaterThan(0);
+        a.chords!.forEach(c => expect(tryChord(c), `${where}: chord ${c}`).toBeTruthy());
+      }
+      a.shapes?.forEach(c => expect(tryChord(c), `${where}: shape ${c}`).toBeTruthy());
+      // every tuning the player might have
+      const tunings = instrument === 'ukulele' ? (['high-g', 'low-g', 'baritone'] as const) : (['high-g'] as const);
+      for (const ukuleleTuning of tunings) {
+        const built = chordPlayScore(a, instrument, { ukuleleTuning });
+        expect(built, `${where}: builds (${ukuleleTuning})`).toBeTruthy();
+        expect(buildSteps(built!.score).length, `${where}: steps`).toBeGreaterThan(0);
+      }
+      // the chosen shapes exist in standard tuning
+      for (const ref of [...(a.chords ?? []), ...(a.shapes ?? [])]) {
+        const { symbol, chart } = parseChordRef(ref);
+        if (!chart) continue;
+        const shape = chordShape(ref, instrument);
+        expect(shape?.notes.length, `${where}: ${ref}`).toBeGreaterThan(0);
+        const pcs = new Set(chordPcs(parseChordSymbol(symbol)));
+        shape!.notes.forEach(nn => expect(pcs.has(nn.midi % 12), `${where}: ${ref} note ${nn.name} is a chord tone`).toBe(true));
+      }
+      break;
+    }
+    case 'chord-quiz':
+      expect(a.count).toBeGreaterThan(0);
+      a.chords.forEach(c => {
+        const ch = tryChord(c);
+        expect(ch, `${where}: chord ${c}`).toBeTruthy();
+        expect(chordViews(ch!, instrument, {}).length, `${where}: ${c} has a voicing`).toBeGreaterThan(0);
+      });
       break;
     case 'tip':
       visualNotes(a.insight.visual);

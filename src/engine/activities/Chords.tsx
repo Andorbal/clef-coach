@@ -14,7 +14,7 @@ import { ChordPicture, playView } from '../../instruments/ChordCell';
 import { CHORD_ROOTS } from '../../music/chordbook';
 import { type ChordSymbol, chordName, chordQuality, chordSymbolText, parseChordSymbol, rootPc } from '../../music/chords';
 import { type ChordView, chordViews, parseChordRef } from '../../music/chordViews';
-import { instrumentDef, isFretted } from '../../music/instruments';
+import { instrumentDef, isFretted, tuningFor } from '../../music/instruments';
 import type { ItemResult } from '../../state/srs';
 import { type ActivityProps, prefsOf } from '../context';
 import { ActivityHeader, PlayAlong } from '../PlayAlong';
@@ -58,15 +58,33 @@ export function ChordPlayActivity({ def, ctx, onDone }: ActivityProps<PlayDef>) 
           ? `${fretted ? 'Strum' : 'Play'} on the beat and change shape in time — keep going even if a change isn't perfect yet.`
           : `${fretted ? 'Strum' : 'Play'} each chord. Take your time over the changes; the app waits for you.`);
   const staff = built.chordStaff;
+  const segments = built.segments;
+  const tuning = tuningFor(ctx.instrument, prefs).open;
+  // the whole shape of the chord being played, with the next note pulsing on top
+  const contextAt = (tick: number) => {
+    const seg = segments.find(sg => tick >= sg.tick && tick < sg.tick + sg.ticks) ?? (tick < (segments[0]?.tick ?? 0) ? segments[0] : undefined);
+    if (!seg) return {};
+    if (fretted) return { frets: seg.shape.notes.filter(n => n.string).map(n => ({ string: n.string!, fret: n.midi - tuning[n.string! - 1], finger: n.finger || undefined, color: 'hint' as const, root: n.root })) };
+    return {
+      keys: seg.shape.notes.map(n => ({
+        midi: n.midi,
+        color: 'hint' as const,
+        finger: ctx.instrument === 'mallets' ? undefined : n.finger,
+        label: ctx.instrument === 'mallets' && n.finger ? String(n.finger) : undefined,
+      })),
+    };
+  };
   return (
     <PlayAlong
       ctx={ctx}
       score={built.score}
       mode={def.mode}
       tempo={def.tempo ?? (def.mode === 'tempo' ? built.score.tempo : 70)}
-      fingering="all"
+      fingering={def.pattern === 'pick' ? 'all' : 'none'}
       filter={staff > 0 ? n => n.staff === staff : undefined}
       accompVolume={0.8}
+      contextAt={contextAt}
+      alwaysHint={def.pattern === 'pick' || ctx.progress < 0.5}
       title={title}
       prompt={prompt}
       onDone={onDone}
@@ -129,7 +147,7 @@ export function ChordQuiz({ def, ctx, onDone }: ActivityProps<QuizDef>) {
     return (sym: string) => {
       if (!cache.has(sym)) {
         const ref = parseChordRef(sym);
-        cache.set(sym, chordViews(parseChordSymbol(ref.symbol), ctx.instrument, prefs, { chart: ref.chart })[0]);
+        cache.set(sym, chordViews(parseChordSymbol(ref.symbol), ctx.instrument, prefs, { chart: ref.chart, fingers: ref.fingers })[0]);
       }
       return cache.get(sym);
     };
@@ -188,7 +206,7 @@ export function ChordQuiz({ def, ctx, onDone }: ActivityProps<QuizDef>) {
               const state = feedback?.picked === sym ? (feedback.ok ? 'is-good' : 'is-bad') : reveal && sym === round.target ? 'is-reveal' : '';
               return (
                 <button key={sym} className={`cq-shape ${state}`} onClick={() => pick(sym)} aria-label={`Shape ${round.options.indexOf(sym) + 1}`}>
-                  {v && <ChordPicture view={v} instrument={ctx.instrument} prefs={prefs} mode="fingers" size="md" />}
+                  {v && <ChordPicture view={v} instrument={ctx.instrument} prefs={prefs} mode="fingers" size="md" interactive={false} leftHanded={ctx.settings.leftHanded} />}
                 </button>
               );
             })}
