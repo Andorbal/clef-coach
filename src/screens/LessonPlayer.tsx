@@ -66,9 +66,11 @@ export default function LessonPlayer() {
   const ref = useMemo(() => (track && lesson ? findLesson(track.id, lesson.id) : undefined), [track, lesson]);
   const isTestOut = search.get('testout') === '1';
 
-  const [phase, setPhase] = useState<Phase>(lesson?.intro?.length ? 'intro' : 'run');
+  // Dev-only: ?step=N jumps straight to an activity (used by the E2E content sweep)
+  const devStep = import.meta.env.DEV && search.has('step') ? Number(search.get('step')) : null;
+  const [phase, setPhase] = useState<Phase>(devStep == null && lesson?.intro?.length ? 'intro' : 'run');
   const [introIdx, setIntroIdx] = useState(0);
-  const [stepIdx, setStepIdx] = useState(0);
+  const [stepIdx, setStepIdx] = useState(devStep ?? 0);
   const [between, setBetween] = useState<{ correct: number; total: number } | null>(null);
   const [summary, setSummary] = useState<LessonSummary | null>(null);
   const [confirmQuit, setConfirmQuit] = useState(false);

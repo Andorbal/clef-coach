@@ -57,6 +57,46 @@
   cursor: grab;
 }
 
+/* Edge fades with a paging button when more of the neck is off-screen. */
+.fb-more {
+  position: absolute;
+  top: 0;
+  width: 44px;
+  display: flex;
+  align-items: center;
+  border: 0;
+  padding: 0;
+  z-index: 2;
+  color: #fff;
+  font-size: 30px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.fb-more span {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(10, 12, 24, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding-bottom: 4px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+.fb-more.left {
+  left: 0;
+  justify-content: flex-start;
+  background: linear-gradient(90deg, rgba(8, 9, 18, 0.75), transparent);
+}
+
+.fb-more.right {
+  right: 0;
+  justify-content: flex-end;
+  background: linear-gradient(270deg, rgba(8, 9, 18, 0.75), transparent);
+}
+
 /* ---- text ---- */
 
 .fb-num {

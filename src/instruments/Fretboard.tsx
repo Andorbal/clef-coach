@@ -721,6 +721,31 @@ export function Fretboard({
     else sc.scrollTo({ left, behavior: 'smooth' });
   }, [viewSig, lay, leftHanded]);
 
+  // ---- More-neck indicators (scrollable boards) ----------------------------
+  const [more, setMore] = useState({ left: false, right: false });
+  const updateMore = useCallback(() => {
+    const sc = scrollerRef.current;
+    if (!sc || !lay.scrollable) {
+      setMore(m => (m.left || m.right ? { left: false, right: false } : m));
+      return;
+    }
+    const left = sc.scrollLeft > 4;
+    const right = sc.scrollLeft + sc.clientWidth < sc.scrollWidth - 4;
+    setMore(m => (m.left === left && m.right === right ? m : { left, right }));
+  }, [lay.scrollable]);
+  useEffect(() => {
+    updateMore();
+    const sc = scrollerRef.current;
+    if (!sc) return;
+    sc.addEventListener('scroll', updateMore, { passive: true });
+    return () => sc.removeEventListener('scroll', updateMore);
+  }, [updateMore, lay.totalW]);
+  const page = (dir: 1 | -1) => {
+    const sc = scrollerRef.current;
+    if (!sc) return;
+    sc.scrollBy({ left: dir * sc.clientWidth * 0.7, behavior: 'smooth' });
+  };
+
   // ---- Overlay content -------------------------------------------------------
   const nameAt = useCallback(
     (str: number, fret: number) => {
@@ -876,6 +901,16 @@ export function Fretboard({
           )}
         </div>
       </div>
+      {more.left && (
+        <button type="button" className="fb-more left" style={{ height: lay.y0 + lay.boardH + 8 }} onClick={() => page(-1)} aria-label="Show lower frets">
+          <span aria-hidden>‹</span>
+        </button>
+      )}
+      {more.right && (
+        <button type="button" className="fb-more right" style={{ height: lay.y0 + lay.boardH + 8 }} onClick={() => page(1)} aria-label="Show higher frets">
+          <span aria-hidden>›</span>
+        </button>
+      )}
     </div>
   );
 }

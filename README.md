@@ -50,10 +50,16 @@ npm run dev        # http://localhost:5173
 npm test           # unit tests (music theory, generator, curriculum, songs, audio DSP, state)
 npm run typecheck
 npm run build      # production build in dist/ (static, PWA)
-npm run e2e        # Playwright smoke tests (uses the preinstalled Chromium)
+npm run e2e        # Playwright smoke tests on iPad mini + phone viewports
+
+# Slower, opt-in browser runs
+SWEEP=1 npx playwright test sweep --project=ipad   # render every step of every lesson, fail on any error
+SHOTS=shots npx playwright test screens            # screenshot every screen into ./shots
 ```
 
 Microphone and MIDI need a secure context: `localhost` or HTTPS.
+
+**Testing on an iPad or phone from your computer:** run `npm run dev:lan`, then open the `https://<your-computer-ip>:5173` address it prints on the tablet (same Wi-Fi). The certificate is self-signed, so Safari warns once: tap *Show Details → visit this website*. The microphone then works as it would on the real deployment. (Offline/PWA install needs the real HTTPS deployment below.)
 
 ### Deploying
 
