@@ -17,7 +17,9 @@
  *     onset and emits them together once present on two consecutive frames,
  *     or reports what WAS heard after a short timeout (wrong/partial chords);
  *  4. when a single note is expected, YIN octave slips (±12) with modest
- *     clarity are corrected if the spectrum clearly supports the expected note.
+ *     clarity are corrected if the spectrum clearly supports the expected note,
+ *     and the ExpectedNoteAssist (assist.ts) catches attacks of that note the
+ *     mono tracker misses while other strings/notes still ring.
  *
  * Self-hearing: while the app is sounding something (see markAppSound),
  * note-ons the app could have caused are suppressed. By default this is
@@ -36,7 +38,7 @@ import {
   setRecordingSession,
 } from '../context';
 import { ChordTracker } from './chord';
-import { computeSpectrum, FrameAnalyzer, harmonicPeak, NoteTracker, verifyChord } from './pitch';
+import { AssistRouter, buildAssistFrame, computeSpectrum, FrameAnalyzer, harmonicPeak, NoteTracker, verifyChord } from './pitch';
 import type { PitchResult, TrackerControl, TrackerEvent } from './pitch';
 import type { InputResult, NoteInputEvent } from './types';
 
@@ -101,6 +103,8 @@ export class MicInput {
   private readonly analyzer = new FrameAnalyzer({ pitchWindow: PITCH_WINDOW, levelWindow: LEVEL_WINDOW });
   private readonly tracker = new NoteTracker({ sensitivity: 0.5, noiseFloor: 0.001, pitchLatencyMs: 32 });
   private readonly chord = new ChordTracker();
+  /** Single expected note: spectral help for attacks the mono tracker misses (see assist.ts). */
+  private readonly router = new AssistRouter();
 
   private expected: number[] | null = null;
   private monoNote: number | null = null;
@@ -293,6 +297,7 @@ export class MicInput {
       this.emitAll(this.tracker.reset(now));
     }
     this.expected = next;
+    this.emitAll(this.router.setExpected(next && next.length === 1 ? next[0] : null, this.tracker.onsetSerial, now));
     if (isChord) {
       this.chord.timeoutMs = (next as number[])[0] < LONG_WINDOW_BELOW ? 450 : 300;
       this.emitAll(this.chord.setExpected(next as number[], this.tracker.onsetSerial, now));
@@ -384,6 +389,8 @@ export class MicInput {
     const chordMode = !!this.expected && this.expected.length >= 2;
     const evs = this.tracker.reset(time);
     if (!chordMode) this.emitAll(evs);
+    this.emitAll(this.router.reset(time));
+    if (this.expected && this.expected.length === 1) this.router.setExpected(this.expected[0], this.tracker.onsetSerial, time);
     this.resetChord(time);
     if (this.monoNote !== null && !chordMode) {
       this.emitAll([{ type: 'off', midi: this.monoNote, time, velocity: 0 }]);
@@ -436,7 +443,7 @@ export class MicInput {
   private control(): TrackerControl {
     if (this.selfSoundMode === 'strict') {
       const busy = appSoundActive();
-      return { allowNoteOn: busy ? () => false : undefined, allowReattack: !busy, confirmPitch: this.confirmPitch };
+      return { allowNoteOn: busy ? () => false : undefined, allowReattack: !busy, confirmPitch: this.confirmPitch, vetoPitch: this.analyzer.isPhantom };
     }
     const tonal = appTonalSoundActive();
     const click = appClickActive();
@@ -445,6 +452,7 @@ export class MicInput {
       deferNoteOn: click,
       allowReattack: !tonal && !click,
       confirmPitch: this.confirmPitch,
+      vetoPitch: this.analyzer.isPhantom,
     };
   }
 
@@ -492,7 +500,26 @@ export class MicInput {
     const ctl = this.control();
     const events = tr.process(frame, ctl);
     if (!exp || exp.length < 2) {
-      this.emitAll(events);
+      const single = exp ? exp[0] : null;
+      this.emitAll(
+        this.router.route(
+          events,
+          buildAssistFrame({
+            expected: single,
+            time: frameTime,
+            level,
+            gate: tr.gateLevel,
+            onsetSerial: tr.onsetSerial,
+            onsetTime: tr.lastOnsetTime,
+            sampleRate: sr,
+            analyzer: this.analyzer,
+            longBuf: this.buf,
+            longSpec: this.longSpec,
+            blocked: single !== null && !!ctl.allowNoteOn && !ctl.allowNoteOn(single),
+            defer: ctl.deferNoteOn,
+          }),
+        ),
+      );
       return;
     }
 

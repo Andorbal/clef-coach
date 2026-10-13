@@ -7,7 +7,7 @@
  * before the first gesture) they are simply skipped rather than played late.
  */
 import { getAudioContext, getBus, isAudioSupported, markAppSound } from './context';
-import { renderSfx, SFX_NAMES, SFX_PITCHES } from './sounds';
+import { audibleDuration, renderSfx, SFX_NAMES, SFX_PITCHES } from './sounds';
 import type { SfxName } from './sounds';
 
 export type { SfxName } from './sounds';
@@ -16,6 +16,10 @@ let enabled = true;
 let volume = 0.8;
 let out: GainNode | null = null;
 const cache = new Map<SfxName, AudioBuffer>();
+/** How long each effect is actually audible (s) – the mic ignores related notes only that long. */
+const audible = new Map<SfxName, number>();
+/** A UI chime can be mis-heard as itself, an octave either way or its twelfth – not two octaves down. */
+const SFX_INTERVALS = [-12, 0, 12, 19];
 const lastPlayed = new Map<SfxName, number>();
 
 /** Minimum spacing between two triggers of the same effect (debounce, seconds). */
@@ -63,6 +67,7 @@ function buffer(ctx: AudioContext, name: SfxName): AudioBuffer {
     b.getChannelData(0).set(s.left);
     b.getChannelData(1).set(s.right);
     cache.set(name, b);
+    audible.set(name, audibleDuration([s.left, s.right], ctx.sampleRate));
   }
   return b;
 }
@@ -92,10 +97,11 @@ function play(name: SfxName): void {
   const t = now + 0.003;
   src.start(t);
   src.onended = () => src.disconnect();
-  markAppSound(t + buf.duration, {
+  markAppSound(t + (audible.get(name) ?? buf.duration), {
     from: t,
     midis: SFX_PITCHES[name],
     kind: name === 'tap' ? 'click' : 'tonal',
+    intervals: SFX_INTERVALS,
   });
 }
 

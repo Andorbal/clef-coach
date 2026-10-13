@@ -279,6 +279,28 @@ function renderStreak(sr: number): StereoSamples {
   return finish(o, sr, 0.38, 0.2);
 }
 
+/**
+ * Seconds until a rendered sound has decayed `dbBelowPeak` dB under its peak –
+ * how long it can actually be heard (and so confuse the microphone), as
+ * opposed to the length of its buffer.
+ */
+export function audibleDuration(channels: readonly Float32Array[], sampleRate: number, dbBelowPeak = 40): number {
+  let peak = 0;
+  for (const ch of channels) for (let i = 0; i < ch.length; i++) peak = Math.max(peak, Math.abs(ch[i]));
+  if (peak <= 0) return 0;
+  const thr = peak * Math.pow(10, -dbBelowPeak / 20);
+  let last = 0;
+  for (const ch of channels) {
+    for (let i = ch.length - 1; i > last; i--) {
+      if (Math.abs(ch[i]) >= thr) {
+        last = i;
+        break;
+      }
+    }
+  }
+  return (last + 1) / sampleRate;
+}
+
 /** Render a UI sound effect (stereo, peak-normalised, deterministic). */
 export function renderSfx(name: SfxName, sampleRate: number): StereoSamples {
   switch (name) {

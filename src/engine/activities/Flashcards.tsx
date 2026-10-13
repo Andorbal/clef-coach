@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { sfx } from '../../audio/sfx';
 import { synth } from '../../audio/synth';
 import { unlockAudio } from '../../audio/context';
+import { inputManager } from '../../audio/input/manager';
 import { drawItems, flashScore } from '../../curriculum/generate';
 import type { ActivityDef } from '../../curriculum/types';
 import type { KeyMark, FretMark, MarkColor } from '../../instruments';
@@ -122,6 +123,13 @@ export function Flashcards({ def, ctx, onDone }: ActivityProps<FlashDef>) {
   const rowStart = Math.floor(idx / ROW) * ROW;
   const rowCards = cards.slice(rowStart, rowStart + ROW);
   const card = cards[idx];
+  // "play this note" cards: tell the microphone which note to listen for
+  const expectedMidi = def.type === 'play' && card ? Number(card.answer) : null;
+  useEffect(() => {
+    if (expectedMidi === null || !Number.isFinite(expectedMidi)) return;
+    inputManager.setExpected([expectedMidi]);
+    return () => inputManager.setExpected(null);
+  }, [expectedMidi]);
 
   const score = useMemo(() => {
     if (def.type === 'keysig') return flashScore([], clef, rowCards[0]?.key ?? 'C', ctx.instrument);

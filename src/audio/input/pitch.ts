@@ -20,4 +20,6 @@ export type {
 export { FrameAnalyzer } from './analyzer';
 export type { FrameAnalyzerOptions, AnalyzedFrame } from './analyzer';
 export { NoteTracker, velocityFromRms } from './tracker';
+export { ExpectedNoteAssist, AssistRouter, buildAssistFrame, notePartials, subFundamentals } from './assist';
+export type { AssistFrame, ExpectedNoteAssistOptions } from './assist';
 export type { PitchFrame, TrackerEvent, TrackerControl, NoteTrackerOptions } from './tracker';

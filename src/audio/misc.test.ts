@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { keyboardOctaveDelta, keyboardToMidi } from './input/keyboard';
 import { parseMidiMessage } from './input/midi';
-import { renderClickSamples, renderSfx, SFX_NAMES, SFX_PITCHES } from './sounds';
+import { audibleDuration, renderClickSamples, renderSfx, SFX_NAMES, SFX_PITCHES } from './sounds';
 import { generateImpulseResponse } from './dsp/reverb';
 import { peakAbs, rmsRange } from './dsp/util';
 import { computeSpectrum, detectPitch } from './input/pitch';
@@ -66,6 +66,15 @@ describe('sound design renders', () => {
     const tap = renderSfx('tap', 48000);
     const correct = renderSfx('correct', 48000);
     expect(peakAbs(tap.left)).toBeLessThan(peakAbs(correct.left) * 0.5);
+  });
+
+  it('the "correct" ping is audible for much less than its buffer (the mic ignores related notes only that long)', () => {
+    const sr = 48000;
+    const s = renderSfx('correct', sr);
+    const d = audibleDuration([s.left, s.right], sr);
+    expect(d).toBeGreaterThan(0.15);
+    expect(d).toBeLessThan(s.left.length / sr);
+    expect(audibleDuration([new Float32Array(100)], sr)).toBe(0);
   });
 
   it('the "correct" ping sounds the pitches SFX_PITCHES declares (A5 → E6)', () => {

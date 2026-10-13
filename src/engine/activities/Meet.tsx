@@ -1,7 +1,8 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { Volume2 } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { unlockAudio } from '../../audio/context';
+import { inputManager } from '../../audio/input/manager';
 import { sfx } from '../../audio/sfx';
 import { synth } from '../../audio/synth';
 import { flashScore } from '../../curriculum/generate';
@@ -28,6 +29,13 @@ export function Meet({ def, ctx, onDone }: ActivityProps<MeetDef>) {
   const items = useRef<{ key: string; correct: boolean }[]>([]);
   const note = notes[i];
   const midi = note ? midiOf(note) : 60;
+  // tell the microphone which note to listen for (it can then pick it out while other strings still ring)
+  const listening = !!note && count < reps;
+  useEffect(() => {
+    if (!listening) return;
+    inputManager.setExpected([midi]);
+    return () => inputManager.setExpected(null);
+  }, [listening, midi]);
   const score = useMemo(() => flashScore([[note]], def.clef, 'C', ctx.instrument, def.hand), [note, def.clef, ctx.instrument, def.hand]);
   const range = useMemo(() => pianoRangeFor(notes.map(midiOf)), [notes]);
   const tipText = def.tips?.[i] ?? def.tips?.[0];

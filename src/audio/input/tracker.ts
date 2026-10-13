@@ -67,6 +67,11 @@ export interface TrackerControl {
    * cleaner frames (a vetoed re-attack is dropped).
    */
   confirmPitch?: (midi: number) => boolean;
+  /**
+   * Pitches that must never be accepted, not even after `trustAfterMs` – e.g.
+   * the "virtual" pitch YIN locks onto between two strings ringing a tone apart.
+   */
+  vetoPitch?: (midi: number) => boolean;
 }
 
 export interface NoteTrackerOptions {
@@ -380,7 +385,7 @@ export class NoteTracker {
         this.trackCandidate(Math.round(midiF), t, level);
         if (this.candCount >= this.stableFrames && !ctl.deferNoteOn) {
           const m = this.candMidi as number;
-          if (ctl.confirmPitch && t - this.candStart < this.trustAfterMs && !ctl.confirmPitch(m)) {
+          if (this.implausible(m, t, ctl)) {
             this.candCount = 0; // implausible (e.g. transition artefact) – keep listening
             return events;
           }
@@ -422,7 +427,7 @@ export class NoteTracker {
       } else {
         const blockedAt = this.needsOnset.get(m);
         if (blockedAt === undefined || this._lastOnsetTime > blockedAt) {
-          if (ctl.confirmPitch && t - this.candStart < this.trustAfterMs && !ctl.confirmPitch(m)) {
+          if (this.implausible(m, t, ctl)) {
             this.candCount = 0;
           } else {
             this.needsOnset.delete(m);
@@ -432,6 +437,12 @@ export class NoteTracker {
       }
     }
     return events;
+  }
+
+  /** Candidate `m` lacks spectral support and is still within the trust delay, or is vetoed outright. */
+  private implausible(m: number, t: number, ctl: TrackerControl): boolean {
+    if (!ctl.confirmPitch || ctl.confirmPitch(m)) return false;
+    return t - this.candStart < this.trustAfterMs || !!ctl.vetoPitch?.(m);
   }
 
   private trackCandidate(m: number, t: number, level: number): void {

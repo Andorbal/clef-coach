@@ -95,4 +95,29 @@ export class FrameAnalyzer {
   /** Does the current frame's spectrum support `midi` (fundamental/octave peak present)? */
   hasSupport = (midi: number): boolean =>
     hasPitchSupport(this.spectrum(), this.sampleRate, this.fftSize, midi);
+
+  /**
+   * An unsupported pitch squeezed between two supported notes up to a minor
+   * third apart – the "virtual" pitch YIN reports while e.g. D4 and E4 ring
+   * together (D♯4). Never a real note.
+   */
+  isBetweenNotes = (midi: number): boolean =>
+    !this.hasSupport(midi) &&
+    (this.hasSupport(midi - 1) || this.hasSupport(midi - 2)) &&
+    (this.hasSupport(midi + 1) || this.hasSupport(midi + 2));
+
+  /**
+   * Pitches the tracker must never accept, even when stable for a while.
+   * Above ~60 Hz a real note always shows its fundamental (hasSupport accepts
+   * weak ones), so an unsupported pitch there is an artefact: an octave slip
+   * (C5 heard as C4), the "missing fundamental" of two ringing strings (D♯4 +
+   * F♯3 → B1) or a pitch between two ringing notes. Only the lowest piano
+   * notes, whose fundamentals the microphone can't capture, may be trusted
+   * without one – if their octave is there and they aren't between notes.
+   */
+  isPhantom = (midi: number): boolean => {
+    if (this.hasSupport(midi)) return false;
+    if (440 * Math.pow(2, (midi - 69) / 12) >= 60) return true;
+    return !this.hasSupport(midi + 12) || this.isBetweenNotes(midi);
+  };
 }

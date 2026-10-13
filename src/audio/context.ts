@@ -292,6 +292,12 @@ export interface AppSoundOptions {
   midis?: readonly number[] | null;
   /** 'click' = short unpitched tick (metronome, tap); default 'tonal'. */
   kind?: AppSoundKind;
+  /**
+   * Intervals (semitones, heard − sounded) at which the mic could mistake this
+   * sound for a note (default RELATED_INTERVALS). A short bright chime can't
+   * plausibly be heard two octaves down, so UI sounds pass a narrower set.
+   */
+  intervals?: readonly number[];
 }
 
 export interface AppSoundMark {
@@ -299,6 +305,7 @@ export interface AppSoundMark {
   until: number;
   midis: readonly number[] | null;
   kind: AppSoundKind;
+  intervals: readonly number[];
 }
 
 /** Release-tail margin after a mark ends (seconds). */
@@ -329,6 +336,7 @@ export function markAppSound(untilCtxTimeSeconds: number, opts: AppSoundOptions 
     until: untilCtxTimeSeconds,
     midis: opts.midis ?? null,
     kind: opts.kind ?? 'tonal',
+    intervals: opts.intervals ?? RELATED_INTERVALS,
   };
   pruneMarks(now);
   marks.push(mark);
@@ -379,7 +387,7 @@ export function appSoundBlocksNote(midi: number): boolean {
   for (const m of marks) {
     if (m.kind !== 'tonal' || !isLive(m, now)) continue;
     if (!m.midis) return true;
-    for (const a of m.midis) if (RELATED_INTERVALS.includes(midi - a)) return true;
+    for (const a of m.midis) if (m.intervals.includes(midi - a)) return true;
   }
   return false;
 }
