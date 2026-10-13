@@ -2,6 +2,7 @@ import type { SongDef } from '../../music/parse';
 import type { InstrumentId } from '../../music/instruments';
 import { PIANO_RH, PIANO_LH, PIANO_BOTH } from './pianoLibrary';
 import { GUITAR_TREBLE, GUITAR_BASS } from './guitarLibrary';
+import { MALLETS } from './malletLibrary';
 
 /** Library shelves: one or more per instrument. */
 export type SongGroup =
@@ -39,7 +40,7 @@ export const SONG_GROUPS: SongGroupDef[] = [
  * Every built-in song. Libraries for each instrument live in their own file and are
  * appended here.
  */
-export const ALL_SONGS: SongDef[] = [...PIANO_RH, ...PIANO_LH, ...PIANO_BOTH, ...GUITAR_TREBLE, ...GUITAR_BASS];
+export const ALL_SONGS: SongDef[] = [...PIANO_RH, ...PIANO_LH, ...PIANO_BOTH, ...GUITAR_TREBLE, ...GUITAR_BASS, ...MALLETS];
 
 const byId = new Map(ALL_SONGS.map(s => [s.id, s]));
 
