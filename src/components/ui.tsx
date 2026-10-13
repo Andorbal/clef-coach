@@ -126,11 +126,12 @@ export function Toggle({ checked, onChange, label, sub }: { checked: boolean; on
 }
 
 export function Segmented<T extends string>({ value, options, onChange, size }: { value: T; options: { value: T; label: ReactNode }[]; onChange: (v: T) => void; size?: 'sm' }) {
+  const id = useId();
   return (
     <div className={`segmented ${size ?? ''}`} role="radiogroup">
       {options.map(o => (
         <button key={o.value} role="radio" aria-checked={o.value === value} className={o.value === value ? 'on' : ''} onClick={() => onChange(o.value)}>
-          {o.value === value && <motion.span layoutId={`seg-${options.map(x => x.value).join('')}`} className="seg-pill" transition={{ type: 'spring', stiffness: 500, damping: 38 }} />}
+          {o.value === value && <motion.span layoutId={`seg-${id}`} className="seg-pill" transition={{ type: 'spring', stiffness: 500, damping: 38 }} />}
           <span className="seg-label">{o.label}</span>
         </button>
       ))}

@@ -8,7 +8,7 @@ import { flashScore } from '../../curriculum/generate';
 import type { ActivityDef } from '../../curriculum/types';
 import type { FretMark, KeyMark, MarkColor } from '../../instruments';
 import { positionsFor } from '../../music/guitar';
-import { midiOf, parsePitch, pitchLabel, pitchToString } from '../../music/pitch';
+import { midiOf, parsePitch, pitchLabel, pitchToString, stepLabel } from '../../music/pitch';
 import { NotationView } from '../../notation/NotationView';
 import type { ActivityProps } from '../context';
 import { InstrumentPanel, pianoRangeFor } from '../InstrumentPanel';
@@ -67,7 +67,7 @@ export function Meet({ def, ctx, onDone }: ActivityProps<MeetDef>) {
 
   const handColor: MarkColor = def.hand === 'L' ? 'lh' : def.hand === 'R' ? 'rh' : 'gold';
   const keyMarks: KeyMark[] = [{ midi, color: handColor, finger, pulse: true, label: undefined }];
-  const fretMarks: FretMark[] = fret ? [{ string: fret.string, fret: fret.fret, color: 'gold', finger: fret.finger || undefined, label: fret.fret === 0 ? 'open' : undefined, pulse: true }] : [];
+  const fretMarks: FretMark[] = fret ? [{ string: fret.string, fret: fret.fret, color: 'gold', finger: fret.finger || undefined, label: fret.fret === 0 ? stepLabel(note.step, note.alter, ctx.settings.naming) : undefined, pulse: true }] : [];
 
   return (
     <div className="activity meet" data-expected={midi}>

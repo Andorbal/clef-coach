@@ -144,6 +144,9 @@
 /* Segmented */
 .segmented {
   display: inline-flex;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
   padding: 4px;
   gap: 2px;
   border-radius: 999px;
@@ -151,8 +154,13 @@
   border: 1px solid var(--border);
 }
 
+.segmented::-webkit-scrollbar {
+  display: none;
+}
+
 .segmented button {
   position: relative;
+  flex: none;
   padding: 8px 14px;
   border-radius: 999px;
   font-size: 14px;

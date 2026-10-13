@@ -10,6 +10,33 @@
   margin-right: -6px;
 }
 
+@media (max-width: 640px) {
+  .trackmap-hero {
+    display: grid;
+    grid-template-columns: auto auto 1fr auto;
+    grid-template-areas:
+      'back badge . ring'
+      'text text text text';
+    gap: 12px 14px;
+  }
+
+  .trackmap-hero > .back-btn {
+    grid-area: back;
+  }
+
+  .trackmap-hero > .track-badge {
+    grid-area: badge;
+  }
+
+  .trackmap-hero > .ring {
+    grid-area: ring;
+  }
+
+  .trackmap-hero > .grow {
+    grid-area: text;
+  }
+}
+
 .trackmap-title {
   font-size: clamp(32px, 4.6vw, 48px);
   line-height: 1.05;
