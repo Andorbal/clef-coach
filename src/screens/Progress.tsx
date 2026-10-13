@@ -26,10 +26,15 @@ function rampColor(v: number): string {
 }
 
 function fmtDuration(ms: number) {
+  if (ms > 0 && ms < 60000) return '<1 min';
   const m = Math.round(ms / 60000);
   if (m < 60) return `${m} min`;
   const h = Math.floor(m / 60);
   return `${h}h ${m % 60}m`;
+}
+
+function plural(n: number, word: string) {
+  return `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`;
 }
 
 function Tip({ text, children }: { text: string; children: React.ReactNode }) {
@@ -42,30 +47,36 @@ function Tip({ text, children }: { text: string; children: React.ReactNode }) {
 
 function CalendarHeatmap({ profile }: { profile: Profile }) {
   const weeks = 18;
-  const end = new Date();
-  // align to the end of the current week (Saturday)
-  const days = lastNDays(weeks * 7 - (6 - end.getDay()), end);
+  const today = new Date();
+  // Columns are weeks (Sunday → Saturday); the last column is the current week.
+  const days = lastNDays((weeks - 1) * 7 + today.getDay() + 1, today);
   const max = Math.max(20, ...days.map(d => profile.days[d]?.xp ?? 0));
-  const pad = (parseDayKey(days[0]).getDay() + 7) % 7;
-  const cells = [...Array(pad).fill(null), ...days];
-  const cols = Math.ceil(cells.length / 7);
+  const todayKey = dayKey();
+  const cols = Array.from({ length: weeks }, (_, c) => days.slice(c * 7, c * 7 + 7));
+  let lastMonth = -1;
   return (
-    <div className="calendar" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
-      {Array.from({ length: cols }, (_, c) => (
-        <div key={c} className="cal-col">
-          {Array.from({ length: 7 }, (_, r) => {
-            const d = cells[c * 7 + r];
-            if (!d) return <span key={r} className="cal-cell empty" />;
-            const xp = profile.days[d]?.xp ?? 0;
-            const label = `${parseDayKey(d).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}: ${xp} XP`;
-            return (
-              <Tip key={r} text={label}>
-                <span className={`cal-cell ${d === dayKey() ? 'today' : ''}`} style={{ background: xp ? rampColor(0.15 + (0.85 * xp) / max) : undefined }} />
-              </Tip>
-            );
-          })}
-        </div>
-      ))}
+    <div className="calendar-wrap">
+      <div className="cal-months" style={{ gridTemplateColumns: `repeat(${weeks}, minmax(0, 1fr))` }} aria-hidden>
+        {cols.map((col, c) => {
+          const m = parseDayKey(col[0]).getMonth();
+          const show = m !== lastMonth && c < weeks - 1;
+          lastMonth = m;
+          return <span key={c}>{show ? parseDayKey(col[0]).toLocaleDateString(undefined, { month: 'short' }) : ''}</span>;
+        })}
+      </div>
+      <div className="calendar" style={{ gridTemplateColumns: `repeat(${weeks}, minmax(0, 1fr))` }}>
+        {Array.from({ length: weeks * 7 }, (_, i) => {
+          const d = days[i];
+          if (!d) return <span key={i} className="cal-cell future" />;
+          const xp = profile.days[d]?.xp ?? 0;
+          const label = `${parseDayKey(d).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}: ${xp} XP`;
+          return (
+            <Tip key={i} text={label}>
+              <span className={`cal-cell ${d === todayKey ? 'is-today' : ''}`} style={{ background: xp ? rampColor(0.15 + (0.85 * xp) / max) : undefined }} />
+            </Tip>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -233,7 +244,7 @@ function TrackMastery({ track, tp }: { track: TrackDef; tp?: TrackProgress }) {
         </div>
         <div className="mastery-stats">
           <span>
-            <strong className="tabular">{s.passed}</strong> <span className="faint">lessons</span>
+            <strong className="tabular">{s.passed}</strong> <span className="faint">{s.passed === 1 ? 'lesson' : 'lessons'}</span>
           </span>
           <span>
             <strong className="tabular">{mastered}</strong> <span className="faint">mastered</span>
@@ -306,8 +317,8 @@ export default function Progress() {
             {[
               { icon: Star, label: 'Level', value: String(lvl.level), sub: `${profile.xp.toLocaleString()} XP` },
               { icon: Flame, label: 'Streak', value: `${effectiveStreak(profile)}`, sub: `best ${profile.streak.best}` },
-              { icon: Clock, label: 'Practice time', value: fmtDuration(profile.totals.ms), sub: `${profile.totals.lessons} sessions` },
-              { icon: Music2, label: 'Notes played', value: profile.totals.notes.toLocaleString(), sub: `${profile.totals.perfect} flawless lessons` },
+              { icon: Clock, label: 'Practice time', value: fmtDuration(profile.totals.ms), sub: plural(profile.totals.lessons, 'session') },
+              { icon: Music2, label: 'Notes played', value: profile.totals.notes.toLocaleString(), sub: `${plural(profile.totals.perfect, 'flawless lesson')}` },
             ].map((t, i) => (
               <motion.div key={t.label} className="stat-tile card" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}>
                 <span className="stat-label">

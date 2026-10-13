@@ -537,7 +537,7 @@ export const guitarTreble: TrackDef = {
         read(G, S123, { rhythms: RH.triplets, maxLeap: 2 }),
         gpiece('Triplet Arpeggios', 'C', [4, 4], [bars(arp(CMAJ, PIM3, 'e3'), arp(AM, PIM3, 'e3'), arp(DM, PIM3, 'e3'), arp(G7, PIM3, 'e3'), arp(CMAJ, PIM3, 'e3'), arp(FMAJ7, PIM3, 'e3'), arp(G7, PIM3, 'e3'), withDur(C_CHORD, 'w'))]),
       ]),
-      lesson('gt12-4', 'Lilting Songs', 'song', 'Folk classics in 3/4 and 6/8', [
+      lesson('gt12-4', 'Lilting Songs', 'song', 'Waltzes and ballads in 3/4 and 6/8', [
         gpiece('Arpeggio Waltz', 'C', [3, 4], [bars(arp(CMAJ, PIMA68, 'e'), arp(G7, PIMA68, 'e'), arp(CMAJ, PIMA68, 'e'), arp(FMAJ7, PIMA68, 'e'), arp(CMAJ, PIMA68, 'e'), arp(DM, PIMA68, 'e'), arp(G7, PIMA68, 'e'), withDur(C_CHORD, 'h.'))]),
         piece('gt-house-of-the-rising-sun'),
         piece('gt-scarborough-fair'),
@@ -660,7 +660,7 @@ export const guitarTreble: TrackDef = {
         piece('gt-romanza'),
         piece('gt-bourree-in-e-minor'),
       ]),
-      lesson('gt15-5', 'Concert Repertoire II', 'song', 'Tárrega and the Spanish tradition', [
+      lesson('gt15-5', 'Concert Repertoire II', 'song', 'Romantic pieces in the Spanish tradition', [
         piece('gt-lagrima'),
         piece('gt-malaguena'),
       ]),

@@ -16,6 +16,10 @@ test('screens', async ({ page }) => {
     await page.waitForTimeout(1300);
     await page.screenshot({ path: `${out}/S-${name}.png`, fullPage: name === 'progress' || name === 'songs' || name === 'settings' });
   }
+  await page.goto('/#/progress');
+  await page.waitForTimeout(1000);
+  await page.locator('.calendar-wrap').evaluate(el => el.scrollIntoView({ block: 'center' }));
+  await page.screenshot({ path: `${out}/S-calendar.png` });
   // a guitar lesson and a grand staff piece in progress
   await page.goto('/#/lesson/guitar-treble/gt1-1');
   await page.waitForTimeout(1500);

@@ -366,7 +366,7 @@ export const guitarBass: TrackDef = {
         bpiece('Prelude in G — opening (after J. S. Bach)', 'G', [4, 4], [BACH_PRELUDE], { prompt: 'Hold the low G with finger 3 while the upper notes ring. Start slowly — evenness first.' }),
         piece('gb-bach-cello-prelude'),
       ]),
-      lesson('gb10-3', 'Repertoire', 'song', 'Melodies from the cello and bass repertoire', [
+      lesson('gb10-3', 'Repertoire', 'song', 'Singing lines in the cello and bass style', [
         piece('gb-the-swan'),
         piece('gb-volga-boatmen'),
       ]),
