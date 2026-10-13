@@ -37,7 +37,7 @@ function parseList(s: string | undefined): (number | undefined)[] | undefined {
   return s.split(',').map(x => (x === '-' || x === '' ? undefined : parseInt(x, 10)));
 }
 
-export function parseVoice(text: string, time: TimeSig, pickupTicks = 0, label = 'voice'): ParseResult {
+export function parseVoice(text: string, time: TimeSig, pickupTicks = 0, label = 'voice', lenient = false): ParseResult {
   const tokens = text.match(TOKEN_RE) ?? [];
   const specs: NoteSpec[] = [];
   const mt = measureTicks(time);
@@ -50,7 +50,7 @@ export function parseVoice(text: string, time: TimeSig, pickupTicks = 0, label =
 
   const closeMeasure = (final: boolean) => {
     const expected = measureIndex === 0 && pickupTicks ? pickupTicks : mt;
-    if (inMeasure !== expected) {
+    if (inMeasure !== expected && !lenient) {
       const isLastShort = final && inMeasure < expected && inMeasure > 0;
       if (!(isLastShort && pickupTicks)) {
         throw new NotationError(

@@ -1,0 +1,291 @@
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { type NoteNaming, type Pitch, pitchLabel } from '../music/pitch';
+import type { NoteEl, Score } from '../music/score';
+import { scoreTotalTicks } from '../music/score';
+import {
+  type RenderResult,
+  ledgerLinesFor,
+  notationFontsReady,
+  renderScore,
+  xForTick,
+  yForPitch,
+} from './render';
+import './notation.css';
+
+export type NoteState = 'active' | 'good' | 'bad' | 'done' | 'hint' | 'missed';
+
+export interface GhostNote {
+  key: string;
+  staff: number;
+  pitch: Pitch;
+  /** id of the note it should appear next to (defaults to focus note) */
+  nearId?: string;
+  tone: 'bad' | 'good' | 'info';
+}
+
+export interface NotationViewProps {
+  score: Score;
+  states?: Record<string, NoteState>;
+  /** Note element id to keep in view (scroll layout) */
+  focusId?: string;
+  /** Tempo-mode playhead position in ticks (overrides focus for scrolling) */
+  playheadTick?: number | null;
+  showPlayhead?: boolean;
+  fingering?: boolean;
+  strings?: boolean;
+  /** Show note-name labels: all notes, only the focused one, or none. */
+  noteNames?: 'all' | 'focus' | 'none';
+  naming?: NoteNaming;
+  ghosts?: GhostNote[];
+  layout?: 'scroll' | 'center';
+  timeSignature?: boolean;
+  barlines?: boolean;
+  beatWidth?: number;
+  maxScale?: number;
+  className?: string;
+  onRendered?: (r: RenderResult) => void;
+}
+
+let instanceCounter = 0;
+
+function NotationViewImpl(props: NotationViewProps) {
+  const {
+    score,
+    states,
+    focusId,
+    playheadTick,
+    showPlayhead = true,
+    fingering = false,
+    strings = false,
+    noteNames = 'none',
+    naming = 'letter',
+    ghosts,
+    layout = 'scroll',
+    timeSignature = true,
+    barlines = true,
+    beatWidth,
+    maxScale = 2.1,
+    className,
+    onRendered,
+  } = props;
+
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const svgHostRef = useRef<HTMLDivElement>(null);
+  const headerHostRef = useRef<HTMLDivElement>(null);
+  const [result, setResult] = useState<RenderResult | null>(null);
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  const prefix = useMemo(() => `cc${++instanceCounter}-`, []);
+  const onRenderedRef = useRef(onRendered);
+  onRenderedRef.current = onRendered;
+
+  const elById = useMemo(() => {
+    const m = new Map<string, NoteEl>();
+    score.staves.forEach(st => st.voices.forEach(v => v.notes.forEach(n => m.set(n.id, n))));
+    return m;
+  }, [score]);
+
+  // Observe container size
+  useLayoutEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      const r = entries[0].contentRect;
+      setBox(b => (Math.abs(b.w - r.width) > 0.5 || Math.abs(b.h - r.height) > 0.5 ? { w: r.width, h: r.height } : b));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Render with VexFlow when the score/options change
+  useEffect(() => {
+    let cancelled = false;
+    notationFontsReady().then(() => {
+      if (cancelled || !svgHostRef.current) return;
+      try {
+        const r = renderScore(svgHostRef.current, score, {
+          fingering,
+          strings,
+          timeSignature,
+          barlines,
+          beatWidth,
+          idPrefix: prefix,
+          tailPad: layout === 'scroll' ? 600 : 0,
+          leadIn: layout === 'scroll' ? 24 : 12,
+        });
+        // fixed header clone for scroll layout
+        if (headerHostRef.current) {
+          headerHostRef.current.innerHTML = '';
+          if (layout === 'scroll') {
+            const svg = svgHostRef.current.querySelector('svg');
+            if (svg) {
+              const clone = svg.cloneNode(true) as SVGSVGElement;
+              // keep only the clef/key/time header group
+              [...clone.children].forEach(ch => {
+                if (!(ch.getAttribute('class') ?? '').includes('vf-header')) ch.remove();
+              });
+              clone.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
+              clone.style.overflow = 'hidden';
+              clone.setAttribute('viewBox', `0 0 ${r.headerWidth} ${r.height}`);
+              clone.setAttribute('width', String(r.headerWidth));
+              clone.setAttribute('height', String(r.height));
+              clone.setAttribute('class', 'cc-score cc-score-header');
+              clone.style.width = '';
+              clone.style.height = '';
+              headerHostRef.current.appendChild(clone);
+            }
+          }
+        }
+        setResult(r);
+        onRenderedRef.current?.(r);
+      } catch (e) {
+        console.error('Notation render failed', e);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [score, fingering, strings, timeSignature, barlines, beatWidth, prefix, layout]);
+
+  // Apply note states as classes on the SVG groups
+  useEffect(() => {
+    if (!result) return;
+    result.notes.forEach(pos => {
+      const g = pos.el;
+      if (!g) return;
+      const st = states?.[pos.id];
+      g.setAttribute('class', `vf-stavenote${st ? ` st-${st}` : ''}`);
+    });
+  }, [result, states]);
+
+  // ---- scaling ----
+  const scale = useMemo(() => {
+    if (!result || !box.h) return 1;
+    let s = box.h / result.height;
+    if (layout === 'center' && box.w) s = Math.min(s, (box.w - 16) / result.width);
+    return Math.max(0.55, Math.min(maxScale, s));
+  }, [result, box, layout, maxScale]);
+
+  // ---- scroll position ----
+  const totalTicks = useMemo(() => scoreTotalTicks(score), [score]);
+  const focusX = useMemo(() => {
+    if (!result) return 0;
+    if (playheadTick !== undefined && playheadTick !== null) return xForTick(result, playheadTick, totalTicks);
+    if (focusId) return result.notes.get(focusId)?.x ?? result.headerWidth;
+    return result.headerWidth;
+  }, [result, focusId, playheadTick, totalTicks]);
+
+  const offset = useMemo(() => {
+    if (!result || layout !== 'scroll') return 0;
+    const anchor = Math.max(result.headerWidth * scale + 70, box.w * 0.32);
+    const contentW = (result.width - 600) * scale;
+    const maxOff = Math.max(0, contentW - box.w + 40);
+    return Math.max(0, Math.min(focusX * scale - anchor, maxOff + 200));
+  }, [result, layout, scale, box.w, focusX]);
+
+  const tempoMode = playheadTick !== undefined && playheadTick !== null;
+  const centerPad = layout === 'center' && result ? Math.max(0, (box.w - result.width * scale) / 2) : 0;
+  const verticalPad = result ? Math.max(0, (box.h - result.height * scale) / 2) : 0;
+
+  const staffSpan = result
+    ? { top: result.staves[0].top - 18, bottom: result.staves[result.staves.length - 1].bottom + 18 }
+    : { top: 0, bottom: 0 };
+
+  return (
+    <div ref={wrapRef} className={`notation ${layout === 'center' ? 'notation-center' : 'notation-scroll'} ${className ?? ''}`}>
+      <div
+        className={`notation-content ${tempoMode ? 'no-ease' : ''}`}
+        style={{
+          transform: `translate3d(${centerPad - offset}px, ${verticalPad}px, 0)`,
+          width: result ? result.width * scale : undefined,
+          height: result ? result.height * scale : undefined,
+        }}
+      >
+        <div
+          ref={svgHostRef}
+          className="notation-svg"
+          style={{ transform: `scale(${scale})`, transformOrigin: '0 0' }}
+        />
+        {result && (
+          <svg
+            className="notation-overlay"
+            width={result.width * scale}
+            height={result.height * scale}
+            viewBox={`0 0 ${result.width} ${result.height}`}
+          >
+            {showPlayhead && layout === 'scroll' && (focusId || tempoMode) && (
+              <rect
+                className="playhead"
+                x={focusX - 14}
+                y={staffSpan.top}
+                width={28}
+                height={staffSpan.bottom - staffSpan.top}
+                rx={14}
+                style={{ transition: tempoMode ? 'none' : undefined }}
+              />
+            )}
+            {noteNames !== 'none' &&
+              [...result.notes.values()].map(pos => {
+                const el = elById.get(pos.id);
+                if (!el || el.rest || el.tiePrev) return null;
+                if (noteNames === 'focus' && pos.id !== focusId) return null;
+                const geom = result.staves[pos.staff];
+                const lowest = Math.max(...el.pitches.map(p => yForPitch(geom, p)));
+                const fingerBelow = fingering && (score.staves[pos.staff].hand === 'L' || score.instrument === 'guitar');
+                const extra = fingerBelow ? 16 * (score.instrument === 'guitar' && strings ? 1.4 : el.pitches.length) : 0;
+                const y = Math.max(geom.bottom + 26, lowest + 24) + extra;
+                const text = el.pitches.map(p => pitchLabel(p, naming)).reverse().join(' ');
+                const st = states?.[pos.id];
+                return (
+                  <g key={pos.id} className={`note-name ${st ? `nn-${st}` : ''}`} transform={`translate(${pos.x}, ${y})`}>
+                    <rect x={-(text.length * 4.2 + 8)} y={-11} width={text.length * 8.4 + 16} height={18} rx={9} />
+                    <text textAnchor="middle" y={2.5}>
+                      {text}
+                    </text>
+                  </g>
+                );
+              })}
+            {ghosts?.map(g => {
+              const geom = result.staves[g.staff] ?? result.staves[0];
+              const near = g.nearId ? result.notes.get(g.nearId)?.x : focusX;
+              const x = (near ?? focusX) + 22;
+              const y = yForPitch(geom, g.pitch);
+              const ledgers = ledgerLinesFor(geom, g.pitch);
+              return (
+                <g key={g.key} className={`ghost ghost-${g.tone}`}>
+                  {ledgers.map(ly => (
+                    <line key={ly} x1={x - 11} x2={x + 11} y1={ly} y2={ly} />
+                  ))}
+                  {g.pitch.alter !== 0 && (
+                    <text className="ghost-acc" x={x - 18} y={y} textAnchor="middle">
+                      {g.pitch.alter > 0 ? '' : ''}
+                    </text>
+                  )}
+                  <text className="ghost-head" x={x} y={y} textAnchor="middle">
+                    {''}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+        )}
+      </div>
+      {layout === 'scroll' && (
+        <div className="notation-header" style={{ top: verticalPad }}>
+          <div
+            ref={headerHostRef}
+            className="notation-header-svg"
+            style={{
+              transform: `scale(${scale})`,
+              transformOrigin: '0 0',
+              width: result ? result.headerWidth : undefined,
+              height: result ? result.height : undefined,
+            }}
+          />
+          <div className="notation-header-fade" style={{ left: result ? result.headerWidth * scale : 0 }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+export const NotationView = memo(NotationViewImpl);
