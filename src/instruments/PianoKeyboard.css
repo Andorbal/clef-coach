@@ -1,0 +1,263 @@
+/* ---------- PianoKeyboard ---------- */
+
+.pk {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pk-scroller {
+  position: relative;
+  overflow-x: hidden;
+  overflow-y: hidden;
+  border-radius: 6px 6px 8px 8px;
+  /* lift the instrument off the card */
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05),
+    0 18px 36px -12px rgba(0, 0, 0, 0.7),
+    0 4px 10px rgba(0, 0, 0, 0.35);
+  background: #120d09;
+}
+
+.pk.is-scrollable .pk-scroller {
+  overflow-x: auto;
+  scroll-behavior: auto;
+  overscroll-behavior-x: contain;
+}
+
+.pk-content {
+  position: relative;
+}
+
+.pk-svg {
+  display: block;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.pk.is-interactive .pk-svg {
+  cursor: pointer;
+}
+
+/* Hit-testing is done geometrically on the <svg>; skip Blink's per-shape SVG hit tests. */
+.pk-svg * {
+  pointer-events: none;
+}
+
+.pk-noptr {
+  pointer-events: none;
+}
+
+/* Drag the key slip to pan a scrollable keyboard (keys themselves never scroll). */
+.pk-pan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  touch-action: pan-x;
+  cursor: grab;
+}
+
+/* ---- keys ---- */
+
+.pk-travel {
+  transition: transform 0.12s var(--ease-out);
+}
+
+.pk-key.is-down .pk-travel {
+  transform: translateY(0.8px);
+  transition-duration: 0.03s;
+}
+
+.pk-key.is-bad .pk-travel {
+  animation: pk-shake 0.36s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@keyframes pk-shake {
+  0% { transform: translate(0, 0.8px); }
+  20% { transform: translate(-1.2px, 0.8px); }
+  40% { transform: translate(1.2px, 0.8px); }
+  60% { transform: translate(-0.8px, 0.8px); }
+  80% { transform: translate(0.5px, 0.8px); }
+  100% { transform: translate(0, 0.8px); }
+}
+
+.pk-wash {
+  transition: opacity 0.32s ease-out;
+}
+
+.pk-key.is-down .pk-wash {
+  transition-duration: 0.04s;
+}
+
+.pk-tint {
+  opacity: 0.26;
+}
+
+.pk-tint.on-black {
+  opacity: 0.42;
+}
+
+.pk-lip-glow {
+  fill: var(--mk);
+  opacity: 0.9;
+}
+
+/* A thin lit rim inside a pressed key: reads as light, not paint. */
+.pk-press-edge {
+  fill: none;
+  stroke: var(--mk);
+  stroke-width: 1.6;
+  opacity: 0.75;
+  animation: ins-fade-in 0.08s ease-out;
+}
+
+.pk-press-edge.on-black {
+  stroke-width: 1.2;
+  opacity: 0.9;
+}
+
+.pk-dim {
+  fill: #121731;
+  opacity: 0.44;
+  pointer-events: none;
+}
+
+.pk-dim.on-black {
+  opacity: 0.45;
+}
+
+/* ---- labels ---- */
+
+.pk-label {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  text-anchor: middle;
+  fill: rgba(58, 46, 30, 0.58);
+  letter-spacing: 0.01em;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.pk-label.is-emph {
+  fill: #a8681f;
+  font-weight: 800;
+}
+
+.pk-label.is-dim {
+  fill: rgba(58, 46, 30, 0.35);
+}
+
+.pk-label.on-black {
+  fill: rgba(255, 255, 255, 0.62);
+  font-weight: 600;
+}
+
+.pk-label.on-black.is-alt {
+  fill: rgba(255, 255, 255, 0.4);
+}
+
+.pk-midc-dot {
+  fill: #c98a35;
+  pointer-events: none;
+}
+
+/* ---- marks ---- */
+
+.pk-mark {
+  pointer-events: none;
+}
+
+.pk-mark .ins-halo {
+  opacity: 0.75;
+}
+
+.pk-mark.on-black .ins-halo {
+  opacity: 0.95;
+}
+
+.pk-mark-shadow {
+  fill: rgba(60, 38, 10, 0.22);
+}
+
+.pk-mark-body {
+  fill: var(--mk);
+  stroke: rgba(255, 255, 255, 0.7);
+  stroke-width: 1;
+}
+
+.pk-mark.on-black .pk-mark-body {
+  stroke: rgba(255, 255, 255, 0.5);
+}
+
+.pk-mark-shine {
+  opacity: 0.55;
+}
+
+.pk-mark-text {
+  font-family: var(--font-ui);
+  font-weight: 750;
+  text-anchor: middle;
+  fill: #1a1006;
+  font-variant-numeric: tabular-nums;
+}
+
+.pk-mark-sub {
+  font-family: var(--font-ui);
+  font-weight: 650;
+  text-anchor: middle;
+  fill: rgba(58, 46, 30, 0.75);
+}
+
+.pk-mark.on-black .pk-mark-sub {
+  fill: rgba(255, 255, 255, 0.75);
+}
+
+/* Hints are suggestions: a softer, outlined chip. */
+.ins-c-hint .pk-mark-body {
+  fill-opacity: 0.28;
+  stroke: var(--mk);
+  stroke-width: 1.5;
+}
+
+.ins-c-hint .pk-mark-shine {
+  opacity: 0.2;
+}
+
+.ins-c-hint .pk-mark-text {
+  fill: #3b2fa0;
+}
+
+.pk-mark.on-black.ins-c-hint .pk-mark-text {
+  fill: #ece8ff;
+}
+
+/* ---- press effects ---- */
+
+.pk-fx .pk-bloom {
+  transform-box: fill-box;
+  transform-origin: 50% 70%;
+  opacity: 0;
+  animation: ins-bloom 0.7s var(--ease-out) forwards;
+}
+
+.pk-fx .pk-felt-glow {
+  opacity: 0.9;
+  animation: ins-fade-in 0.08s ease-out;
+}
+
+.pk-fx .pk-felt-led {
+  fill: var(--mk);
+  animation: ins-fade-in 0.06s ease-out;
+}
+
+.pk-fx.ins-c-good .pk-bloom,
+.pk-fx.ins-c-bad .pk-bloom {
+  animation-duration: 0.9s;
+}

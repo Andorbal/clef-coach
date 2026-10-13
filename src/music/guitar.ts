@@ -171,7 +171,9 @@ export function fingerGuitarLine(
   return chosen.map(combo => {
     const h = handOf(combo);
     if (h) {
-      if (h.lo < handPos || h.hi > handPos + 3) {
+      // a one-fret stretch below the position (index finger reaches back) is not a shift
+      const stretch = h.lo === handPos - 1 && h.hi <= handPos + 2 && h.lo >= 1;
+      if (!stretch && (h.lo < handPos || h.hi > handPos + 3)) {
         // shift: keep index finger at the lowest fretted note when possible
         handPos = h.hi - h.lo <= 3 ? (h.hi > handPos + 3 ? Math.max(h.lo, h.hi - 3) : h.lo) : h.lo;
       }

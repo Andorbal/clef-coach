@@ -123,7 +123,7 @@ export type ActivityDef =
       type: 'piece';
       /** song id from the song library, or inline notation */
       song?: string;
-      inline?: { key: string; time: TimeSig; staves: { clef: Clef; hand?: Hand; voices: string[] }[]; title?: string };
+      inline?: { key: string; time: TimeSig; staves: { clef: Clef; hand?: Hand; voices: string[] }[]; title?: string; pickup?: string };
       mode: 'wait' | 'tempo';
       tempo?: number;
       hands?: 'R' | 'L' | 'both';

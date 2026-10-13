@@ -9,7 +9,7 @@ import { fingerPianoLine, scaleFingering } from '../music/fingering';
 import { type KeySig, parseKey, scalePitches, tonicOf, keyAlterations, type ScaleKind } from '../music/keys';
 import { type Pitch, diatonicIndex, fromDiatonic, midiOf, parsePitch, pitchClass } from '../music/pitch';
 import { type BaseDuration, PPQ, type TimeSig, beatTicks, durationTicks, measureTicks, splitTicks } from '../music/rhythm';
-import { type Clef, type Hand, type NoteSpec, type Score, type StaffPart, buildVoice } from '../music/score';
+import { type Clef, type Hand, type NoteEl, type NoteSpec, type Score, type StaffPart, buildVoice } from '../music/score';
 import type { AccompPattern, MelodyGen, RhythmCell } from './types';
 
 // ---------------------------------------------------------------------------
@@ -464,6 +464,34 @@ function genAccomp(
 
 let genCounter = 0;
 
+const CHORD_PATTERNS = new Set<AccompPattern>(['broken', 'alberti', 'waltz', 'blocked', 'roots', 'drone']);
+
+/**
+ * Left-hand fingering for accompaniment figures, bar by bar: the lowest note of the
+ * bar's chord takes 5, the highest takes 1, inner notes take 3 (or 2 when they sit a
+ * 4th or more above the bass) — e.g. Alberti C–G–E–G = 5-1-3-1, C–F–A = 5-2-1.
+ */
+function fingerAccompaniment(notes: NoteEl[]) {
+  const byMeasure = new Map<number, NoteEl[]>();
+  for (const n of notes) {
+    const list = byMeasure.get(n.measure) ?? [];
+    list.push(n);
+    byMeasure.set(n.measure, list);
+  }
+  for (const list of byMeasure.values()) {
+    const all = [...new Set(list.flatMap(n => n.pitches.map(midiOf)))].sort((a, b) => a - b);
+    const lo = all[0];
+    const hi = all[all.length - 1];
+    const fingerOf = (m: number) => {
+      if (all.length === 1) return 5;
+      if (m === lo) return 5;
+      if (m === hi) return hi - lo > 12 ? 1 : 1;
+      return m - lo >= 5 && hi - m <= 4 ? 2 : 3;
+    };
+    for (const n of list) n.fingers = n.pitches.map(p => fingerOf(midiOf(p)));
+  }
+}
+
 export function generateScore(gen: MelodyGen, rng: Rng = makeRng(), instrument: 'piano' | 'guitar' = 'piano', title = ''): Score {
   const key = parseKey(gen.key);
   const id = `gen${++genCounter}`;
@@ -524,6 +552,9 @@ export function generateScore(gen: MelodyGen, rng: Rng = makeRng(), instrument: 
           });
         }
         void base;
+      } else if (si === 1 && CHORD_PATTERNS.has(pattern) && h === 'L') {
+        // accompaniment figures: the hand frames each bar's chord (lowest = 5, highest = 1)
+        fingerAccompaniment(notes);
       } else {
         const res = fingerPianoLine(notes.map(n => ({ midis: n.pitches.map(midiOf) })), h);
         notes.forEach((n, i) => (n.fingers = res[i]));

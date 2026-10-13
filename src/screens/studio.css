@@ -1,0 +1,264 @@
+@import './songs.css';
+
+.tool-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
+}
+
+.tool-card {
+  position: relative;
+  height: 100%;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text);
+  transition: transform 0.2s var(--ease-out), border-color 0.2s;
+  --c: var(--gold);
+  background:
+    radial-gradient(130% 110% at 0% 0%, color-mix(in srgb, var(--c) 14%, transparent), transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+}
+
+.tool-card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--c) 40%, transparent);
+}
+
+.tool-teal {
+  --c: var(--teal);
+}
+
+.tool-violet {
+  --c: var(--violet);
+}
+
+.tool-green {
+  --c: var(--good);
+}
+
+.tool-coral {
+  --c: var(--rh);
+}
+
+.tool-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 15px;
+  display: grid;
+  place-items: center;
+  color: var(--c);
+  background: color-mix(in srgb, var(--c) 14%, transparent);
+  margin-bottom: 4px;
+}
+
+.tool-title {
+  font-size: 21px;
+}
+
+.tool-arrow {
+  position: absolute;
+  right: 18px;
+  top: 22px;
+  color: var(--text-faint);
+}
+
+.tool-shell-title {
+  font-size: 20px;
+}
+
+.freeplay-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.freeplay-names {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.freeplay-big {
+  font-size: clamp(24px, 3.4vw, 34px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.freeplay-chord {
+  color: var(--gold);
+  font-weight: 600;
+  min-height: 1.4em;
+}
+
+.freeplay-paper {
+  max-height: 380px;
+}
+
+.explorer-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.root-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.root-btn {
+  min-width: 46px;
+  height: 40px;
+  padding: 0 10px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+
+.root-btn.on {
+  background: linear-gradient(180deg, #ffe0a3, var(--gold));
+  color: #1d1306;
+  border-color: #ffe0a3;
+  box-shadow: 0 4px 16px var(--gold-glow);
+}
+
+.explorer-caption {
+  font-size: 15px;
+}
+
+.explorer-board {
+  margin: auto 0;
+}
+
+/* Tuner */
+.tuner {
+  align-items: center;
+  justify-content: center;
+}
+
+.tuner-dial {
+  width: min(520px, 100%);
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  transition: box-shadow 0.3s, border-color 0.3s;
+}
+
+.tuner-dial.in-tune {
+  border-color: rgba(63, 220, 154, 0.5);
+  box-shadow: var(--shadow-2), 0 0 60px var(--good-glow);
+}
+
+.tuner-svg {
+  width: 100%;
+  max-width: 380px;
+}
+
+.tuner-svg .tick {
+  stroke: rgba(255, 255, 255, 0.28);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.tuner-svg .tick.zero {
+  stroke: var(--good);
+  stroke-width: 3;
+}
+
+.tuner-svg .needle {
+  stroke: var(--gold);
+  stroke-width: 3;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 6px var(--gold-glow));
+}
+
+.in-tune .tuner-svg .needle {
+  stroke: var(--good);
+}
+
+.tuner-svg .hub {
+  fill: #f8f3e8;
+}
+
+.tuner-note {
+  font-size: 72px;
+  line-height: 1;
+  font-weight: 600;
+}
+
+.tuner-note sub {
+  font-size: 24px;
+  color: var(--text-faint);
+}
+
+.tuner-cents {
+  color: var(--text-dim);
+}
+
+.tuner-strings {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  width: min(640px, 100%);
+}
+
+.tuner-string {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 0;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.tuner-string.on {
+  border-color: var(--gold);
+  box-shadow: 0 0 16px var(--gold-glow);
+}
+
+.tuner-note-small {
+  font-size: 13px;
+}
+
+/* Gym */
+.gym-setup {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 24px 16px;
+}
+
+.set-select {
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+}
+
+.gym-stop {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 10;
+}
+
+.scales .stage-paper {
+  max-height: 260px;
+}

@@ -14,7 +14,7 @@ function visualNotes(v: Insight['visual']) {
   if (!v) return;
   if ('notes' in v && v.kind !== 'keys') {
     const text = v.notes.join(' ');
-    parseVoice(/\//.test(text) ? text : text.replace(/^(\S+)/, '$1/w'), v.kind === 'staff' && v.time ? v.time : [4, 4], 0, 'visual', true);
+    parseVoice(/\//.test(text) ? text : text.replace(/^(\[[^\]]*\]|\S+)/, '$1/w'), v.kind === 'staff' && v.time ? v.time : [4, 4], 0, 'visual', true);
   }
   if (v.kind === 'keys') v.notes.forEach(parsePitch);
 }
@@ -68,7 +68,7 @@ function checkActivity(a: ActivityDef, instrument: 'piano' | 'guitar', where: st
         expect(song, `${where}: missing song ${a.song}`).toBeTruthy();
         if (song) expect(song.instrument, `${where}: song instrument`).toBe(instrument);
       } else if (a.inline) {
-        songToScore({ id: 'inline', title: '', composer: '', instrument, level: 1, key: a.inline.key, time: a.inline.time, tempo: 80, staves: a.inline.staves });
+        songToScore({ id: 'inline', title: '', composer: '', instrument, level: 1, key: a.inline.key, time: a.inline.time, tempo: 80, pickup: a.inline.pickup, staves: a.inline.staves });
       } else throw new Error(`${where}: piece needs song or inline`);
       break;
     case 'scale':
