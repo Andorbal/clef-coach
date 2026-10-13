@@ -1,0 +1,79 @@
+/* Shared instrument styles: mark colours + gentle animations. */
+
+.ins-c-rh { --mk: var(--rh); --mk-glow: var(--rh-glow); }
+.ins-c-lh { --mk: var(--lh); --mk-glow: var(--lh-glow); }
+.ins-c-good { --mk: var(--good); --mk-glow: var(--good-glow); }
+.ins-c-bad { --mk: var(--bad); --mk-glow: var(--bad-glow); }
+.ins-c-gold { --mk: var(--gold); --mk-glow: var(--gold-glow); }
+.ins-c-hint { --mk: var(--violet); --mk-glow: rgba(155, 140, 255, 0.4); }
+
+/* Calm "breathing" for pulsing targets: slow, symmetric, never frantic. */
+@keyframes ins-breathe {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+}
+
+@keyframes ins-breathe-body {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.07);
+  }
+}
+
+.ins-pulse .ins-halo {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ins-breathe 2.4s ease-in-out infinite;
+}
+
+.ins-pulse .ins-body {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ins-breathe-body 2.4s ease-in-out infinite;
+}
+
+/* Expanding ring when something is struck / tapped. */
+@keyframes ins-ripple {
+  from {
+    opacity: 0.95;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 0;
+    transform: scale(2.6);
+  }
+}
+
+/* Light bloom on press: quick attack, slow release. */
+@keyframes ins-bloom {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes ins-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

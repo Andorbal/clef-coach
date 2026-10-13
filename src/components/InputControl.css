@@ -1,0 +1,130 @@
+.input-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  max-width: 220px;
+}
+
+.input-chip.mic {
+  color: var(--good);
+  border-color: rgba(63, 220, 154, 0.3);
+}
+
+.input-chip.midi {
+  color: var(--lh);
+  border-color: rgba(105, 184, 255, 0.3);
+}
+
+.input-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mic-meter {
+  width: 34px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.mic-meter span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--good), var(--gold));
+  transform-origin: left;
+  transition: transform 0.08s linear;
+}
+
+.input-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.input-option {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  text-align: left;
+  padding: 14px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  transition: border-color 0.2s, background 0.2s, transform 0.15s;
+}
+
+.input-option:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.input-option:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+.input-option.on {
+  border-color: rgba(244, 201, 122, 0.6);
+  background: linear-gradient(180deg, rgba(244, 201, 122, 0.1), rgba(244, 201, 122, 0.03));
+  box-shadow: 0 0 0 1px rgba(244, 201, 122, 0.25) inset;
+}
+
+.input-option:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.input-option-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--gold);
+  flex: none;
+}
+
+.input-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 14px;
+}
+
+.input-option-text strong {
+  font-size: 16px;
+}
+
+.input-error {
+  color: var(--bad);
+  font-size: 14px;
+}
+
+.live-readout {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px dashed var(--border-strong);
+  min-height: 52px;
+}
+
+.live-readout strong {
+  font-size: 22px;
+}
+
+.mic-meter.wide {
+  width: 80px;
+  margin-left: auto;
+}

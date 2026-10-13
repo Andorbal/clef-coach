@@ -1,0 +1,155 @@
+import { create } from 'zustand';
+import {
+  type LessonOutcome,
+  type OutcomeReport,
+  addTrack,
+  applyOutcome,
+  emptyData,
+  makeExport,
+  mergeData,
+  newProfile,
+  removeTrack,
+  testOut,
+} from './logic';
+import {
+  DEFAULT_DEVICE,
+  type DeviceSettings,
+  type PersistedData,
+  type Profile,
+  type ProfileSettings,
+  type TrackId,
+} from './types';
+
+const DATA_KEY = 'clefcoach.data.v1';
+const DEVICE_KEY = 'clefcoach.device.v1';
+export const APP_VERSION = '1.0.0';
+
+function load<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+let persistRequested = false;
+function save(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    console.warn('Could not save progress', e);
+  }
+  if (!persistRequested && typeof navigator !== 'undefined' && navigator.storage?.persist) {
+    persistRequested = true;
+    navigator.storage.persist().catch(() => undefined);
+  }
+}
+
+interface AppState {
+  data: PersistedData;
+  device: DeviceSettings;
+  /** Convenience selectors */
+  profile: () => Profile | null;
+  createProfile: (name: string, hue?: number) => Profile;
+  switchProfile: (id: string) => void;
+  renameProfile: (id: string, name: string, hue?: number) => void;
+  deleteProfile: (id: string) => void;
+  addTrack: (t: TrackId) => void;
+  removeTrack: (t: TrackId) => void;
+  setActiveTrack: (t: TrackId) => void;
+  reorderTracks: (order: TrackId[]) => void;
+  updateSettings: (s: Partial<ProfileSettings>) => void;
+  updateDevice: (s: Partial<DeviceSettings>) => void;
+  recordOutcome: (o: LessonOutcome) => OutcomeReport | null;
+  testOut: (t: TrackId, lessonIds: string[]) => void;
+  exportJson: (profileIds?: string[]) => string;
+  importData: (d: PersistedData, mode: 'merge' | 'replace') => void;
+  resetAll: () => void;
+}
+
+function initialData(): PersistedData {
+  const d = load<PersistedData>(DATA_KEY, emptyData());
+  if (d?.app !== 'clef-coach' || typeof d.profiles !== 'object') return emptyData();
+  return d;
+}
+
+export const useApp = create<AppState>((set, get) => {
+  const commit = (data: PersistedData) => {
+    save(DATA_KEY, data);
+    set({ data });
+  };
+  const mutateProfile = (fn: (p: Profile) => Profile) => {
+    const { data } = get();
+    const id = data.activeProfileId;
+    if (!id || !data.profiles[id]) return;
+    commit({ ...data, profiles: { ...data.profiles, [id]: fn(data.profiles[id]) } });
+  };
+
+  return {
+    data: initialData(),
+    device: { ...DEFAULT_DEVICE, ...load<Partial<DeviceSettings>>(DEVICE_KEY, {}) },
+    profile: () => {
+      const { data } = get();
+      return data.activeProfileId ? data.profiles[data.activeProfileId] ?? null : null;
+    },
+    createProfile: (name, hue) => {
+      const p = newProfile(name, hue);
+      const { data } = get();
+      commit({ ...data, profiles: { ...data.profiles, [p.id]: p }, activeProfileId: p.id });
+      return p;
+    },
+    switchProfile: id => {
+      const { data } = get();
+      if (data.profiles[id]) commit({ ...data, activeProfileId: id });
+    },
+    renameProfile: (id, name, hue) => {
+      const { data } = get();
+      const p = data.profiles[id];
+      if (!p) return;
+      commit({ ...data, profiles: { ...data.profiles, [id]: { ...p, name: name.trim() || p.name, hue: hue ?? p.hue } } });
+    },
+    deleteProfile: id => {
+      const { data } = get();
+      const profiles = { ...data.profiles };
+      delete profiles[id];
+      const activeProfileId = data.activeProfileId === id ? Object.keys(profiles)[0] ?? null : data.activeProfileId;
+      commit({ ...data, profiles, activeProfileId });
+    },
+    addTrack: t => mutateProfile(p => addTrack(p, t)),
+    removeTrack: t => mutateProfile(p => removeTrack(p, t)),
+    setActiveTrack: t => mutateProfile(p => ({ ...p, activeTrackId: t })),
+    reorderTracks: order => mutateProfile(p => ({ ...p, trackOrder: order })),
+    updateSettings: s => mutateProfile(p => ({ ...p, settings: { ...p.settings, ...s } })),
+    updateDevice: s => {
+      const device = { ...get().device, ...s };
+      save(DEVICE_KEY, device);
+      set({ device });
+    },
+    recordOutcome: o => {
+      const p = get().profile();
+      if (!p) return null;
+      const report = applyOutcome(p, o);
+      mutateProfile(() => report.profile);
+      return report;
+    },
+    testOut: (t, ids) => mutateProfile(p => testOut(p, t, ids)),
+    exportJson: ids => JSON.stringify(makeExport(get().data, APP_VERSION, ids), null, 1),
+    importData: (d, mode) => {
+      commit(mode === 'replace' ? d : mergeData(get().data, d));
+    },
+    resetAll: () => {
+      commit(emptyData());
+    },
+  };
+});
+
+/** Hook: the active profile (re-renders on change). */
+export function useProfile(): Profile | null {
+  return useApp(s => (s.data.activeProfileId ? s.data.profiles[s.data.activeProfileId] ?? null : null));
+}
+
+export function useDevice(): DeviceSettings {
+  return useApp(s => s.device);
+}

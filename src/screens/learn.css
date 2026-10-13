@@ -1,0 +1,63 @@
+.learn-group {
+  margin-bottom: 30px;
+}
+
+.learn-group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.learn-group-head h2 {
+  font-size: 26px;
+}
+
+.learn-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.learn-card {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background:
+    radial-gradient(140% 110% at 0% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+}
+
+.learn-card.mine {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.learn-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.learn-card-title {
+  font-size: 26px;
+}
+
+.learn-card-desc {
+  font-size: 14px;
+  flex: 1;
+}
+
+.learn-card-meta {
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.learn-card-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}

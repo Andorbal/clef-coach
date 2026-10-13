@@ -1,0 +1,227 @@
+.notation {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.notation-content {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transition: transform 0.55s var(--ease-out);
+  will-change: transform;
+}
+
+.notation-content.no-ease {
+  transition: none;
+}
+
+.notation-svg {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.notation-svg svg,
+.notation-header-svg svg {
+  display: block;
+  overflow: visible;
+}
+
+.notation-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.notation-header {
+  position: absolute;
+  left: 0;
+  height: 100%;
+  pointer-events: none;
+}
+
+.notation-header-svg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  background: transparent;
+}
+
+.notation-header-svg::before {
+  content: '';
+  position: absolute;
+  inset: -200px 0 -200px -40px;
+  background: var(--paper-bg, var(--paper));
+  z-index: -1;
+}
+
+.notation-header-fade {
+  position: absolute;
+  top: -400px;
+  bottom: -400px;
+  width: 56px;
+  background: linear-gradient(90deg, var(--paper-bg, var(--paper)), transparent);
+}
+
+/* ---------- note states ---------- */
+.cc-score .vf-stavenote text,
+.cc-score .vf-stavenote path {
+  transition: fill 0.25s ease, stroke 0.25s ease, opacity 0.35s ease;
+}
+
+.cc-score .vf-stavenote.st-active text,
+.cc-score .vf-stavenote.st-active path {
+  fill: #b86e12;
+  stroke: #b86e12;
+}
+
+.cc-score .vf-stavenote.st-hint text,
+.cc-score .vf-stavenote.st-hint path {
+  fill: #7a5cff;
+  stroke: #7a5cff;
+}
+
+.cc-score .vf-stavenote.st-good text,
+.cc-score .vf-stavenote.st-good path {
+  fill: #138a5a;
+  stroke: #138a5a;
+}
+
+.cc-score .vf-stavenote.st-bad text,
+.cc-score .vf-stavenote.st-bad path {
+  fill: #d23452;
+  stroke: #d23452;
+}
+
+.cc-score .vf-stavenote.st-missed text,
+.cc-score .vf-stavenote.st-missed path {
+  fill: #d23452;
+  stroke: #d23452;
+  opacity: 0.55;
+}
+
+.cc-score .vf-stavenote.st-done text,
+.cc-score .vf-stavenote.st-done path {
+  opacity: 0.38;
+}
+
+/* ---------- overlay ---------- */
+.playhead {
+  fill: rgba(229, 165, 75, 0.16);
+  stroke: rgba(229, 165, 75, 0.35);
+  stroke-width: 1;
+  transition: x 0.45s var(--ease-out);
+}
+
+.note-name rect {
+  fill: rgba(28, 25, 21, 0.06);
+  stroke: rgba(28, 25, 21, 0.12);
+  stroke-width: 0.6;
+}
+
+.note-name text {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 650;
+  fill: #5d554a;
+  letter-spacing: 0.02em;
+}
+
+.note-name.nn-active rect {
+  fill: rgba(229, 165, 75, 0.2);
+  stroke: rgba(184, 110, 18, 0.5);
+}
+
+.note-name.nn-active text {
+  fill: #8a4f05;
+}
+
+.note-name.nn-good text {
+  fill: #138a5a;
+}
+
+.note-name.nn-done {
+  opacity: 0.4;
+}
+
+.ghost text {
+  font-family: Bravura;
+  font-size: 40px;
+}
+
+.ghost line {
+  stroke-width: 1.4;
+}
+
+.ghost-bad text {
+  fill: #d23452;
+}
+
+.ghost-bad line {
+  stroke: #d23452;
+}
+
+.ghost-good text {
+  fill: #138a5a;
+}
+
+.ghost-good line {
+  stroke: #138a5a;
+}
+
+.ghost-info text {
+  fill: #7a5cff;
+}
+
+.ghost-info line {
+  stroke: #7a5cff;
+}
+
+.ghost {
+  animation: ghost-in 0.9s var(--ease-out) forwards;
+}
+
+@keyframes ghost-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  15% {
+    opacity: 0.95;
+    transform: translateY(0);
+  }
+  70% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ---------- paper card ---------- */
+.paper {
+  --paper-bg: var(--paper);
+  position: relative;
+  background: var(--paper);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-paper);
+  overflow: hidden;
+}
+
+.paper::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  z-index: 2;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04), inset 0 -40px 80px rgba(120, 90, 40, 0.08), inset 0 40px 80px rgba(255, 255, 255, 0.35);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.4  0 0 0 0 0.3  0 0 0 0 0.15  0 0 0 0.05 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  opacity: 0.7;
+}

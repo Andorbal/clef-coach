@@ -1,0 +1,303 @@
+/* ---------- Fretboard ---------- */
+
+.fb {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.fb-scroller {
+  position: relative;
+  overflow-x: hidden;
+  overflow-y: hidden;
+}
+
+.fb.is-scrollable .fb-scroller {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.fb-content {
+  position: relative;
+}
+
+.fb-surface {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.fb.is-interactive .fb-surface {
+  cursor: pointer;
+}
+
+.fb-svg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* Drag along the fret numbers to pan a neck that doesn't fit. */
+.fb-pan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  touch-action: pan-x;
+  cursor: grab;
+}
+
+/* Edge fades with a paging button when more of the neck is off-screen. */
+.fb-more {
+  position: absolute;
+  top: 0;
+  width: 44px;
+  display: flex;
+  align-items: center;
+  border: 0;
+  padding: 0;
+  z-index: 2;
+  color: #fff;
+  font-size: 30px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.fb-more span {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(10, 12, 24, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding-bottom: 4px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+.fb-more.left {
+  left: 0;
+  justify-content: flex-start;
+  background: linear-gradient(90deg, rgba(8, 9, 18, 0.75), transparent);
+}
+
+.fb-more.right {
+  right: 0;
+  justify-content: flex-end;
+  background: linear-gradient(270deg, rgba(8, 9, 18, 0.75), transparent);
+}
+
+/* ---- text ---- */
+
+.fb-num {
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-anchor: middle;
+  fill: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.fb-num.is-marker {
+  fill: var(--text-dim);
+  font-weight: 700;
+}
+
+.fb-pos-num {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  text-anchor: middle;
+  fill: var(--gold);
+}
+
+.fb-pos-fr {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-anchor: middle;
+  fill: var(--text-faint);
+}
+
+.fb-name rect {
+  fill: rgba(16, 9, 5, 0.66);
+  stroke: rgba(255, 230, 200, 0.08);
+  stroke-width: 1;
+}
+
+.fb-name text {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  text-anchor: middle;
+  fill: rgba(255, 236, 214, 0.72);
+}
+
+/* ---- hand-position window ---- */
+
+.fb-window-dim {
+  fill: #05060c;
+  opacity: 0.42;
+}
+
+.fb-window-fill {
+  fill: rgba(244, 201, 122, 0.07);
+}
+
+.fb-window-edge {
+  fill: none;
+  stroke: rgba(244, 201, 122, 0.6);
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 6px rgba(244, 201, 122, 0.45));
+}
+
+/* ---- marks ---- */
+
+.fb-mark .ins-halo {
+  opacity: 0.6;
+}
+
+.fb-mark-body {
+  fill: var(--mk);
+  stroke: rgba(255, 255, 255, 0.75);
+  stroke-width: 1.2;
+}
+
+.fb-shine {
+  opacity: 0.5;
+}
+
+.fb-mark-text {
+  font-family: var(--font-ui);
+  font-weight: 750;
+  text-anchor: middle;
+  fill: #170e04;
+  font-variant-numeric: tabular-nums;
+}
+
+.fb-root-ring {
+  fill: none;
+  stroke: var(--mk);
+  stroke-width: 1.6;
+  opacity: 0.85;
+}
+
+/* Open strings: a hollow ring like the "o" over a chord diagram. */
+.fb-mark.is-open .fb-mark-body {
+  fill: var(--mk);
+  fill-opacity: 0.16;
+  stroke: var(--mk);
+  stroke-width: 2.2;
+}
+
+.fb-mark.is-open .fb-mark-text {
+  fill: var(--mk);
+}
+
+/* Ghosts: pattern context, quiet. */
+.fb-mark.is-ghost .fb-mark-body {
+  fill: var(--mk);
+  fill-opacity: 0.1;
+  stroke: var(--mk);
+  stroke-opacity: 0.55;
+  stroke-width: 1.4;
+  stroke-dasharray: 3 2.5;
+}
+
+.fb-mark.is-ghost .fb-root-ring {
+  opacity: 0.35;
+}
+
+.fb-mark.is-ghost .fb-mark-text {
+  fill: var(--mk);
+  opacity: 0.75;
+  font-weight: 600;
+}
+
+.ins-c-hint.fb-mark .fb-mark-body {
+  fill-opacity: 0.3;
+  stroke: var(--mk);
+  stroke-width: 1.6;
+}
+
+.ins-c-hint.fb-mark .fb-mark-text {
+  fill: #f1eeff;
+}
+
+.fb-badge circle {
+  fill: #14100c;
+  stroke: var(--mk);
+  stroke-width: 1.2;
+}
+
+.fb-badge text {
+  font-family: var(--font-ui);
+  font-weight: 750;
+  text-anchor: middle;
+  fill: #fff;
+}
+
+/* ---- press feedback ---- */
+
+.fb-press-glow {
+  animation: ins-fade-in 0.1s ease-out;
+}
+
+.fb-press-dot {
+  fill: var(--mk);
+  opacity: 0.92;
+  stroke: rgba(255, 255, 255, 0.8);
+  stroke-width: 1.2;
+}
+
+.fb-press-ring {
+  fill: none;
+  stroke: var(--mk);
+  stroke-width: 2;
+  opacity: 0.9;
+}
+
+.fb-ripple {
+  fill: none;
+  stroke: var(--mk);
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ins-ripple 0.75s var(--ease-out) forwards;
+}
+
+.fb-ripple.is-late {
+  stroke-width: 1.2;
+  animation-delay: 0.14s;
+  opacity: 0;
+}
+
+/* A plucked/fretted string shimmers from the fret to the bridge, then settles. */
+.fb-vib {
+  fill: var(--mk);
+  opacity: 0.32;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: fb-vibrate 1.1s ease-out forwards;
+  filter: drop-shadow(0 0 4px var(--mk));
+}
+
+@keyframes fb-vibrate {
+  0% { transform: scaleY(3.4); opacity: 1; }
+  10% { transform: scaleY(0.6); }
+  20% { transform: scaleY(2.5); }
+  32% { transform: scaleY(0.8); }
+  46% { transform: scaleY(1.7); opacity: 0.7; }
+  62% { transform: scaleY(1); }
+  100% { transform: scaleY(1); opacity: 0.32; }
+}
