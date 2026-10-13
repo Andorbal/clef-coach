@@ -6,8 +6,10 @@ import { pianoGrand } from './tracks/pianoGrand';
 import { guitarTreble } from './tracks/guitarTreble';
 import { guitarBass } from './tracks/guitarBass';
 import { guitarFretboard } from './tracks/guitarFretboard';
+import { bassLines } from './tracks/bassLines';
+import { bassFretboard } from './tracks/bassFretboard';
 
-export const TRACKS: TrackDef[] = [pianoTreble, pianoBass, pianoGrand, guitarTreble, guitarBass, guitarFretboard];
+export const TRACKS: TrackDef[] = [pianoTreble, pianoBass, pianoGrand, guitarTreble, guitarBass, guitarFretboard, bassLines, bassFretboard];
 
 const byId = new Map(TRACKS.map(t => [t.id, t]));
 

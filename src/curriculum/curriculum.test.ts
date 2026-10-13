@@ -1,4 +1,4 @@
-import { type InstrumentId, MALLET_VARIANTS, instrumentDef, tuningFor } from '../music/instruments';
+import { type InstrumentId, MALLET_VARIANTS, instrumentDef, isFretted, tuningFor } from '../music/instruments';
 import { describe, expect, it } from 'vitest';
 import { TRACKS } from './index';
 import { generateScore, genRhythm, makeRng, scaleScore } from './generate';
@@ -97,15 +97,19 @@ function checkActivity(a: ActivityDef, instrument: InstrumentId, where: string) 
     case 'fret-find':
     case 'fret-name':
     case 'fret-play':
-    case 'fret-octave':
-      expect(instrument).toBe('guitar');
-      a.strings.forEach(s => expect(s >= 1 && s <= 6, `${where}: string ${s}`).toBe(true));
+    case 'fret-octave': {
+      expect(isFretted(instrument), `${where}: fret activity needs a fretted instrument`).toBe(true);
+      const strings = tuningFor(instrument, { ukuleleTuning: 'low-g', bassStrings: 4 }).open.length;
+      a.strings.forEach(s => expect(s >= 1 && s <= strings, `${where}: string ${s}`).toBe(true));
       expect(a.frets[0]).toBeGreaterThanOrEqual(0);
       expect(a.frets[1]).toBeLessThanOrEqual(19);
       expect(a.frets[0]).toBeLessThanOrEqual(a.frets[1]);
       break;
+    }
     case 'fret-shape':
-      expect(instrument).toBe('guitar');
+      expect(isFretted(instrument), `${where}: fret activity needs a fretted instrument`).toBe(true);
+      // CAGED shapes are guitar chord shapes
+      if (a.shape.kind === 'caged') expect(instrument, `${where}: CAGED shape`).toBe('guitar');
       break;
     case 'tip':
       visualNotes(a.insight.visual);
