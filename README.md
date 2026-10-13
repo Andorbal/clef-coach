@@ -1,32 +1,42 @@
 # Clef Coach
 
-**Learn to read the treble and bass clefs on piano and guitar, with your real instrument.**
+**Learn to read music and play songs on piano, guitar, ukulele, bass guitar and mallet percussion — with your real instrument.**
 
-Clef Coach is an installable web app (PWA) that takes you from your very first note to advanced sight-reading. It listens to your piano or guitar through **MIDI** or the **microphone**, shows real engraved notation, an accurate keyboard and fretboard, and teaches proper **fingering**, **hands-together** playing and the **whole guitar neck**.
+Clef Coach is an installable web app (PWA) that takes you from your very first note to advanced sight-reading and real songs. It listens to your instrument through **MIDI** or the **microphone**, shows real engraved notation, an accurate keyboard, fretboard or set of mallet bars, and teaches proper **fingering**, **sticking**, **hands-together** playing, **chords** and the **whole neck**.
 
 There's no account and no server. Progress lives on your device, and you can export or import it at any time.
 
 ## Highlights
 
-- **Six tracks you can run side by side**
+- **Five instruments, thirteen tracks you can run side by side**
   - **Piano:** Treble Clef (right hand), Bass Clef (left hand), Both Hands (grand staff).
-  - **Guitar:** Treble Clef (standard notation), Bass Clef (bass lines and low voices), Fretboard Navigator (every note, octave shapes, CAGED, pentatonic boxes, 3-notes-per-string scales).
+  - **Guitar:** Treble Clef (standard notation), Bass Clef (bass lines and low voices), Fretboard Navigator (every note, octave shapes, CAGED, pentatonic boxes, 3-notes-per-string scales), Chords (open chords to barre and colour chords, strumming along with songs).
+  - **Ukulele** (standard high-G, low-G or baritone tuning): Treble Clef (melodies, positions, campanella, chord-melody, the fretboard), Chords & Strumming.
+  - **Bass guitar** (4 or 5 strings): Bass Clef (grooves, walking lines, Simandl fingering), Fretboard & Grooves.
+  - **Mallets** (marimba, xylophone, glockenspiel or vibraphone): Two Mallets and Four Mallets, with sticking for every note. Xylophone and glockenspiel are written in their own octave and heard where they really sound.
 - **Smooth progression.** Each track has 10–15 units of short lessons. Every unit ends with a checkpoint, and you can **test out** of any unit to skip ahead.
 - **Endless content.** A harmony-aware generator writes fresh exercises with exactly the notes, rhythms, keys, leaps and accompaniment patterns each lesson calls for. You don't get "max level" and then refreshers forever: the **Sight-reading Gym** keeps going at your level.
 - **Real feedback**
   - *Wait mode*: the music waits for the right note or chord.
   - *Tempo mode*: a count-in and metronome, with every note scored for timing.
   - Wrong notes appear as red "ghost" notes on the staff, so you see what you actually played.
-- **Fingering everywhere**
+- **Fingering and sticking everywhere**
   - Standard scale fingerings, and five-finger positions that grow into thumb-under crossings.
-  - A dynamic-programming fingering engine handles everything else.
-  - Guitar gets left-hand fingers and circled string numbers.
+  - Dynamic-programming engines handle everything else: piano fingers; left-hand fingers and circled string numbers for guitar, ukulele (in any tuning) and bass (one finger per fret, or Simandl low on the neck); mallet sticking for two mallets (L/R) or four (1–4), avoiding crossings and double stickings.
 - **Hands together.** Accompaniment patterns progress through drone, roots, blocked chords, waltz, broken chords, Alberti bass, parallel and contrary motion, then independent counter-melodies. When you practise one hand of a piece, the app plays the other.
-- **Smart Review** uses spaced repetition on the notes (and frets) you find hardest.
-- **Songs.** Public-domain classics plus original compositions, arranged by level for each hand and instrument.
+- **Smart Review** uses spaced repetition on the notes, frets and chords you find hardest.
+- **Songs, and a place to learn them.** A library of public-domain classics and original pieces for every instrument, and a **Song Studio** for learning any song:
+  - a guided **practice plan**, phrase by phrase: hands (or mallets) separately, then together, then in time at 60, 80 and 100% — and then chaining phrases together;
+  - **phrase looping**, any custom range of bars, **slow-down** and a **speed builder**, **count-in** and **metronome**;
+  - **split the music**: one hand on piano, chosen strings on guitar, ukulele or bass, one staff of a marimba part — the app plays the rest at the volume you choose;
+  - **trouble spots** found from your mistakes, **lyrics** under each phrase, the song's **chords** drawn for your instrument;
+  - a **goal date** (“Silent Night by Christmas Eve”) that paces how much to practise each day.
+- **Import your own songs**: MusicXML (from MuseScore, Finale, Sibelius, Dorico, Flat, Noteflight or any sheet-music scanner), MIDI, or Clef Coach song files. **Scan sheet music or tab with Claude** using your own Anthropic API key, or use the prompt with any AI assistant. Every file is checked bar by bar with errors that say exactly what to fix. See [docs/song-format.md](docs/song-format.md).
+- **Chord chart.** Any chord on every instrument — chord boxes for guitar, ukulele and bass, marked keys for piano, marked bars for mallets — with fingers, intervals or note names. On a tablet or laptop, compare several chords side by side on several instruments at once (guitar over piano, say), or see every voicing of one chord. Tap to hear.
 - **Studio**
-  - Free Play: play anything and see it appear on the grand staff, with chord names.
-  - Fretboard Explorer, a chromatic tuner, and a scales-and-fingering reference.
+  - Free Play: play anything and see it appear on the staff, with chord names.
+  - Fretboard Explorer (guitar, ukulele, bass), a chromatic tuner, a scales-and-fingering reference and a sight-reading gym for every instrument.
+  - Metronome: tap tempo, time signatures, subdivisions, accents and a speed trainer.
 - **Progress.** XP, streaks with streak freezes, a daily goal, a practice calendar, per-note mastery heatmaps on a keyboard or fretboard, and low-key milestones.
 - **Multiple players on one device**, plus **export/import** (download, share sheet, or paste) with merge or replace.
 
@@ -51,6 +61,7 @@ npm test           # unit tests (music theory, generator, curriculum, songs, aud
 npm run typecheck
 npm run build      # production build in dist/ (static, PWA)
 npm run e2e        # Playwright smoke tests on iPad mini + phone viewports
+npm run clefsong -- help   # song file tools: validate, convert MusicXML/MIDI, scan with Claude, AI prompt
 
 # Slower, opt-in browser runs
 SWEEP=1 npx playwright test sweep --project=ipad   # render every step of every lesson, fail on any error
@@ -69,19 +80,26 @@ Microphone and MIDI need a secure context: `localhost` or HTTPS.
 
 ```
 src/
-  music/        pitch & keys, rhythm ticks, score model, text notation parser,
-                piano + guitar fingering engines, guitar fretboard patterns, chord naming
+  music/        pitch & keys, rhythm ticks, score model, text notation parser (repeats, key and
+                meter changes), instruments & tunings, piano / fretted / mallet fingering engines,
+                fretboard patterns, chord symbols and the chord book (voicings for every instrument)
   notation/     VexFlow 5 (Bravura) renderer: scrolling staff with fixed clef header,
                 grand staff, fingering, note states, ghost notes, playhead
-  instruments/  SVG piano keyboard (true key geometry) and fretboard (real fret spacing)
-  audio/        Web Audio context, synthesised piano (additive) & guitar (Karplus–Strong),
-                metronome, UI sounds, MIDI input, microphone pitch detection, input manager
-  curriculum/   lesson data model, builders, procedural generator, the six tracks
-  content/      public-domain + original song library
+  instruments/  SVG piano keyboard (true key geometry), fretboard (real fret spacing, any tuning),
+                mallet bars, chord diagrams
+  audio/        Web Audio context, synthesised piano (additive), guitar / ukulele / bass
+                (Karplus–Strong) and mallets (modal synthesis), metronome, UI sounds, MIDI input,
+                microphone pitch detection, input manager
+  curriculum/   lesson data model, builders, procedural generator, chord practice, the tracks
+  content/      public-domain + original song library for every instrument
+  songs/        the Clef Coach song format, MusicXML / MIDI importers, scanning with Claude
   engine/       lesson runtime: PlayAlong (wait/tempo judging), flashcards, rhythm,
                 fretboard activities, review & gym generators, unlock logic
   state/        zustand store, persistence, spaced repetition, achievements, export/import
-  screens/      onboarding, home, learn, track map, lesson player, songs, studio, progress, settings
+  screens/      onboarding, home, learn, track map, lesson player, songs, song studio, import,
+                chord chart, studio tools, metronome, progress, settings
+tools/          `clefsong` command-line tool (runs the app's TypeScript through Vite)
+docs/           song-format.md: the song file format and why
 ```
 
 All music is either public domain (traditional melodies, or composers who died long ago with works published before 1931) or composed for Clef Coach.
