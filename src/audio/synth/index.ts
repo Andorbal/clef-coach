@@ -8,6 +8,10 @@ import type { PlayOptions, SequenceEvent, SequenceHandle, SynthVoice } from './e
 export type { PlayOptions, SequenceEvent, SequenceHandle, SynthVoice } from './engine';
 export { renderPianoSamples, pianoNoteDuration, pianoNoteLength, pianoInharmonicity, PIANO_LOWEST, PIANO_HIGHEST } from './piano';
 export { renderGuitarSamples, guitarNoteDuration, guitarNoteLength, GUITAR_LOWEST, GUITAR_HIGHEST } from './guitar';
+export type { PluckedVariant } from './guitar';
+export { renderMalletSamples, malletNoteDuration, malletNoteLength } from './mallets';
+export type { MalletVoice } from './mallets';
+export { voiceOffset } from './engine';
 
 const engine = new SynthEngine();
 

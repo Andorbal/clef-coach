@@ -1,10 +1,25 @@
+import type { InstrumentId } from './instruments';
 import type { KeySig } from './keys';
 import { type Pitch, midiOf } from './pitch';
 import { type BaseDuration, type TimeSig, durationTicks, measureTicks } from './rhythm';
 
-export type Clef = 'treble' | 'bass' | 'treble8vb';
+/**
+ * Clefs. The "8vb" clefs are for instruments written an octave above their sound
+ * (guitar: treble8vb, bass guitar: bass8vb); scores always hold sounding pitch.
+ */
+export type Clef = 'treble' | 'bass' | 'treble8vb' | 'bass8vb';
 export type Hand = 'R' | 'L';
-export type Instrument = 'piano' | 'guitar';
+export type Instrument = InstrumentId;
+
+/** Treble or bass, ignoring any octave transposition. */
+export function clefBase(clef: Clef): 'treble' | 'bass' {
+  return clef === 'bass' || clef === 'bass8vb' ? 'bass' : 'treble';
+}
+
+/** Octaves the written notation sits above the sound. */
+export function clefOctave(clef: Clef): number {
+  return clef === 'treble8vb' || clef === 'bass8vb' ? 1 : 0;
+}
 
 export interface NoteEl {
   id: string;
@@ -19,9 +34,13 @@ export interface NoteEl {
   tick: number;
   /** 0-based measure index. */
   measure: number;
-  /** Piano: finger 1-5 per pitch. Guitar: left-hand finger 0-4 (0 = open) per pitch. */
+  /**
+   * Piano: finger 1-5 per pitch. Fretted: left-hand finger 0-4 (0 = open) per pitch.
+   * Mallets: mallet number 1-4 per pitch (1-2 left hand, 3-4 right hand; in two-mallet
+   * playing 2 = L and 3 = R).
+   */
   fingers?: (number | undefined)[];
-  /** Guitar string (1 = high E ... 6 = low E) per pitch. */
+  /** Fretted: string number per pitch (1 = highest course). */
   strings?: (number | undefined)[];
   /** Tie from this note into the next note of the same voice. */
   tieNext?: boolean;
@@ -52,16 +71,58 @@ export interface Score {
   measures: number;
   staves: StaffPart[];
   instrument: Instrument;
+  /** Fretted: open-string MIDI notes (string 1 first) the string numbers refer to. */
+  tuning?: number[];
+  /** Mallets: two- or four-mallet sticking (default 2). */
+  mallets?: 2 | 4;
+  /** Key / time signature changes after the first measure, sorted by measure. */
+  changes?: MeterChange[];
+}
+
+/** A key and/or time signature change at the start of a (0-based) measure. */
+export interface MeterChange {
+  measure: number;
+  time?: TimeSig;
+  key?: KeySig;
+}
+
+/** Time signature in force in a measure. */
+export function timeAt(score: Pick<Score, 'time' | 'changes'>, measure: number): TimeSig {
+  let t = score.time;
+  for (const c of score.changes ?? []) if (c.measure <= measure && c.time) t = c.time;
+  return t;
+}
+
+/** Key signature in force in a measure. */
+export function keyAt(score: Pick<Score, 'key' | 'changes'>, measure: number): KeySig {
+  let k = score.key;
+  for (const c of score.changes ?? []) if (c.measure <= measure && c.key) k = c.key;
+  return k;
+}
+
+/** Length in ticks of each measure: the pickup (if any), then each measure's own time signature. */
+export function measureLengths(time: TimeSig, measures: number, pickup = 0, changes?: MeterChange[]): number[] {
+  const out: number[] = [];
+  let t = time;
+  for (let m = 0; m < measures; m++) {
+    for (const c of changes ?? []) if (c.measure === m && c.time) t = c.time;
+    out.push(m === 0 && pickup ? pickup : measureTicks(t));
+  }
+  return out;
 }
 
 export function scoreTotalTicks(score: Score): number {
+  if (score.changes?.some(c => c.time)) return measureLengths(score.time, score.measures, score.pickup, score.changes).reduce((a, b) => a + b, 0);
   const mt = measureTicks(score.time);
   if (score.pickup) return score.pickup + mt * (score.measures - 1);
   return mt * score.measures;
 }
 
-/** Start tick of a measure (accounts for pickup). */
+/** Start tick of a measure (accounts for pickup and time changes). */
 export function measureStartTick(score: Score, measure: number): number {
+  if (score.changes?.some(c => c.time)) {
+    return measureLengths(score.time, measure, score.pickup, score.changes).reduce((a, b) => a + b, 0);
+  }
   const mt = measureTicks(score.time);
   if (!score.pickup) return measure * mt;
   if (measure === 0) return 0;
@@ -179,12 +240,31 @@ export interface NoteSpec {
 }
 
 /** Assign ids, ticks and measure indexes to a flat list of note specs. */
-export function buildVoice(specs: NoteSpec[], time: TimeSig, idPrefix: string, pickup = 0): VoicePart {
+export function buildVoice(specs: NoteSpec[], time: TimeSig, idPrefix: string, pickup = 0, changes?: MeterChange[]): VoicePart {
   const mt = measureTicks(time);
+  // with time changes, measure boundaries come from each measure's own length
+  const bounds: number[] | null = changes?.some(c => c.time) ? [] : null;
+  if (bounds) {
+    const total = specs.reduce((s, x) => s + durationTicks(x.base, x.dots ?? 0, x.triplet), 0);
+    let acc = 0;
+    const lens = measureLengths(time, 4096, pickup, changes);
+    for (let m = 0; acc <= total && m < lens.length; m++) {
+      bounds.push(acc);
+      acc += lens[m];
+    }
+  }
+  const measureOf = (tick: number): number => {
+    if (bounds) {
+      let m = 0;
+      while (m + 1 < bounds.length && bounds[m + 1] <= tick) m++;
+      return m;
+    }
+    return pickup ? (tick < pickup ? 0 : 1 + Math.floor((tick - pickup) / mt)) : Math.floor(tick / mt);
+  };
   let tick = 0;
   const notes: NoteEl[] = specs.map((s, i) => {
     const ticks = durationTicks(s.base, s.dots ?? 0, s.triplet);
-    const measure = pickup ? (tick < pickup ? 0 : 1 + Math.floor((tick - pickup) / mt)) : Math.floor(tick / mt);
+    const measure = measureOf(tick);
     // sort pitches low → high, keeping fingers/strings aligned
     const order = s.pitches.map((_, k) => k).sort((a, b) => midiOf(s.pitches[a]) - midiOf(s.pitches[b]));
     const el: NoteEl = {

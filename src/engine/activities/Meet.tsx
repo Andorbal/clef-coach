@@ -9,9 +9,10 @@ import { flashScore } from '../../curriculum/generate';
 import type { ActivityDef } from '../../curriculum/types';
 import type { FretMark, KeyMark, MarkColor } from '../../instruments';
 import { positionsFor } from '../../music/guitar';
+import { isFretted, isMallet } from '../../music/instruments';
 import { midiOf, parsePitch, pitchLabel, pitchToString, stepLabel } from '../../music/pitch';
 import { NotationView } from '../../notation/NotationView';
-import type { ActivityProps } from '../context';
+import { type ActivityProps, ctxTuning } from '../context';
 import { InstrumentPanel, pianoRangeFor } from '../InstrumentPanel';
 import { useComputerPiano, useNoteInput } from '../input';
 import { ActivityHeader } from '../PlayAlong';
@@ -40,12 +41,13 @@ export function Meet({ def, ctx, onDone }: ActivityProps<MeetDef>) {
   const range = useMemo(() => pianoRangeFor(notes.map(midiOf)), [notes]);
   const tipText = def.tips?.[i] ?? def.tips?.[0];
   const finger = def.fingers?.[i];
-  const fret = def.frets?.[i] ?? (ctx.instrument === 'guitar' ? (() => {
-    const p = positionsFor(midi, 15).sort((a, b) => a.fret - b.fret)[0];
+  const fretted = isFretted(ctx.instrument);
+  const fret = def.frets?.[i] ?? (fretted ? (() => {
+    const p = positionsFor(midi, 15, 0, ctxTuning(ctx)).sort((a, b) => a.fret - b.fret)[0];
     return p ? { ...p, finger: p.fret === 0 ? 0 : Math.min(4, p.fret) } : undefined;
   })() : undefined);
 
-  useComputerPiano(ctx.instrument === 'piano', def.clef === 'bass' ? 3 : 4);
+  useComputerPiano(!fretted, def.clef === 'bass' ? 3 : 4);
   useNoteInput(e => {
     if (e.type !== 'on' || !note || count >= reps) return;
     if (e.midi === midi) {
@@ -73,15 +75,19 @@ export function Meet({ def, ctx, onDone }: ActivityProps<MeetDef>) {
     setTimeout(() => setFlash(null), 300);
   });
 
-  const handColor: MarkColor = def.hand === 'L' ? 'lh' : def.hand === 'R' ? 'rh' : 'gold';
-  const keyMarks: KeyMark[] = [{ midi, color: handColor, finger, pulse: true, label: undefined }];
+  const mallet = isMallet(ctx.instrument);
+  const hand = mallet && finger ? (finger <= 2 ? 'L' : 'R') : def.hand;
+  const handColor: MarkColor = hand === 'L' ? 'lh' : hand === 'R' ? 'rh' : 'gold';
+  const keyMarks: KeyMark[] = [
+    mallet ? { midi, color: handColor, pulse: true, label: finger ? (finger <= 2 ? 'L' : 'R') : undefined } : { midi, color: handColor, finger, pulse: true, label: undefined },
+  ];
   const fretMarks: FretMark[] = fret ? [{ string: fret.string, fret: fret.fret, color: 'gold', finger: fret.finger || undefined, label: fret.fret === 0 ? stepLabel(note.step, note.alter, ctx.settings.naming) : undefined, pulse: true }] : [];
 
   return (
     <div className="activity meet" data-expected={midi}>
       <ActivityHeader
         title={def.title ?? `Meet ${pitchLabel(note, ctx.settings.naming)}`}
-        prompt={def.prompt ?? (ctx.instrument === 'guitar' ? `Play it ${reps} times.` : `Play it ${reps} times${finger ? ` with finger ${finger}` : ''}.`)}
+        prompt={def.prompt ?? (fretted ? `Play it ${reps} times.` : isMallet(ctx.instrument) ? `Strike it ${reps} times${finger ? ` with your ${finger <= 2 ? 'left' : 'right'} mallet` : ''}.` : `Play it ${reps} times${finger ? ` with finger ${finger}` : ''}.`)}
         badge={`${i + 1} / ${notes.length}`}
       />
       <div className="meet-body">
@@ -112,7 +118,7 @@ export function Meet({ def, ctx, onDone }: ActivityProps<MeetDef>) {
           <motion.div key={i} className="meet-tip card" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
             <div className="meet-name display">{pitchLabel(note, ctx.settings.naming)}<sub>{note.octave}</sub></div>
             {tipText && <p className="dim">{tipText}</p>}
-            {ctx.instrument === 'guitar' && fret && (
+            {fretted && fret && (
               <p className="meet-loc">
                 String {fret.string} · {fret.fret === 0 ? 'open' : `fret ${fret.fret}`}
                 {fret.finger ? ` · finger ${fret.finger}` : ''}

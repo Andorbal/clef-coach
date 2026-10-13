@@ -1,3 +1,4 @@
+import { type InstrumentId, MALLET_VARIANTS, instrumentDef, tuningFor } from '../music/instruments';
 import { describe, expect, it } from 'vitest';
 import { TRACKS } from './index';
 import { generateScore, genRhythm, makeRng, scaleScore } from './generate';
@@ -19,8 +20,17 @@ function visualNotes(v: Insight['visual']) {
   if (v.kind === 'keys') v.notes.forEach(parsePitch);
 }
 
-function checkActivity(a: ActivityDef, instrument: 'piano' | 'guitar', where: string) {
-  const range = instrument === 'piano' ? [21, 108] : [40, 88];
+/** Range a track's notes must stay in (written pitch for mallets: the marimba's range; low-G ukulele). */
+function rangeOf(instrument: InstrumentId): [number, number] {
+  if (instrument === 'piano') return [21, 108];
+  if (instrument === 'mallets') return [MALLET_VARIANTS.marimba.low, MALLET_VARIANTS.marimba.high];
+  if (instrument === 'guitar') return [40, 88];
+  const t = tuningFor(instrument, { ukuleleTuning: 'low-g', bassStrings: 4 }).open;
+  return [Math.min(...t), Math.max(...t) + instrumentDef(instrument).fretted!.maxFret];
+}
+
+function checkActivity(a: ActivityDef, instrument: InstrumentId, where: string) {
+  const range = rangeOf(instrument);
   const inRange = (s: string) => {
     const m = midiOf(parsePitch(s));
     expect(m, `${where}: ${s} out of instrument range`).toBeGreaterThanOrEqual(range[0]);
@@ -29,7 +39,7 @@ function checkActivity(a: ActivityDef, instrument: 'piano' | 'guitar', where: st
   switch (a.type) {
     case 'meet':
       a.notes.forEach(inRange);
-      if (instrument === 'guitar' && a.frets) expect(a.frets.length, `${where}: frets per note`).toBe(a.notes.length);
+      if (a.frets) expect(a.frets.length, `${where}: frets per note`).toBe(a.notes.length);
       break;
     case 'name':
     case 'play':

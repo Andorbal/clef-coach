@@ -3,7 +3,7 @@ import { ALL_SONGS, getSong, songGroup } from './index';
 import { songToScore } from '../../music/parse';
 import { autoFinger } from '../../music/autofinger';
 import { midiOf } from '../../music/pitch';
-import { openMidi } from '../../music/guitar';
+import { familyOf } from '../../music/instruments';
 import { buildSteps } from '../../music/score';
 import { TRACKS } from '../../curriculum';
 
@@ -13,6 +13,10 @@ const RANGES = {
   'piano-both': [21, 100],
   'guitar-treble': [40, 83], // E2..B5
   'guitar-bass': [40, 64], // E2..E4
+  ukulele: [55, 84], // low G .. C6 (15th fret)
+  bass: [28, 67], // 4-string E1 .. G4
+  'mallets-two': [53, 89], // F3..F6: fits xylophone, vibraphone and marimba (written)
+  'mallets-four': [45, 96], // marimba A2..C7
 } as const;
 
 describe('song library', () => {
@@ -31,15 +35,17 @@ describe('song library', () => {
           expect(m, `${song.id}: ${p.step}${p.octave}`).toBeGreaterThanOrEqual(lo);
           expect(m, `${song.id}: ${p.step}${p.octave}`).toBeLessThanOrEqual(hi);
         }
+        const fam = familyOf(song.instrument);
         n.fingers?.forEach(f => {
           if (f === undefined) return;
-          if (song.instrument === 'piano') expect(f >= 1 && f <= 5, `${song.id} finger ${f}`).toBe(true);
+          if (fam === 'keyboard') expect(f >= 1 && f <= 5, `${song.id} finger ${f}`).toBe(true);
+          else if (fam === 'mallet') expect(f >= 1 && f <= 4, `${song.id} mallet ${f}`).toBe(true);
           else expect(f >= 0 && f <= 4, `${song.id} finger ${f}`).toBe(true);
         });
-        if (song.instrument === 'guitar') {
+        if (fam === 'fretted') {
           n.strings?.forEach((s, i) => {
             if (s === undefined) return;
-            const fret = midiOf(n.pitches[i]) - openMidi(s);
+            const fret = midiOf(n.pitches[i]) - score.tuning![s - 1];
             expect(fret, `${song.id}: string ${s}`).toBeGreaterThanOrEqual(0);
             expect(fret, `${song.id}: string ${s}`).toBeLessThanOrEqual(19);
           });

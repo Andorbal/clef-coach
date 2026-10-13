@@ -25,8 +25,8 @@ export interface AnalyzedFrame extends PitchFrame {
 export class FrameAnalyzer {
   readonly pitchWindow: number;
   readonly levelWindow: number;
-  private readonly minFreq: number;
-  private readonly maxFreq: number;
+  private minFreq: number;
+  private maxFreq: number;
   private buf: Float32Array = new Float32Array(0);
   private sampleRate = 48000;
   private readonly spec: Float32Array;
@@ -38,6 +38,14 @@ export class FrameAnalyzer {
     this.minFreq = opts.minFreq ?? 50;
     this.maxFreq = opts.maxFreq ?? 2500;
     this.spec = new Float32Array(this.pitchWindow); // fft = 2 × window → window bins
+  }
+
+  /** Widen the pitch detector's search range (e.g. 38 Hz for a bass's low E, 4.5 kHz for a glockenspiel). */
+  setFreqRange(minFreq: number, maxFreq: number): void {
+    if (minFreq > 0 && maxFreq > minFreq) {
+      this.minFreq = minFreq;
+      this.maxFreq = maxFreq;
+    }
   }
 
   /** Time-domain samples of the current frame's pitch window. */

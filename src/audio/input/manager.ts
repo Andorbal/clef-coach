@@ -57,6 +57,8 @@ class InputManager {
   private readonly echo: Record<InputSource, boolean> = { midi: false, mic: false, touch: true, keyboard: true };
   /** MIDI echo notes released while the pedal was down. */
   private readonly sustained = new Set<number>();
+  /** Semitones added to microphone and MIDI notes (−12 for a xylophone: written = sounding − 12). */
+  private transpose = 0;
   private _status: InputStatus;
 
   constructor() {
@@ -107,7 +109,9 @@ class InputManager {
    * computer-keyboard handlers (and internally by MIDI/mic).
    */
   emit = (e: NoteInputEvent): void => {
-    const midi = Math.round(e.midi);
+    // real instruments report what they sound; lessons work in written pitch
+    const shift = e.source === 'mic' || e.source === 'midi' ? this.transpose : 0;
+    const midi = Math.round(e.midi) + shift;
     if (!(midi >= 0 && midi <= 127)) return;
     const ev: NoteInputEvent = {
       type: e.type === 'off' ? 'off' : 'on',
@@ -136,10 +140,23 @@ class InputManager {
   /** Notes currently held down, across all sources. */
   getHeld = (): ReadonlySet<number> => this.held;
 
-  /** Notes the lesson expects next (forwarded to the mic detector). */
+  /** Notes the lesson expects next (forwarded to the mic detector, which hears sounding pitch). */
   setExpected = (midis: number[] | null): void => {
-    micInput.setExpected(midis);
+    micInput.setExpected(midis && this.transpose ? midis.map(m => m - this.transpose) : midis);
   };
+
+  /**
+   * Shift microphone and MIDI notes into written pitch. For a xylophone (sounds an
+   * octave above written) pass −12; for a glockenspiel −24; otherwise 0.
+   */
+  setTranspose = (semitones: number): void => {
+    if (semitones === this.transpose || !Number.isFinite(semitones)) return;
+    this.releaseSource('mic');
+    this.releaseSource('midi');
+    this.transpose = Math.round(semitones);
+  };
+
+  getTranspose = (): number => this.transpose;
 
   /** Request Web MIDI (call from a user gesture). */
   enableMidi = async (): Promise<InputResult> => {

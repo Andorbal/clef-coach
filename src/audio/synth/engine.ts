@@ -21,10 +21,23 @@ import {
 } from '../context';
 import type { AppSoundMark } from '../context';
 import { clamp, interp } from '../dsp/util';
+import { MALLET_VARIANTS, type SynthVoiceId } from '../../music/instruments';
 import { guitarNoteLength, renderGuitarSamples } from './guitar';
+import { type MalletVoice, malletAudibleSeconds, malletNoteLength, renderMalletSamples } from './mallets';
 import { pianoNoteLength, renderPianoSamples } from './piano';
 
-export type SynthVoice = 'piano' | 'guitar';
+export type SynthVoice = SynthVoiceId;
+
+const isPlucked = (v: SynthVoice): v is 'guitar' | 'ukulele' | 'bass' => v === 'guitar' || v === 'ukulele' || v === 'bass';
+const isMalletVoice = (v: SynthVoice): v is MalletVoice => v === 'marimba' || v === 'xylophone' || v === 'glockenspiel' || v === 'vibraphone';
+
+/**
+ * Semitones a voice sounds above the written note it is given (xylophone 12,
+ * glockenspiel 24): mallet music is played in written pitch.
+ */
+export function voiceOffset(v: SynthVoice): number {
+  return isMalletVoice(v) ? MALLET_VARIANTS[v].offset : 0;
+}
 
 export interface PlayOptions {
   /** 0..1, default 0.7 */
@@ -71,19 +84,35 @@ function velocityGain(v: number): number {
 }
 
 /** Output trim per instrument so both sit at a similar loudness. */
-const VOICE_TRIM: Record<SynthVoice, number> = { piano: 0.55, guitar: 0.6 };
+const VOICE_TRIM: Record<SynthVoice, number> = {
+  piano: 0.55,
+  guitar: 0.6,
+  ukulele: 0.6,
+  bass: 0.72,
+  marimba: 0.62,
+  xylophone: 0.5,
+  glockenspiel: 0.42,
+  vibraphone: 0.55,
+};
 
-/** Key-up release time constant (s). Top piano octave has no dampers → longer. */
+/**
+ * Key-up release time constant (s). Top piano octave has no dampers → longer.
+ * A struck bar keeps ringing after the mallet leaves it, so mallet "releases" are
+ * gentle (the vibraphone's pedal is down).
+ */
 function releaseTau(voice: SynthVoice, midi: number): number {
-  if (voice === 'guitar') return 0.035;
+  if (isPlucked(voice)) return voice === 'bass' ? 0.05 : 0.035;
+  if (voice === 'vibraphone') return 0.45;
+  if (isMalletVoice(voice)) return 0.22;
   return midi >= 89 ? 0.25 : 0.04;
 }
 
-/** Roughly how long a note stays clearly audible (for the mic's self-hearing guard). */
+/** Roughly how long a (sounding) note stays clearly audible (for the mic's self-hearing guard). */
 function audibleSeconds(voice: SynthVoice, midi: number): number {
-  return voice === 'piano'
-    ? interp([[21, 3.2], [48, 2.4], [60, 1.9], [84, 1.1], [108, 0.5]], midi)
-    : interp([[40, 2.6], [64, 1.7], [88, 0.9]], midi);
+  if (voice === 'piano') return interp([[21, 3.2], [48, 2.4], [60, 1.9], [84, 1.1], [108, 0.5]], midi);
+  if (isMalletVoice(voice)) return malletAudibleSeconds(voice, midi);
+  const base = interp([[28, 3.0], [40, 2.6], [64, 1.7], [88, 0.9]], midi);
+  return voice === 'ukulele' ? base * 0.7 : voice === 'bass' ? base * 1.2 : base;
 }
 
 interface Voice {
@@ -172,12 +201,13 @@ export class SynthEngine {
     const hit = this.cache.get(key);
     if (hit) return hit;
     const sr = ctx.sampleRate;
-    const len = voice === 'piano' ? pianoNoteLength(m, sr) : guitarNoteLength(m, sr);
+    const len = voice === 'piano' ? pianoNoteLength(m, sr) : isMalletVoice(voice) ? malletNoteLength(voice, m, sr) : guitarNoteLength(m, sr, voice);
     const buf = ctx.createBuffer(1, len, sr);
     // Render straight into the buffer's memory – no extra copy.
     const data = buf.getChannelData(0);
     if (voice === 'piano') renderPianoSamples(m, BUCKET_VELOCITY[b], sr, { out: data });
-    else renderGuitarSamples(m, BUCKET_VELOCITY[b], sr, { out: data });
+    else if (isMalletVoice(voice)) renderMalletSamples(voice, m, BUCKET_VELOCITY[b], sr, { out: data });
+    else renderGuitarSamples(m, BUCKET_VELOCITY[b], sr, { out: data, variant: voice });
     this.cache.set(key, buf);
     return buf;
   }
@@ -208,7 +238,9 @@ export class SynthEngine {
     if (!running) ctx.resume().catch(() => {});
     const voice = opts.voice ?? this.voiceType;
     const vel = clamp(opts.velocity ?? DEFAULT_VELOCITY, 0, 1);
-    const m = Math.round(midi);
+    // `midi` is the written note; transposing voices (xylophone, glockenspiel) sound higher
+    const written = Math.round(midi);
+    const m = written + voiceOffset(voice);
     if (!(m >= 0 && m <= 127)) return null;
     const buffer = this.getBuffer(voice, m, vel);
     const now = ctx.currentTime;
@@ -223,8 +255,8 @@ export class SynthEngine {
     let pan: StereoPannerNode | null = null;
     if (typeof ctx.createStereoPanner === 'function') {
       pan = ctx.createStereoPanner();
-      // Piano: low notes slightly left, high slightly right (player's perspective).
-      pan.pan.value = voice === 'piano' ? clamp((m - 64) / 48, -1, 1) * 0.35 : 0.05;
+      // Keyboards and mallets: low notes slightly left, high slightly right (player's perspective).
+      pan.pan.value = voice === 'piano' || isMalletVoice(voice) ? clamp((m - 64 - voiceOffset(voice)) / 48, -1, 1) * 0.35 : 0.05;
       gain.connect(pan);
       pan.connect(getBus('synth'));
     } else {
@@ -237,7 +269,7 @@ export class SynthEngine {
       src,
       gain,
       pan,
-      midi: m,
+      midi: written,
       voice,
       level,
       start,
@@ -254,7 +286,7 @@ export class SynthEngine {
         /* ignore */
       }
       this.active.delete(v);
-      if (this.held.get(m) === v) this.held.delete(m);
+      if (this.held.get(written) === v) this.held.delete(written);
       v.onEnd?.();
     };
     src.start(start);
@@ -331,7 +363,7 @@ export class SynthEngine {
     this.release(v, when ?? getAudioContext().currentTime);
   }
 
-  /** One-shot note or chord. Guitar chords are gently strummed low → high. */
+  /** One-shot note or chord. Guitar and ukulele chords are gently strummed low → high. */
   play(midi: number | number[], opts: PlayOptions = {}): void {
     const notes = (Array.isArray(midi) ? midi : [midi]).slice().sort((a, b) => a - b);
     const voice = opts.voice ?? this.voiceType;
@@ -341,7 +373,7 @@ export class SynthEngine {
     } catch {
       return;
     }
-    const strum = voice === 'guitar' && notes.length > 1 ? 0.014 : 0;
+    const strum = (voice === 'guitar' || voice === 'ukulele') && notes.length > 1 ? 0.014 : 0;
     notes.forEach((m, i) => {
       this.startVoice(m, { ...opts, voice, when: base + i * strum });
     });
@@ -382,7 +414,7 @@ export class SynthEngine {
         const ev = sorted[idx++];
         const when = t0 + ev.at;
         if (when < now - 0.05) continue; // fell behind (tab hidden): skip, don't burst
-        const strum = v === 'guitar' && ev.midi.length > 1 ? 0.014 : 0;
+        const strum = (v === 'guitar' || v === 'ukulele') && ev.midi.length > 1 ? 0.014 : 0;
         ev.midi
           .slice()
           .sort((a, b) => a - b)
@@ -446,9 +478,10 @@ export class SynthEngine {
     const b = bucketOf(velocity);
     for (const m of [...new Set(midis.map((x) => Math.round(x)))]) {
       if (!(m >= 0 && m <= 127)) continue;
-      if (this.cacheRate === sr && this.cache.has(`${voice}:${m}:${b}`)) continue;
+      const sounding = m + voiceOffset(voice);
+      if (this.cacheRate === sr && this.cache.has(`${voice}:${sounding}:${b}`)) continue;
       await yieldToMain();
-      this.getBuffer(voice, m, velocity);
+      this.getBuffer(voice, sounding, velocity);
     }
   }
 }

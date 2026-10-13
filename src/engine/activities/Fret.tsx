@@ -24,12 +24,15 @@ import {
   stepPitchClass,
   transposePcs,
   type FretPos,
+  STANDARD_TUNING,
 } from '../../music/guitar';
 import { type Step, STEPS, isBlackKey, parsePitch, pitchClass, spellMidi, stepLabel } from '../../music/pitch';
 import { type NoteSpec, type Score, buildVoice } from '../../music/score';
 import { splitTicks } from '../../music/rhythm';
 import { reviewPriority } from '../../state/srs';
-import type { ActivityProps } from '../context';
+import { type ActivityProps, ctxTuning } from '../context';
+import { instrumentDef } from '../../music/instruments';
+import type { Clef } from '../../music/score';
 import { InstrumentPanel, type FretTap } from '../InstrumentPanel';
 import { useLetterKeys, useNoteInput } from '../input';
 import { ActivityHeader, PlayAlong } from '../PlayAlong';
@@ -55,7 +58,8 @@ export function FretFind({ def, ctx, onDone }: ActivityProps<FindDef>) {
   const names = useMemo(() => Array.from({ length: rounds }, (_, i) => def.notes[i % def.notes.length]), [def.notes, rounds]);
   const [round, setRound] = useState(0);
   const pc = parsePc(names[round]);
-  const targets = useMemo(() => allLocationsOfPitchClass(pc, def.frets[0], def.frets[1], def.strings), [pc, def.frets, def.strings]);
+  const tuning = ctxTuning(ctx);
+  const targets = useMemo(() => allLocationsOfPitchClass(pc, def.frets[0], def.frets[1], def.strings, tuning), [pc, def.frets, def.strings, tuning.join()]); // eslint-disable-line react-hooks/exhaustive-deps
   const [found, setFound] = useState<Set<string>>(new Set());
   const [wrong, setWrong] = useState<{ string: number; fret: number; color: MarkColor }[]>([]);
   const mistakes = useRef(0);
@@ -116,7 +120,7 @@ export function FretFind({ def, ctx, onDone }: ActivityProps<FindDef>) {
   const onFretTap = useCallback((t: FretTap) => tryPos(t), [tryPos]);
   useNoteInput(e => {
     if (e.type !== 'on' || e.source === 'touch') return;
-    const cand = targets.filter(t => !found.has(posKey(t)) && midiAt(t.string, t.fret) === e.midi && (currentString === null || t.string === currentString));
+    const cand = targets.filter(t => !found.has(posKey(t)) && midiAt(t.string, t.fret, tuning) === e.midi && (currentString === null || t.string === currentString));
     if (cand.length) tryPos(cand[0]);
     else if (pitchClass(e.midi) !== pc) {
       mistakes.current++;
@@ -126,7 +130,7 @@ export function FretFind({ def, ctx, onDone }: ActivityProps<FindDef>) {
 
   const marks: FretMark[] = targets.filter(t => found.has(posKey(t))).map(t => ({ ...t, color: 'good', label: pcName(pc, flats), root: true }));
   const prompt = tapMode
-    ? `Tap every ${pcName(pc, flats)} between fret ${def.frets[0]} and ${def.frets[1]}${def.strings.length < 6 ? ` on strings ${def.strings.join(', ')}` : ''}.`
+    ? `Tap every ${pcName(pc, flats)} between fret ${def.frets[0]} and ${def.frets[1]}${def.strings.length < tuning.length ? ` on strings ${def.strings.join(', ')}` : ''}.`
     : currentString
       ? `Play ${pcName(pc, flats)} on string ${currentString}.`
       : 'Nice!';
@@ -148,10 +152,12 @@ type QuizDef = Extract<ActivityDef, { type: 'fret-name' | 'fret-play' | 'fret-oc
 
 export function FretQuiz({ def, ctx, onDone }: ActivityProps<QuizDef>) {
   const naturalsOnly = def.type !== 'fret-octave' && def.naturalsOnly !== false && (def.naturalsOnly ?? true);
+  const tuning = ctxTuning(ctx);
   const cards = useMemo(() => {
     const pool: FretPos[] = [];
     for (const s of def.strings) for (let f = def.frets[0]; f <= def.frets[1]; f++) {
-      const m = midiAt(s, f);
+      if (s > tuning.length) continue;
+      const m = midiAt(s, f, tuning);
       if (naturalsOnly && isBlackKey(m)) continue;
       pool.push({ string: s, fret: f });
     }
@@ -166,7 +172,7 @@ export function FretQuiz({ def, ctx, onDone }: ActivityProps<QuizDef>) {
   const start = useRef(performance.now());
   const locked = useRef(false);
   const card = cards[i];
-  const midi = card ? midiAt(card.string, card.fret) : 0;
+  const midi = card ? midiAt(card.string, card.fret, tuning) : 0;
   const name = card ? spellMidi(midi, 1) : null;
 
   const next = useCallback(() => {
@@ -214,7 +220,7 @@ export function FretQuiz({ def, ctx, onDone }: ActivityProps<QuizDef>) {
   useLetterKeys(def.type === 'fret-name', (l, a) => answerLetter(l, a));
 
   const isOctave = (s: number, f: number) => {
-    const m = midiAt(s, f);
+    const m = midiAt(s, f, tuning);
     return Math.abs(m - midi) === 12 && s !== card?.string;
   };
 
@@ -249,7 +255,7 @@ export function FretQuiz({ def, ctx, onDone }: ActivityProps<QuizDef>) {
   }
   if (card && def.type === 'fret-play' && (fb?.ok || tries >= 2)) marks.push({ string: card.string, fret: card.fret, color: fb?.ok ? 'good' : 'hint', label: stepLabel(name!.step, name!.alter) });
   if (card && def.type === 'fret-octave' && tries >= 2) {
-    for (const s of [1, 2, 3, 4, 5, 6]) for (let f = def.frets[0]; f <= def.frets[1]; f++) if (isOctave(s, f)) marks.push({ string: s, fret: f, color: 'hint', ghost: true });
+    for (let s = 1; s <= tuning.length; s++) for (let f = def.frets[0]; f <= def.frets[1]; f++) if (isOctave(s, f)) marks.push({ string: s, fret: f, color: 'hint', ghost: true });
   }
 
   const title =
@@ -301,7 +307,7 @@ export function FretQuiz({ def, ctx, onDone }: ActivityProps<QuizDef>) {
 
 type ShapeDef = Extract<ActivityDef, { type: 'fret-shape' }>;
 
-export function shapePositions(def: ShapeDef): { positions: FretPos[]; roots: Set<string>; label: string } {
+export function shapePositions(def: ShapeDef, tuning: readonly number[] = STANDARD_TUNING): { positions: FretPos[]; roots: Set<string>; label: string } {
   const sh = def.shape;
   const rootPc = parsePc(sh.root);
   if (sh.kind === 'caged') {
@@ -313,28 +319,31 @@ export function shapePositions(def: ShapeDef): { positions: FretPos[]; roots: Se
   const quality = sh.quality ?? (sh.kind === 'pentatonic' ? 'minor' : 'major');
   const pcs = sh.kind === 'pentatonic' ? (quality === 'minor' ? PENTATONIC_MINOR : PENTATONIC_MAJOR) : quality === 'minor' ? NATURAL_MINOR : MAJOR_SCALE;
   const start = sh.kind === 'pentatonic' ? sh.box : sh.startDegree;
-  const positions = scaleBox(transposePcs(pcs, rootPc), start, sh.kind === 'pentatonic' ? 2 : 3, 0);
-  const roots = new Set(positions.filter(p => pitchClass(midiAt(p.string, p.fret)) === rootPc).map(posKey));
+  const positions = scaleBox(transposePcs(pcs, rootPc), start, sh.kind === 'pentatonic' ? 2 : 3, 0, tuning);
+  const roots = new Set(positions.filter(p => pitchClass(midiAt(p.string, p.fret, tuning)) === rootPc).map(posKey));
   const rootName = pcName(rootPc, sh.root.includes('b'));
   const label = sh.kind === 'pentatonic' ? `${rootName} ${quality} pentatonic — box ${sh.box + 1}` : `${rootName} ${quality} — pattern ${sh.startDegree + 1} (3 notes per string)`;
   return { positions, roots, label };
 }
 
 export function FretShape({ def, ctx, onDone }: ActivityProps<ShapeDef>) {
-  const { positions, roots, label } = useMemo(() => shapePositions(def), [def]);
+  const tuning = ctxTuning(ctx);
+  const tuningKey = tuning.join();
+  const { positions, roots, label } = useMemo(() => shapePositions(def, tuning), [def, tuningKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const score: Score = useMemo(() => {
-    const sorted = [...positions].sort((a, b) => midiAt(a.string, a.fret) - midiAt(b.string, b.fret) || b.string - a.string);
+    const at = (p: FretPos) => midiAt(p.string, p.fret, tuning);
+    const sorted = [...positions].sort((a, b) => at(a) - at(b) || b.string - a.string);
     const seq = def.direction === 'updown' ? [...sorted, ...sorted.slice(0, -1).reverse()] : sorted;
     const fretted = positions.filter(p => p.fret > 0).map(p => p.fret);
     const handPos = fretted.length ? Math.min(...fretted) : 1;
     const specs: NoteSpec[] = seq.map(p => ({
-      pitches: [spellMidi(midiAt(p.string, p.fret), 1)],
+      pitches: [spellMidi(at(p), 1)],
       base: 'e',
       strings: [p.string],
       fingers: [p.fret === 0 ? 0 : Math.min(4, Math.max(1, p.fret - handPos + 1))],
     }));
     if (def.shape.kind === 'caged') {
-      specs.push({ pitches: sorted.map(p => spellMidi(midiAt(p.string, p.fret), 1)), base: 'h', strings: sorted.map(p => p.string), fingers: sorted.map(p => (p.fret === 0 ? 0 : Math.min(4, Math.max(1, p.fret - handPos + 1)))) });
+      specs.push({ pitches: sorted.map(p => spellMidi(at(p), 1)), base: 'h', strings: sorted.map(p => p.string), fingers: sorted.map(p => (p.fret === 0 ? 0 : Math.min(4, Math.max(1, p.fret - handPos + 1)))) });
     }
     // pad to whole bars of 4/4 with rests
     const ticks = specs.reduce((s, x) => s + (x.base === 'e' ? 24 : 96), 0);
@@ -349,10 +358,11 @@ export function FretShape({ def, ctx, onDone }: ActivityProps<ShapeDef>) {
       time: [4, 4],
       tempo: def.tempo ?? 72,
       measures: Math.max(...voice.notes.map(n => n.measure)) + 1,
-      staves: [{ clef: 'treble8vb', voices: [voice] }],
-      instrument: 'guitar',
+      staves: [{ clef: instrumentDef(ctx.instrument).clefs[0] as Clef, voices: [voice] }],
+      instrument: ctx.instrument,
+      tuning: [...tuning],
     };
-  }, [positions, def, label]);
+  }, [positions, def, label, ctx.instrument, tuningKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const contextMarks: FretMark[] = positions.map(p => ({ ...p, ghost: !roots.has(posKey(p)), root: roots.has(posKey(p)), color: roots.has(posKey(p)) ? 'gold' : 'hint' }));
   const frets = positions.map(p => p.fret);

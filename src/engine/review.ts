@@ -6,6 +6,7 @@
 import type { ActivityDef, LessonDef, MelodyGen, TrackDef } from '../curriculum/types';
 import { allLessons } from '../curriculum';
 import { midiOf, parsePitch } from '../music/pitch';
+import type { Clef } from '../music/score';
 import { reviewPriority } from '../state/srs';
 import type { TrackProgress } from '../state/types';
 
@@ -38,7 +39,7 @@ export function buildReviewLesson(track: TrackDef, tp?: TrackProgress): LessonDe
     .sort((a, b) => b.pr - a.pr);
   if (noteItems.length >= 3) {
     // group by clef; take the clef with the most urgent items
-    const clef = noteItems[0].k.split(':')[1] as 'treble' | 'bass' | 'treble8vb';
+    const clef = noteItems[0].k.split(':')[1] as Clef;
     const weak = noteItems.filter(x => x.k.split(':')[1] === clef).slice(0, 10).map(x => x.k.split(':')[2]);
     const sorted = [...new Set(weak)].sort((a, b) => midiOf(parsePitch(a)) - midiOf(parsePitch(b)));
     steps.push({ type: 'name', clef, pool: sorted, count: 12, title: 'Your trickiest notes' });
@@ -74,7 +75,7 @@ export function buildReviewLesson(track: TrackDef, tp?: TrackProgress): LessonDe
   }
   const keyItems = entries.filter(([k]) => k.startsWith('key:')).map(([k, s]) => ({ k, pr: reviewPriority(s, now) })).sort((a, b) => b.pr - a.pr);
   if (keyItems.length >= 2) {
-    const clef = track.clef === 'bass' ? 'bass' : track.clef === 'treble8vb' ? 'treble8vb' : 'treble';
+    const clef: Clef = track.clef === 'grand' || track.clef === 'fretboard' ? (track.instrument === 'bass' ? 'bass8vb' : track.instrument === 'guitar' ? 'treble8vb' : 'treble') : track.clef;
     steps.push({ type: 'keysig', clef, keys: keyItems.slice(0, 6).map(x => x.k.slice(4)), count: 6 });
   }
   if (!steps.length) return null;

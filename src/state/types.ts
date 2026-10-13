@@ -1,3 +1,4 @@
+import type { BassStrings, MalletVariant, UkuleleTuning } from '../music/instruments';
 import type { NoteNaming } from '../music/pitch';
 
 export type TrackId =
@@ -6,7 +7,14 @@ export type TrackId =
   | 'piano-grand'
   | 'guitar-treble'
   | 'guitar-bass'
-  | 'guitar-fretboard';
+  | 'guitar-fretboard'
+  | 'guitar-chords'
+  | 'ukulele-treble'
+  | 'ukulele-chords'
+  | 'bass-lines'
+  | 'bass-fretboard'
+  | 'mallets-two'
+  | 'mallets-four';
 
 export const TRACK_IDS: TrackId[] = [
   'piano-treble',
@@ -15,6 +23,13 @@ export const TRACK_IDS: TrackId[] = [
   'guitar-treble',
   'guitar-bass',
   'guitar-fretboard',
+  'guitar-chords',
+  'ukulele-treble',
+  'ukulele-chords',
+  'bass-lines',
+  'bass-fretboard',
+  'mallets-two',
+  'mallets-four',
 ];
 
 export interface ItemStat {
@@ -80,6 +95,12 @@ export interface ProfileSettings {
   dailyGoalXp: number;
   /** Show on-screen instrument labels */
   keyLabels: 'none' | 'c-only' | 'white';
+  /** Which mallet instrument you play (changes range, sound and microphone octave). */
+  malletVariant?: MalletVariant;
+  /** Ukulele tuning: re-entrant high G (standard), low G or baritone. */
+  ukuleleTuning?: UkuleleTuning;
+  /** 4- or 5-string bass. */
+  bassStrings?: BassStrings;
 }
 
 export interface Profile {
@@ -130,6 +151,9 @@ export const DEFAULT_SETTINGS: ProfileSettings = {
   leftHanded: false,
   dailyGoalXp: 50,
   keyLabels: 'c-only',
+  malletVariant: 'marimba',
+  ukuleleTuning: 'high-g',
+  bassStrings: 4,
 };
 
 export const DEFAULT_DEVICE: DeviceSettings = {

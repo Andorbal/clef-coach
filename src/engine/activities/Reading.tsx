@@ -5,7 +5,7 @@ import { getSong } from '../../content/songs';
 import { autoFinger } from '../../music/autofinger';
 import { keyDisplayName } from '../../music/keys';
 import { songToScore } from '../../music/parse';
-import type { ActivityProps, ActivityResult } from '../context';
+import { type ActivityProps, type ActivityResult, prefsOf } from '../context';
 import { PlayAlong } from '../PlayAlong';
 
 type ReadDef = Extract<ActivityDef, { type: 'read' }>;
@@ -29,7 +29,7 @@ export function ReadActivity({ def, ctx, onDone }: ActivityProps<ReadDef>) {
   const [rep, setRep] = useState(0);
   const acc = useRef<ActivityResult | null>(null);
   const score = useMemo(() => {
-    const s = generateScore(def.gen, ctx.rng, ctx.instrument);
+    const s = generateScore(def.gen, ctx.rng, ctx.instrument, '', prefsOf(ctx.settings));
     s.tempo = def.tempo ?? 80;
     return s;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -60,7 +60,7 @@ export function ReadActivity({ def, ctx, onDone }: ActivityProps<ReadDef>) {
 export function PieceActivity({ def, ctx, onDone }: ActivityProps<PieceDef>) {
   const song = def.song ? getSong(def.song) : undefined;
   const score = useMemo(() => {
-    if (song) return autoFinger(songToScore(song));
+    if (song) return autoFinger(songToScore(song), prefsOf(ctx.settings));
     if (def.inline) {
       return autoFinger(
         songToScore({
@@ -75,6 +75,7 @@ export function PieceActivity({ def, ctx, onDone }: ActivityProps<PieceDef>) {
           pickup: def.inline.pickup,
           staves: def.inline.staves,
         }),
+        prefsOf(ctx.settings),
       );
     }
     return null;
@@ -121,6 +122,8 @@ export function ScaleActivity({ def, ctx, onDone }: ActivityProps<ScaleDef>) {
         instrument: ctx.instrument,
         clef: def.clef,
         guitarPosition: def.guitarPosition,
+        prefs: prefsOf(ctx.settings),
+        mallets: def.mallets,
       }),
     [def, ctx.instrument],
   );
@@ -135,7 +138,7 @@ export function ScaleActivity({ def, ctx, onDone }: ActivityProps<ScaleDef>) {
       tempo={def.tempo ?? 72}
       fingering={def.fingering}
       title={def.title ?? `${tonic} ${kindName} scale`}
-      prompt={def.prompt ?? (ctx.instrument === 'piano' ? `${def.octaves > 1 ? `${def.octaves} octaves, ` : ''}${handsLabel}. Follow the fingering — it makes the crossings smooth.` : 'Follow the fingers and string numbers.')}
+      prompt={def.prompt ?? (ctx.instrument === 'piano' ? `${def.octaves > 1 ? `${def.octaves} octaves, ` : ''}${handsLabel}. Follow the fingering — it makes the crossings smooth.` : ctx.instrument === 'mallets' ? 'Follow the sticking: alternate hands and keep your mallets from crossing.' : 'Follow the fingers and string numbers.')}
       onDone={onDone}
     />
   );

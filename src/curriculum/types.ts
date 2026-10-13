@@ -11,9 +11,9 @@ export interface Insight {
   /** Optional visual: a few notes on a staff, a highlighted keyboard range, etc. */
   visual?:
     | { kind: 'staff'; clef: Clef; notes: string[]; labels?: boolean; key?: string; time?: TimeSig }
-    | { kind: 'keys'; notes: string[]; low?: string; high?: string; fingers?: number[]; hand?: Hand }
+    | { kind: 'keys'; notes: string[]; low?: string; high?: string; fingers?: number[]; hand?: Hand; sticking?: string[] }
     | { kind: 'frets'; positions: { string: number; fret: number; label?: string; finger?: number; root?: boolean }[]; minFret?: number; maxFret?: number }
-    | { kind: 'staff+keys'; clef: Clef; notes: string[]; fingers?: number[]; hand?: Hand }
+    | { kind: 'staff+keys'; clef: Clef; notes: string[]; fingers?: number[]; hand?: Hand; sticking?: string[] }
     | { kind: 'staff+frets'; clef: Clef; notes: string[]; positions: { string: number; fret: number; finger?: number }[] };
 }
 
@@ -53,8 +53,10 @@ export interface MelodyGen {
   dyads?: { chance: number; intervals: number[] };
   /** End on the tonic */
   cadence?: boolean;
-  /** Guitar position for fingering (index-finger fret); default 1 */
+  /** Fretted: position for fingering (index-finger fret); default 1 */
   guitarPosition?: number;
+  /** Mallets: two or four mallets (default 2, or 4 for a grand-staff part). */
+  mallets?: 2 | 4;
   /** Second staff (grand staff) */
   accomp?: { pattern: AccompPattern; pool: string[]; fivePosition?: boolean; rhythms?: Record<RhythmCell, number> };
   /** Use chromatic accidentals (passing tones) with this probability */
@@ -146,6 +148,8 @@ export type ActivityDef =
       /** guitar: position for fingering */
       guitarPosition?: number;
       clef?: Clef;
+      /** mallets: two or four mallets */
+      mallets?: 2 | 4;
     })
   | (ActivityBase & {
       type: 'interval';

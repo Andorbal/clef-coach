@@ -5,6 +5,7 @@ import { micInput } from '../audio/input/mic';
 import { unlockAudio } from '../audio/context';
 import { useApp, useDevice } from '../state/store';
 import { pitchToString, spellMidi } from '../music/pitch';
+import { type InstrumentId, familyOf, instrumentDef } from '../music/instruments';
 import type { InputMode } from '../state/types';
 import { Modal } from './ui';
 import './InputControl.css';
@@ -26,7 +27,7 @@ export async function applyInputMode(mode: InputMode): Promise<{ ok: boolean; er
   return { ok: true };
 }
 
-export function InputChip({ instrument }: { instrument: 'piano' | 'guitar' }) {
+export function InputChip({ instrument }: { instrument: InstrumentId }) {
   const device = useDevice();
   const status = useInputStatus();
   const [open, setOpen] = useState(false);
@@ -38,7 +39,7 @@ export function InputChip({ instrument }: { instrument: 'piano' | 'guitar' }) {
   }, [status.micActive]);
   const mode = device.inputMode;
   const label = mode === 'mic' ? (status.micActive ? 'Listening' : 'Mic off') : mode === 'midi' ? (status.midiDevices.length ? status.midiDevices[0].name : 'MIDI') : 'On-screen';
-  const Icon = mode === 'mic' ? (status.micActive ? Mic : MicOff) : mode === 'midi' ? Usb : instrument === 'piano' ? Piano : Keyboard;
+  const Icon = mode === 'mic' ? (status.micActive ? Mic : MicOff) : mode === 'midi' ? Usb : familyOf(instrument) === 'keyboard' ? Piano : Keyboard;
   return (
     <>
       <button className={`input-chip ${mode}`} onClick={() => setOpen(true)} aria-label="Input settings">
@@ -55,7 +56,20 @@ export function InputChip({ instrument }: { instrument: 'piano' | 'guitar' }) {
   );
 }
 
-export function InputPicker({ instrument, onPicked }: { instrument: 'piano' | 'guitar'; onPicked?: () => void }) {
+function micBody(instrument: InstrumentId): string {
+  switch (instrument) {
+    case 'piano':
+      return 'Play a real or digital piano near your device. Works great on iPad.';
+    case 'mallets':
+      return 'Play your marimba, xylophone, glockenspiel or vibraphone near the device. Set which one in Settings so the octave is right.';
+    case 'bass':
+      return 'Play your bass near the device — unplugged works, or through an amp. Low notes need a quiet room.';
+    default:
+      return `Play your ${instrumentDef(instrument).short.toLowerCase()} near the device — acoustic or amplified.`;
+  }
+}
+
+export function InputPicker({ instrument, onPicked }: { instrument: InstrumentId; onPicked?: () => void }) {
   const device = useDevice();
   const update = useApp(s => s.updateDevice);
   const status = useInputStatus();
@@ -78,7 +92,7 @@ export function InputPicker({ instrument, onPicked }: { instrument: 'piano' | 'g
     {
       mode: 'mic',
       title: 'Microphone',
-      body: instrument === 'piano' ? 'Play a real or digital piano near your device. Works great on iPad.' : 'Play your guitar near the device — acoustic or amplified.',
+      body: micBody(instrument),
       icon: Mic,
     },
     {
@@ -93,8 +107,8 @@ export function InputPicker({ instrument, onPicked }: { instrument: 'piano' | 'g
     {
       mode: 'touch',
       title: 'On-screen',
-      body: instrument === 'piano' ? 'Tap the keyboard (or use your computer keys: A W S E D F…).' : 'Tap the fretboard.',
-      icon: instrument === 'piano' ? Piano : Keyboard,
+      body: familyOf(instrument) === 'fretted' ? 'Tap the fretboard.' : familyOf(instrument) === 'mallet' ? 'Tap the bars (or use your computer keys: A W S E D F…).' : 'Tap the keyboard (or use your computer keys: A W S E D F…).',
+      icon: familyOf(instrument) === 'keyboard' ? Piano : Keyboard,
     },
   ];
   return (
@@ -120,7 +134,7 @@ export function InputPicker({ instrument, onPicked }: { instrument: 'piano' | 'g
   );
 }
 
-export function InputModal({ open, onClose, instrument }: { open: boolean; onClose: () => void; instrument: 'piano' | 'guitar' }) {
+export function InputModal({ open, onClose, instrument }: { open: boolean; onClose: () => void; instrument: InstrumentId }) {
   return (
     <Modal open={open} onClose={onClose} title="How will you play?">
       <InputPicker instrument={instrument} onPicked={onClose} />

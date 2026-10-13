@@ -15,12 +15,14 @@ import { synth } from '../audio/synth';
 import { getAudioContext, unlockAudio } from '../audio/context';
 import type { FingeringMode } from '../curriculum/types';
 import { type FretMark, type KeyMark, type MarkColor } from '../instruments';
+import { isFretted, isMallet, voiceFor } from '../music/instruments';
 import { type Pitch, pitchToString, spellMidi } from '../music/pitch';
 import { PPQ, beatTicks } from '../music/rhythm';
-import { type PlayStep, type Score, buildSteps, scoreRange, scoreTotalTicks } from '../music/score';
+import { type PlayStep, type Score, type StepNote, buildSteps, scoreRange, scoreTotalTicks } from '../music/score';
+import { malletHand, malletLabel } from '../music/sticking';
 import { type GhostNote, NotationView, type NoteState } from '../notation/NotationView';
 import type { ItemResult } from '../state/srs';
-import { type ActivityResult, type LessonCtx, resolveVisibility } from './context';
+import { type ActivityResult, type LessonCtx, ctxTuning, prefsOf, resolveVisibility } from './context';
 import { applyFingeringMode } from './fingeringView';
 import { InstrumentPanel, pianoRangeFor } from './InstrumentPanel';
 import { useComputerPiano, useNoteInput } from './input';
@@ -34,6 +36,19 @@ export interface PlayAlongProps {
   noteNames?: boolean;
   /** Which hand(s) the learner plays on a two-staff piano score. */
   hands?: 'R' | 'L' | 'both';
+  /**
+   * Which notes the learner plays (default: all, subject to `hands`). Notes left out
+   * are played by the app – e.g. practise only the bass strings, or only the left mallet.
+   */
+  filter?: (n: StepNote) => boolean;
+  /** Metronome clicks after the count-in in tempo mode (default: the profile setting). */
+  metronome?: boolean;
+  /** Count-in bars before tempo mode starts (default 1). */
+  countInBars?: number;
+  /** Start tempo mode immediately (no "Start" button) — used when looping. */
+  autoStart?: boolean;
+  /** Volume of the part the app plays (0..1, default 0.5). */
+  accompVolume?: number;
   title?: string;
   prompt?: string;
   /** Guitar: fret window & context marks (e.g. a scale shape) */
@@ -57,6 +72,10 @@ export function PlayAlong(props: PlayAlongProps) {
   const { ctx, score: rawScore, mode, onDone } = props;
   const tempo = props.tempo ?? rawScore.tempo ?? 80;
   const instrument = ctx.instrument;
+  const voice = voiceFor(instrument, prefsOf(ctx.settings));
+  const fretted = isFretted(instrument);
+  const tuning = useMemo(() => rawScore.tuning ?? ctxTuning(ctx), [rawScore.tuning, ctx]);
+  const accompVel = 0.5 * (props.accompVolume ?? 1) + 0.05;
 
   // ----- derived score / steps -----
   const fingeringMode: FingeringMode = useMemo(() => {
@@ -67,10 +86,12 @@ export function PlayAlong(props: PlayAlongProps) {
   const score = useMemo(() => applyFingeringMode(rawScore, fingeringMode), [rawScore, fingeringMode]);
   const showNames = resolveVisibility(ctx.settings.noteNames, !!props.noteNames);
   const steps = useMemo(() => buildSteps(rawScore), [rawScore]);
+  const filterRef = useRef(props.filter);
   const runtime: StepRuntime[] = useMemo(() => {
     const hands = props.hands ?? 'both';
+    const filter = filterRef.current;
     return steps.map(s => {
-      const required = s.notes.filter(n => hands === 'both' || !n.hand || n.hand === hands);
+      const required = s.notes.filter(n => (hands === 'both' || !n.hand || n.hand === hands) && (!filter || filter(n)));
       const auto = s.notes.filter(n => !required.includes(n));
       return { required, auto };
     });
@@ -109,12 +130,12 @@ export function PlayAlong(props: PlayAlongProps) {
       let i = from;
       while (i < runtime.length && runtime[i].required.length === 0) {
         const auto = runtime[i].auto;
-        if (auto.length) synth.play(auto.map(n => n.midi), { duration: Math.min(1.5, auto[0].ticks * secPerTick), velocity: 0.5 });
+        if (auto.length) synth.play(auto.map(n => n.midi), { duration: Math.min(1.5, auto[0].ticks * secPerTick), velocity: accompVel, voice });
         i++;
       }
       return i;
     },
-    [runtime, secPerTick],
+    [runtime, secPerTick, accompVel, voice],
   );
 
   const finish = useCallback(() => {
@@ -132,8 +153,17 @@ export function PlayAlong(props: PlayAlongProps) {
       } else if (stepStatesRef.current[i] === 'good') correct++;
     }
     const notes = gradedSteps.reduce((s, i) => s + runtime[i].required.length, 0);
-    setTimeout(() => onDone({ total, correct, items: itemsRef.current, notes, responseMs: responseRef.current }), 650);
-  }, [gradedSteps, mode, onDone, runtime]);
+    // per-measure results, so song practice can find the trouble spots
+    const measureStats: Record<number, { total: number; clean: number }> = {};
+    for (const i of gradedSteps) {
+      const m = steps[i].measure;
+      const st = (measureStats[m] ??= { total: 0, clean: 0 });
+      st.total++;
+      const ok = mode === 'wait' ? !mistakesRef.current[i] : stepStatesRef.current[i] === 'good';
+      if (ok) st.clean++;
+    }
+    setTimeout(() => onDone({ total, correct, items: itemsRef.current, notes, responseMs: responseRef.current, measureStats }), 650);
+  }, [gradedSteps, mode, onDone, runtime, steps]);
 
   /** Synchronous mirror of step results (state updates are async; scoring must not miss the last step). */
   const stepStatesRef = useRef<Record<number, NoteState>>({});
@@ -299,7 +329,7 @@ export function PlayAlong(props: PlayAlongProps) {
     if (mode === 'wait') onWaitInput(e);
     else onTempoInput(e);
   });
-  useComputerPiano(instrument === 'piano' && phase !== 'done', rawScore.staves[0]?.clef === 'bass' ? 3 : 4);
+  useComputerPiano(!fretted && phase !== 'done', rawScore.staves[0]?.clef === 'bass' ? 3 : 4);
 
   const tick = useCallback(() => {
     const now = performance.now();
@@ -343,8 +373,8 @@ export function PlayAlong(props: PlayAlongProps) {
     metro.start({
       bpm,
       beatsPerBar,
-      countIn: 1,
-      muted: !ctx.settings.metronome,
+      countIn: props.countInBars ?? 1,
+      muted: !(props.metronome ?? ctx.settings.metronome),
       onBeat: info => {
         if (info.isCountIn) setCountIn(beatsPerBar - info.beat);
         else {
@@ -360,13 +390,22 @@ export function PlayAlong(props: PlayAlongProps) {
     const ctxNow = getAudioContext().currentTime;
     const autoEvents = runtime.flatMap((rt, i) =>
       rt.auto.length
-        ? [{ midi: rt.auto.map(n => n.midi), at: metro.startTime + pickupOffset + steps[i].tick * secPerTick - ctxNow, duration: rt.auto[0].ticks * secPerTick * 0.95 }]
+        ? [{ midi: rt.auto.map(n => n.midi), at: metro.startTime + pickupOffset + steps[i].tick * secPerTick - ctxNow, duration: rt.auto[0].ticks * secPerTick * 0.95, velocity: accompVel }]
         : [],
     );
-    if (autoEvents.length) seqRef.current = synth.playSequence(autoEvents, instrument === 'guitar' ? 'guitar' : 'piano');
+    if (autoEvents.length) seqRef.current = synth.playSequence(autoEvents, voice);
     cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(tick);
-  }, [rawScore, secPerTick, ctx.settings.metronome, runtime, steps, tick, instrument]);
+  }, [rawScore, secPerTick, ctx.settings.metronome, props.metronome, props.countInBars, runtime, steps, tick, voice, accompVel]);
+
+  // looping practice: start straight away
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (props.autoStart && mode === 'tempo' && !autoStarted.current) {
+      autoStarted.current = true;
+      startTempo();
+    }
+  }, [props.autoStart, mode, startTempo]);
 
   // preview ("listen")
   const preview = useCallback(async () => {
@@ -382,7 +421,7 @@ export function PlayAlong(props: PlayAlongProps) {
     setPhase('preview');
     const lead = 0.25;
     const events = steps.map(s => ({ midi: s.notes.map(n => n.midi), at: lead + s.tick * secPerTick, duration: Math.max(0.15, s.notes[0].ticks * secPerTick * 0.95) }));
-    seqRef.current = synth.playSequence(events, instrument === 'guitar' ? 'guitar' : 'piano');
+    seqRef.current = synth.playSequence(events, voice);
     const start = performance.now() + lead * 1000;
     const loop = () => {
       const cur = (performance.now() - start) / (secPerTick * 1000);
@@ -395,7 +434,7 @@ export function PlayAlong(props: PlayAlongProps) {
       rafRef.current = requestAnimationFrame(loop);
     };
     rafRef.current = requestAnimationFrame(loop);
-  }, [phase, steps, secPerTick, instrument, totalTicks, mode]);
+  }, [phase, steps, secPerTick, voice, totalTicks, mode]);
 
   // ----- view model -----
   const states = useMemo(() => {
@@ -412,26 +451,35 @@ export function PlayAlong(props: PlayAlongProps) {
   const [lo, hi] = useMemo(() => scoreRange(rawScore), [rawScore]);
   const range = useMemo(() => pianoRangeFor([lo, hi]), [lo, hi]);
 
+  const mallets = isMallet(instrument);
   const keyMarks: KeyMark[] = useMemo(() => {
     if (!hint || !currentRt) return [];
+    if (mallets) {
+      return currentRt.required.map(n => ({
+        midi: n.midi,
+        color: (n.finger ? (malletHand(n.finger) === 'L' ? 'lh' : 'rh') : 'gold') as MarkColor,
+        label: n.finger ? malletLabel(n.finger, rawScore.mallets ?? 2) : undefined,
+        pulse: true,
+      }));
+    }
     return currentRt.required.map(n => ({ midi: n.midi, color: (n.hand === 'L' ? 'lh' : 'rh') as MarkColor, finger: n.finger, pulse: true }));
-  }, [hint, currentRt]);
+  }, [hint, currentRt, mallets, rawScore.mallets]);
 
   const fretMarks: FretMark[] = useMemo(() => {
     const ctxMarks = props.contextMarks ?? [];
-    if (!currentRt || instrument !== 'guitar') return ctxMarks;
+    if (!currentRt || !fretted) return ctxMarks;
     const cur = currentRt.required
       .filter(n => n.string !== undefined)
-      .map(n => ({ string: n.string!, fret: n.midi - [64, 59, 55, 50, 45, 40][n.string! - 1], color: 'gold' as MarkColor, finger: n.finger, pulse: true }));
+      .map(n => ({ string: n.string!, fret: n.midi - tuning[n.string! - 1], color: 'gold' as MarkColor, finger: n.finger, pulse: true }));
     return hint || props.contextMarks ? [...ctxMarks.filter(m => !cur.some(c => c.string === m.string && c.fret === m.fret)), ...(hint || props.contextMarks ? cur : [])] : ctxMarks;
-  }, [currentRt, instrument, hint, props.contextMarks]);
+  }, [currentRt, fretted, hint, props.contextMarks, tuning]);
 
   const fretRange = useMemo<[number, number]>(() => {
     if (props.fretRange) return props.fretRange;
     let maxF = 0;
-    for (const s of steps) for (const n of s.notes) if (n.string) maxF = Math.max(maxF, n.midi - [64, 59, 55, 50, 45, 40][n.string - 1]);
+    for (const s of steps) for (const n of s.notes) if (n.string) maxF = Math.max(maxF, n.midi - tuning[n.string - 1]);
     return maxF <= 5 ? [0, 7] : maxF <= 12 ? [0, 12] : [Math.max(0, maxF - 10), maxF + 2];
-  }, [props.fretRange, steps]);
+  }, [props.fretRange, steps, tuning]);
 
   const focusMidi = current ? Math.round(current.notes.reduce((s, n) => s + n.midi, 0) / Math.max(1, current.notes.length)) : undefined;
   const focusId = current?.elIds[0];
@@ -449,7 +497,7 @@ export function PlayAlong(props: PlayAlongProps) {
           focusId={phase === 'playing' && mode === 'wait' ? focusId : undefined}
           playheadTick={phase === 'preview' || (mode === 'tempo' && (phase === 'playing' || phase === 'countin')) ? playheadTick ?? 0 : null}
           fingering={fingeringMode !== 'none'}
-          strings={instrument === 'guitar' && fingeringMode !== 'none'}
+          strings={fretted && fingeringMode !== 'none'}
           noteNames={showNames ? 'all' : hint ? 'focus' : 'none'}
           naming={ctx.settings.naming}
           labelSpace

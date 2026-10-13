@@ -4,6 +4,7 @@
  * of cells, leaps up to a limit, phrases that end on stable notes, and (for the grand
  * staff) a left-hand part that follows the harmony.
  */
+import { type InstrumentId, type InstrumentPrefs, instrumentDef } from '../music/instruments';
 import { autoFinger } from '../music/autofinger';
 import { fingerPianoLine, scaleFingering } from '../music/fingering';
 import { type KeySig, parseKey, scalePitches, tonicOf, keyAlterations, type ScaleKind } from '../music/keys';
@@ -492,7 +493,7 @@ function fingerAccompaniment(notes: NoteEl[]) {
   }
 }
 
-export function generateScore(gen: MelodyGen, rng: Rng = makeRng(), instrument: 'piano' | 'guitar' = 'piano', title = ''): Score {
+export function generateScore(gen: MelodyGen, rng: Rng = makeRng(), instrument: InstrumentId = 'piano', title = '', prefs: InstrumentPrefs = {}): Score {
   const key = parseKey(gen.key);
   const id = `gen${++genCounter}`;
   const rhythm = genRhythm(rng, gen.time, gen.measures, gen.rhythms, true);
@@ -514,7 +515,8 @@ export function generateScore(gen: MelodyGen, rng: Rng = makeRng(), instrument: 
   const hand: Hand = gen.hand ?? (gen.clef === 'bass' ? 'L' : 'R');
   const rhSpecs = melodyToSpecs(melody);
   const staves: StaffPart[] = [];
-  const rhStaff: StaffPart = { clef: gen.clef, hand: instrument === 'piano' ? hand : undefined, voices: [buildVoice(rhSpecs, gen.time, `${id}-a`)] };
+  const twoStaves = !!gen.accomp && pattern !== 'none';
+  const rhStaff: StaffPart = { clef: gen.clef, hand: instrument === 'piano' || (instrument === 'mallets' && twoStaves) ? hand : undefined, voices: [buildVoice(rhSpecs, gen.time, `${id}-a`)] };
   staves.push(rhStaff);
   if (gen.accomp && pattern !== 'none') {
     const lhSpecs = genAccomp(rng, pattern, gen, melody, prog!, key);
@@ -530,6 +532,7 @@ export function generateScore(gen: MelodyGen, rng: Rng = makeRng(), instrument: 
     measures: gen.measures,
     staves,
     instrument,
+    mallets: instrument === 'mallets' ? gen.mallets ?? (twoStaves ? 4 : 2) : undefined,
   };
 
   // Fingering
@@ -565,7 +568,7 @@ export function generateScore(gen: MelodyGen, rng: Rng = makeRng(), instrument: 
       }
     });
   } else {
-    autoFinger(score, { guitarPosition: gen.guitarPosition ?? 1, maxFret: Math.max(5, (gen.guitarPosition ?? 1) + 4) });
+    autoFinger(score, { ...prefs, guitarPosition: gen.guitarPosition ?? 1, maxFret: Math.max(5, (gen.guitarPosition ?? 1) + 4) });
   }
   return score;
 }
@@ -582,9 +585,12 @@ export function scaleScore(opts: {
   octave?: number;
   motion?: 'parallel' | 'contrary';
   rhythm?: 'q' | 'e' | 's';
-  instrument: 'piano' | 'guitar';
+  instrument: InstrumentId;
   clef?: Clef;
   guitarPosition?: number;
+  prefs?: InstrumentPrefs;
+  /** Mallets: two or four mallets (default 2). */
+  mallets?: 2 | 4;
 }): Score {
   const m = /^([A-G])(#|b)?$/.exec(opts.tonic)!;
   const tonic = { step: m[1] as Pitch['step'], alter: m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0 };
@@ -598,7 +604,7 @@ export function scaleScore(opts: {
   const id = `scale${++genCounter}`;
   const time: TimeSig = [4, 4];
   const base: BaseDuration = opts.rhythm ?? 'q';
-  const rhOct = opts.octave ?? (opts.instrument === 'guitar' ? 3 : 4);
+  const rhOct = opts.octave ?? (opts.instrument === 'guitar' ? 3 : opts.instrument === 'bass' ? 2 : 4);
   const mkLine = (oct: number, dir: 'up' | 'down') => {
     const up = scalePitches(tonic, oct, opts.kind, opts.octaves);
     const line = dir === 'up' ? [...up, ...up.slice(0, -1).reverse()] : [...[...up].reverse(), ...up.slice(1)];
@@ -625,12 +631,14 @@ export function scaleScore(opts: {
   };
   const tk = opts.tonic;
   const staves: StaffPart[] = [];
-  if (opts.instrument === 'guitar') {
+  if (opts.instrument !== 'piano') {
+    // fretted instruments and mallets: one staff in the instrument's own clef
     const line = mkLine(rhOct, 'up');
-    staves.push({ clef: opts.clef ?? 'treble8vb', voices: [buildVoice(toSpecs(line), time, `${id}-g`)] });
-    const s: Score = { id, title: '', key, time, tempo: 80, measures: 0, staves, instrument: 'guitar' };
+    const clef: Clef = opts.clef ?? (instrumentDef(opts.instrument).clefs[0] as Clef);
+    staves.push({ clef, voices: [buildVoice(toSpecs(line), time, `${id}-g`)] });
+    const s: Score = { id, title: '', key, time, tempo: 80, measures: 0, staves, instrument: opts.instrument, mallets: opts.instrument === 'mallets' ? opts.mallets ?? 2 : undefined };
     s.measures = Math.max(...staves[0].voices[0].notes.map(n => n.measure)) + 1;
-    return autoFinger(s, { guitarPosition: opts.guitarPosition ?? 1, maxFret: (opts.guitarPosition ?? 1) + 5 });
+    return autoFinger(s, { ...opts.prefs, guitarPosition: opts.guitarPosition ?? 1, maxFret: (opts.guitarPosition ?? 1) + 5 });
   }
   const upDown = (hand: Hand) => {
     const up = scaleFingering(tk, opts.kind, hand, opts.octaves);
@@ -667,7 +675,7 @@ export function scaleScore(opts: {
 // ---------------------------------------------------------------------------
 
 /** A run of whole notes with no barlines — used for note-reading drills. */
-export function flashScore(notes: Pitch[][], clef: Clef, keyName = 'C', instrument: 'piano' | 'guitar' = 'piano', hand?: Hand): Score {
+export function flashScore(notes: Pitch[][], clef: Clef, keyName = 'C', instrument: InstrumentId = 'piano', hand?: Hand): Score {
   const id = `flash${++genCounter}`;
   const key = parseKey(keyName);
   const specs: NoteSpec[] = notes.map(p => ({ pitches: p, base: 'w' }));

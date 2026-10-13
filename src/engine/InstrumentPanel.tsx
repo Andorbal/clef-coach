@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { inputManager } from '../audio/input/manager';
-import { Fretboard, PianoKeyboard, type FretMark, type KeyMark, type MarkColor } from '../instruments';
-import type { LessonCtx } from './context';
+import { Fretboard, MalletKeyboard, PianoKeyboard, type FretMark, type KeyMark, type MarkColor } from '../instruments';
+import { familyOf, instrumentDef, malletVariant, tuningFor } from '../music/instruments';
+import { type LessonCtx, prefsOf } from './context';
 import { useHeldNotes } from './input';
 
 export interface FretTap {
@@ -12,7 +13,7 @@ export interface FretTap {
 
 interface Props {
   ctx: Pick<LessonCtx, 'instrument' | 'settings'>;
-  /** MIDI range to show (piano). */
+  /** MIDI range to show (piano / mallets). */
   range?: [number, number];
   marks?: KeyMark[];
   fretMarks?: FretMark[];
@@ -49,6 +50,9 @@ export function InstrumentPanel(p: Props) {
   const autoHeight = vh < 700 ? Math.max(92, Math.round(vh * 0.3)) : undefined;
   const height = p.height ?? autoHeight;
   const emit = p.emitNotes !== false;
+  const family = familyOf(p.ctx.instrument);
+  const prefs = prefsOf(p.ctx.settings);
+  const tuning = useMemo(() => tuningFor(p.ctx.instrument, prefs).open, [p.ctx.instrument, prefs.ukuleleTuning, prefs.bassStrings]); // eslint-disable-line react-hooks/exhaustive-deps
   const onKeyDown = useCallback(
     (midi: number, velocity: number) => {
       if (emit) inputManager.emit({ type: 'on', midi, velocity, time: performance.now(), source: 'touch' });
@@ -72,21 +76,24 @@ export function InstrumentPanel(p: Props) {
   const onRelease = useCallback(
     (pos: { string: number; fret: number }) => {
       if (!emit) return;
-      const midi = [64, 59, 55, 50, 45, 40][pos.string - 1] + pos.fret;
+      const midi = tuning[pos.string - 1] + pos.fret;
       inputManager.emit({ type: 'off', midi, velocity: 0, time: performance.now(), source: 'touch' });
     },
-    [emit],
+    [emit, tuning],
   );
 
   const range = useMemo<[number, number]>(() => p.range ?? [48, 84], [p.range]);
 
-  if (p.ctx.instrument === 'guitar') {
-    const [minFret, maxFret] = p.fretRange ?? [0, 12];
+  if (family === 'fretted') {
+    const look = instrumentDef(p.ctx.instrument).fretted!;
+    const [minFret, maxFret] = p.fretRange ?? look.defaultWindow;
     return (
-      <div className="instrument-panel guitar">
+      <div className={`instrument-panel fretted ${p.ctx.instrument}`}>
         <Fretboard
+          tuning={tuning}
+          look={look}
           minFret={minFret}
-          maxFret={maxFret}
+          maxFret={Math.min(maxFret, look.maxFret + 2)}
           marks={p.fretMarks}
           pressed={p.pressedFrets}
           showNoteNames={p.fretNoteNames ?? 'marks'}
@@ -97,6 +104,33 @@ export function InstrumentPanel(p: Props) {
           onTap={onTap}
           onRelease={onRelease}
           height={height}
+          ariaLabel={`${instrumentDef(p.ctx.instrument).name} fretboard`}
+        />
+      </div>
+    );
+  }
+  if (family === 'mallet') {
+    const v = malletVariant(prefs);
+    const lo = Math.max(v.low, Math.min(range[0], v.high - 24));
+    const hi = Math.min(v.high, Math.max(range[1], lo + 24));
+    return (
+      <div className="instrument-panel mallets">
+        <MalletKeyboard
+          low={lo}
+          high={hi}
+          metal={v.metal}
+          pressed={held}
+          pressedColor={p.pressedColor}
+          marks={p.marks}
+          showLabels={p.ctx.settings.keyLabels === 'none' ? 'none' : p.ctx.settings.keyLabels === 'white' ? 'white' : 'c-only'}
+          naming={p.ctx.settings.naming}
+          dimOutside={p.dimOutside}
+          focus={p.focus}
+          onKeyDown={onKeyDown}
+          onKeyUp={onKeyUp}
+          interactive={p.interactive !== false}
+          height={height}
+          ariaLabel={v.name}
         />
       </div>
     );
