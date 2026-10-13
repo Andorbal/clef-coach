@@ -12,7 +12,8 @@
  * auto-fingering leaves it alone.
  */
 import { getSong } from '../content/songs';
-import { bassShapes, frettedVoicings, malletVoicings, pianoVoicings } from '../music/chordbook';
+import { bassShapes, malletVoicings, pianoVoicings } from '../music/chordbook';
+import { frettedVoicingsFor, parseChordRef } from '../music/chordViews';
 import { type ChordSymbol, parseChordSymbol, rootPc, spellChordTone } from '../music/chords';
 import { type InstrumentId, type InstrumentPrefs, isFretted, malletVariant, tuningFor } from '../music/instruments';
 import { type SongDef, songToScore } from '../music/parse';
@@ -60,7 +61,8 @@ export function chordNoteName(chord: ChordSymbol, midi: number): string {
 }
 
 /** The first (easiest) voicing of a chord on an instrument, as notes with fingers and strings. */
-export function chordShape(symbol: string, instrument: InstrumentId, prefs: InstrumentPrefs = {}): ChordShape | null {
+export function chordShape(ref: string, instrument: InstrumentId, prefs: InstrumentPrefs = {}): ChordShape | null {
+  const { symbol, chart } = parseChordRef(ref);
   let chord: ChordSymbol;
   try {
     chord = parseChordSymbol(symbol);
@@ -76,7 +78,7 @@ export function chordShape(symbol: string, instrument: InstrumentId, prefs: Inst
   }
   if (isFretted(instrument)) {
     const tuning = tuningFor(instrument, prefs).open;
-    const v = frettedVoicings(chord, tuning, { max: 1, instrument: instrument as 'guitar' | 'ukulele' })[0];
+    const v = frettedVoicingsFor(chord, tuning, instrument as 'guitar' | 'ukulele', 1, chart)[0];
     if (!v) return null;
     const notes: ShapeNote[] = [];
     // low string first: the order of a down-strum

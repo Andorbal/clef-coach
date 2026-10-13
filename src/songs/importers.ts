@@ -46,15 +46,16 @@ export async function importBytes(name: string, bytes: Uint8Array, opts: ImportO
     const { song, warnings } = parseSongDoc(text);
     return { song, warnings, kind };
   }
+  const title = name.replace(/^.*[\\/]/, '').replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim() || undefined;
   if (kind === 'musicxml') {
     const mx = await import('./musicxml');
-    const zipped = bytes[0] === 0x50 && bytes[1] === 0x4b;
-    const res = zipped ? await mx.importMxl(bytes, { instrument: opts.instrument, partIds: opts.parts }) : mx.importMusicXml(new TextDecoder().decode(bytes), { instrument: opts.instrument, partIds: opts.parts });
+    // importMxl reads zipped .mxl as well as plain (UTF-8 or UTF-16) MusicXML
+    const res = await mx.importMxl(bytes, { instrument: opts.instrument, partIds: opts.parts, title });
     const { song, warnings } = checked(res.song, res.warnings);
     return { song, warnings, parts: res.parts, kind };
   }
   const md = await import('./midi');
-  const res = md.importMidi(bytes, { instrument: opts.instrument, tracks: opts.parts?.map(Number) });
+  const res = md.importMidi(bytes, { instrument: opts.instrument, tracks: opts.parts?.map(Number), title });
   const { song, warnings } = checked(res.song, res.warnings);
   return { song, warnings, parts: res.parts, kind };
 }

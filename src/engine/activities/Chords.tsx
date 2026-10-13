@@ -13,7 +13,7 @@ import type { ActivityDef } from '../../curriculum/types';
 import { ChordPicture, playView } from '../../instruments/ChordCell';
 import { CHORD_ROOTS } from '../../music/chordbook';
 import { type ChordSymbol, chordName, chordQuality, chordSymbolText, parseChordSymbol, rootPc } from '../../music/chords';
-import { type ChordView, chordViews } from '../../music/chordViews';
+import { type ChordView, chordViews, parseChordRef } from '../../music/chordViews';
 import { instrumentDef, isFretted } from '../../music/instruments';
 import type { ItemResult } from '../../state/srs';
 import { type ActivityProps, prefsOf } from '../context';
@@ -24,7 +24,7 @@ type QuizDef = Extract<ActivityDef, { type: 'chord-quiz' }>;
 
 const nameOf = (sym: string) => {
   try {
-    return chordName(parseChordSymbol(sym));
+    return chordName(parseChordSymbol(parseChordRef(sym).symbol));
   } catch {
     return sym;
   }
@@ -80,8 +80,9 @@ export function ChordPlayActivity({ def, ctx, onDone }: ActivityProps<PlayDef>) 
 
 /** Wrong answers that look plausible: the other chords in the lesson, then near neighbours. */
 function distractors(target: string, pool: string[], n: number, rnd: () => number): string[] {
-  const t = parseChordSymbol(target);
-  const out = pool.filter(s => s !== target);
+  const t = parseChordSymbol(parseChordRef(target).symbol);
+  const sym = (r: string) => parseChordRef(r).symbol;
+  const out = pool.filter(s => sym(s) !== sym(target));
   const near = (c: ChordSymbol): string[] => {
     const q = (id: string) => chordQuality(id)!;
     const same = (qid: string) => chordSymbolText({ ...c, quality: q(qid), bass: undefined });
@@ -89,7 +90,7 @@ function distractors(target: string, pool: string[], n: number, rnd: () => numbe
     const alt = c.quality.id === 'maj' ? ['min', '7'] : c.quality.id === 'min' ? ['maj', 'm7'] : c.quality.id === '7' ? ['maj', 'maj7'] : ['maj', 'min'];
     return [...alt.map(same), moved(5), moved(7), moved(2)];
   };
-  const extra = near(t).filter(s => s !== target && !out.includes(s));
+  const extra = near(t).filter(s => s !== sym(target) && !out.some(o => sym(o) === s));
   const shuffle = <T,>(a: T[]) => a.map(x => [rnd(), x] as const).sort((x, y) => x[0] - y[0]).map(x => x[1]);
   return [...shuffle(out), ...extra].slice(0, n);
 }
@@ -126,7 +127,10 @@ export function ChordQuiz({ def, ctx, onDone }: ActivityProps<QuizDef>) {
   const viewOf = useMemo(() => {
     const cache = new Map<string, ChordView | undefined>();
     return (sym: string) => {
-      if (!cache.has(sym)) cache.set(sym, chordViews(parseChordSymbol(sym), ctx.instrument, prefs)[0]);
+      if (!cache.has(sym)) {
+        const ref = parseChordRef(sym);
+        cache.set(sym, chordViews(parseChordSymbol(ref.symbol), ctx.instrument, prefs, { chart: ref.chart })[0]);
+      }
       return cache.get(sym);
     };
   }, [ctx.instrument, prefs.ukuleleTuning, prefs.bassStrings, prefs.malletVariant]); // eslint-disable-line react-hooks/exhaustive-deps

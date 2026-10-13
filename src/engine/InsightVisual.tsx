@@ -12,7 +12,7 @@ import type { NoteNaming } from '../music/pitch';
 import { pianoRangeFor } from './InstrumentPanel';
 import { ChordPicture } from '../instruments/ChordCell';
 import { chordName, parseChordSymbol } from '../music/chords';
-import { chordViews } from '../music/chordViews';
+import { chordViews, parseChordRef } from '../music/chordViews';
 
 let visualCounter = 0;
 
@@ -147,8 +147,9 @@ function ChordVisual({ chords, instrument, prefs, compact }: { chords: string[];
     () =>
       chords.map(sym => {
         try {
-          const c = parseChordSymbol(sym);
-          return { sym, name: chordName(c), view: chordViews(c, instrument, prefs)[0] };
+          const ref = parseChordRef(sym);
+          const c = parseChordSymbol(ref.symbol);
+          return { sym, name: chordName(c), view: chordViews(c, instrument, prefs, { chart: ref.chart })[0] };
         } catch {
           return { sym, name: sym, view: undefined };
         }

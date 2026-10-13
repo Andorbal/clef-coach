@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { parseVoice, formatVoice, unrollRepeats } from '../music/parse';
+import { parsePitch } from '../music/pitch';
+import { parseKey } from '../music/keys';
+import type { NoteSpec } from '../music/score';
 import { measureTicks } from '../music/rhythm';
 import { SongFormatError, parseChordTimeline, parseSongDoc, parseTempo, songSections, songToJson } from './format';
 
@@ -126,5 +129,28 @@ describe('notation extensions', () => {
     const back = parseVoice(text, [4, 4]);
     expect(back.measures).toBe(2);
     expect(formatVoice(parseVoice('[C4 E4]/e@1,3 D4@2 r/q G4/h%2 |', [4, 4]).specs, [4, 4])).toBe('[C4 E4]/e@1,3 D4@2 r/q G4/h%2 |');
+  });
+});
+
+describe('formatVoice edge cases', () => {
+  it('splits a triplet note across a bar line with triplet values', () => {
+    // a half-note triplet starting on beat 4 of 4/4 crosses the bar line
+    const p = (s: string) => [parsePitch(s)];
+    const specs: NoteSpec[] = [
+      { pitches: p('C4'), base: 'h', dots: 1 },
+      { pitches: p('D4'), base: 'h', triplet: true },
+      { pitches: p('E4'), base: 'h', dots: 1 },
+      { pitches: p('F4'), base: 'e', triplet: true },
+      { pitches: p('G4'), base: 'e', triplet: true },
+    ];
+    const back = formatVoice(specs, [4, 4]);
+    const r = parseVoice(back, [4, 4], 0, 't', false);
+    expect(r.measures).toBe(2);
+  });
+
+  it('drops a change after the last bar', () => {
+    const r = parseVoice('C4/w |', [4, 4], 0, 't', false);
+    const out = formatVoice(r.specs, [4, 4], { changes: [{ measure: 1, key: parseKey('G') }] });
+    expect(out).toBe('C4/w |');
   });
 });

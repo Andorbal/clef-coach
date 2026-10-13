@@ -266,6 +266,24 @@ export function formatToken(spec: NoteSpec, prevDur: string | null, opts: { mall
  * Write note specs back as text notation with bar lines (and key/time change marks).
  * Notes that cross a bar line are split and tied. Durations carry over.
  */
+/**
+ * Plain and dotted values for a length, with triplet values for what they can't reach
+ * (part of a triplet note cut by a bar line).
+ */
+function splitWithTriplets(ticks: number): { base: BaseDuration; dots: number; triplet?: boolean }[] {
+  const plain = splitTicks(ticks);
+  if (plain.reduce((a, p) => a + durationTicks(p.base, p.dots), 0) === ticks) return plain;
+  for (const b of ['w', 'h', 'q', 'e', 's', 't'] as BaseDuration[]) {
+    const v = durationTicks(b, 0, true);
+    for (let k = 1; k <= 4 && k * v <= ticks; k++) {
+      const rest = ticks - k * v;
+      const tail = rest ? splitTicks(rest) : [];
+      if (tail.reduce((a, p) => a + durationTicks(p.base, p.dots), 0) === rest) return [...Array.from({ length: k }, () => ({ base: b, dots: 0, triplet: true })), ...tail];
+    }
+  }
+  return plain;
+}
+
 export function formatVoice(specs: NoteSpec[], time: TimeSig, opts: { pickup?: number; changes?: MeterChange[]; mallets?: 2 | 4 } = {}): string {
   const out: string[] = [];
   let measure = 0;
@@ -283,15 +301,22 @@ export function formatVoice(specs: NoteSpec[], time: TimeSig, opts: { pickup?: n
   };
   let room = lenOf(0);
   let prevDur: string | null = null;
+  // a change takes effect when the next note is written, so none trail after the last bar
+  let barStart = false;
   for (const spec of specs) {
     let remaining = durationTicks(spec.base, spec.dots ?? 0, spec.triplet);
     let first = true;
     while (remaining > 0) {
+      if (barStart) {
+        applyChanges(measure);
+        room = lenOf(measure);
+        barStart = false;
+      }
       const take = Math.min(remaining, room);
       const whole = take === remaining && first;
       const parts: { base: BaseDuration; dots: number; triplet?: boolean }[] = whole
         ? [{ base: spec.base, dots: spec.dots ?? 0, triplet: spec.triplet }]
-        : splitTicks(take).map(p => ({ ...p }));
+        : splitWithTriplets(take);
       parts.forEach((p, i) => {
         const last = i === parts.length - 1 && take === remaining;
         const piece: NoteSpec = {
@@ -313,8 +338,7 @@ export function formatVoice(specs: NoteSpec[], time: TimeSig, opts: { pickup?: n
       if (room <= 0) {
         out.push('|');
         measure++;
-        applyChanges(measure);
-        room = lenOf(measure);
+        barStart = true;
       }
     }
   }
