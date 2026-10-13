@@ -42,6 +42,18 @@
   --c: var(--rh);
 }
 
+.tool-gold {
+  --c: var(--gold);
+}
+
+.tool-blue {
+  --c: var(--lh);
+}
+
+.tool-pink {
+  --c: #ff7eb6;
+}
+
 .tool-icon {
   width: 50px;
   height: 50px;
@@ -244,13 +256,6 @@
   padding: 24px 16px;
 }
 
-.set-select {
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: var(--surface-2);
-  border: 1px solid var(--border-strong);
-  color: var(--text);
-}
 
 .gym-stop {
   position: absolute;

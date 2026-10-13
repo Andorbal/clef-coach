@@ -275,3 +275,31 @@
 .ob-dots span.done {
   background: rgba(244, 201, 122, 0.5);
 }
+
+.ob-choices.instruments {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
+@media (max-width: 560px) {
+  .ob-choices.instruments {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.ob-variant {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.ob-variant-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ob-variant-blurb {
+  font-size: 13px;
+}

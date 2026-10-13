@@ -1,9 +1,11 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, ArrowRight, Check, Guitar, Piano } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { unlockAudio } from '../audio/context';
 import { InputPicker } from '../components/InputControl';
+import { InstrumentIcon } from '../components/InstrumentIcon';
+import { INSTRUMENT_IDS, type InstrumentId, MALLET_VARIANTS, type MalletVariant, instrumentDef } from '../music/instruments';
 import { TrackBadge } from '../components/TrackBadge';
 import { Logo } from '../components/ui';
 import { TRACKS } from '../curriculum';
@@ -59,7 +61,22 @@ function HeroDemo() {
   );
 }
 
-type Instr = 'piano' | 'guitar' | 'both';
+/** Tracks picked for you when you choose an instrument (the ones that exist). */
+const DEFAULT_TRACKS: Record<InstrumentId, TrackId[]> = {
+  piano: ['piano-treble', 'piano-bass'],
+  guitar: ['guitar-treble', 'guitar-fretboard'],
+  ukulele: ['ukulele-treble', 'ukulele-chords'],
+  bass: ['bass-lines'],
+  mallets: ['mallets-two'],
+};
+
+function defaultPicks(instrs: Set<InstrumentId>): Set<TrackId> {
+  const ids = new Set(TRACKS.map(t => t.id));
+  const out = new Set<TrackId>();
+  // with several instruments, start with the first track of each
+  for (const i of instrs) for (const t of DEFAULT_TRACKS[i].filter(x => ids.has(x)).slice(0, instrs.size > 1 ? 1 : 2)) out.add(t);
+  return out;
+}
 
 const HUES = [32, 200, 265, 150, 340, 12, 50, 180];
 
@@ -72,18 +89,27 @@ export default function Onboarding() {
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
   const [hue, setHue] = useState(HUES[0]);
-  const [instr, setInstr] = useState<Instr>('piano');
-  const [picked, setPicked] = useState<Set<TrackId>>(new Set(['piano-treble', 'piano-bass']));
+  const [instrs, setInstrs] = useState<Set<InstrumentId>>(new Set(['piano']));
+  const [mallet, setMallet] = useState<MalletVariant>('marimba');
+  const [picked, setPicked] = useState<Set<TrackId>>(() => defaultPicks(new Set(['piano'])));
   const [level, setLevel] = useState<'new' | 'some' | 'good'>('new');
+  const updateSettings = useApp(s => s.updateSettings);
 
   useEffect(() => {
-    if (instr === 'piano') setPicked(new Set(['piano-treble', 'piano-bass']));
-    if (instr === 'guitar') setPicked(new Set(['guitar-treble', 'guitar-fretboard']));
-    if (instr === 'both') setPicked(new Set(['piano-treble', 'guitar-treble', 'guitar-fretboard']));
-  }, [instr]);
+    setPicked(defaultPicks(instrs));
+  }, [instrs]);
+
+  const toggleInstr = (i: InstrumentId) => {
+    const n = new Set(instrs);
+    if (n.has(i) && n.size > 1) n.delete(i);
+    else n.add(i);
+    // keep the order of the list
+    setInstrs(new Set(INSTRUMENT_IDS.filter(x => n.has(x))));
+  };
 
   const finish = () => {
     createProfile(name || 'Player', hue);
+    if (instrs.has('mallets')) updateSettings({ malletVariant: mallet });
     const order = TRACKS.map(t => t.id).filter(id => picked.has(id));
     order.forEach(id => addTrack(id));
     if (order[0]) setActive(order[0]);
@@ -94,7 +120,8 @@ export default function Onboarding() {
   const next = () => setStep(s => Math.min(total - 1, s + 1));
   const back = () => setStep(s => Math.max(0, s - 1));
 
-  const visibleTracks = TRACKS.filter(t => instr === 'both' || t.instrument === instr);
+  const visibleTracks = TRACKS.filter(t => instrs.has(t.instrument));
+  const firstInstr = [...instrs][0] ?? 'piano';
 
   return (
     <div className="onboarding">
@@ -118,7 +145,7 @@ export default function Onboarding() {
                 <span className="gold-text">Play it for real.</span>
               </h1>
               <p className="dim ob-lede">
-                Clef Coach teaches the treble and bass clefs on piano and guitar — listening to your real instrument through MIDI or the microphone, from your very first note to advanced sight-reading.
+                Clef Coach teaches you to read music on piano, guitar, ukulele, bass and mallet percussion — listening to your real instrument through MIDI or the microphone, from your very first note to the songs you want to play.
               </p>
               <HeroDemo />
               <div className="ob-actions">
@@ -158,31 +185,36 @@ export default function Onboarding() {
             <div className="ob-card card">
               <span className="eyebrow">Step 2 of 5</span>
               <h2 className="display ob-title">What do you play?</h2>
-              <div className="ob-choices three">
-                {(
-                  [
-                    ['piano', 'Piano', 'Keyboard or digital piano', Piano],
-                    ['guitar', 'Guitar', 'Acoustic, classical or electric', Guitar],
-                    ['both', 'Both', 'Learn the two side by side', null],
-                  ] as const
-                ).map(([v, title, sub, Icon]) => (
-                  <button key={v} className={`ob-choice ${instr === v ? 'on' : ''}`} onClick={() => setInstr(v)}>
-                    <span className="ob-choice-icon">
-                      {Icon ? (
-                        <Icon size={30} />
-                      ) : (
-                        <span className="ob-both">
-                          <Piano size={22} />
-                          <Guitar size={22} />
-                        </span>
-                      )}
-                    </span>
-                    <strong>{title}</strong>
-                    <span className="dim">{sub}</span>
-                    {instr === v && <Check className="ob-check" size={18} />}
-                  </button>
-                ))}
+              <p className="dim">Pick one or more — you can add others later.</p>
+              <div className="ob-choices instruments">
+                {INSTRUMENT_IDS.map(v => {
+                  const def = instrumentDef(v);
+                  const on = instrs.has(v);
+                  return (
+                    <button key={v} className={`ob-choice ${on ? 'on' : ''}`} onClick={() => toggleInstr(v)} aria-pressed={on}>
+                      <span className="ob-choice-icon">
+                        <InstrumentIcon instrument={v} size={30} />
+                      </span>
+                      <strong>{def.name}</strong>
+                      <span className="dim">{def.blurb}</span>
+                      {on && <Check className="ob-check" size={18} />}
+                    </button>
+                  );
+                })}
               </div>
+              {instrs.has('mallets') && (
+                <div className="ob-variant">
+                  <span className="faint">Which mallet instrument?</span>
+                  <div className="ob-variant-row">
+                    {Object.values(MALLET_VARIANTS).map(v => (
+                      <button key={v.id} className={`chip-btn ${mallet === v.id ? 'on' : ''}`} onClick={() => setMallet(v.id)}>
+                        {v.name}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="faint ob-variant-blurb">{MALLET_VARIANTS[mallet].blurb}</span>
+                </div>
+              )}
             </div>
           )}
 
@@ -247,7 +279,7 @@ export default function Onboarding() {
               <span className="eyebrow">Step 5 of 5</span>
               <h2 className="display ob-title">How will you play?</h2>
               <p className="dim">Clef Coach listens to your instrument. You can change this any time.</p>
-              <InputPicker instrument={instr === 'guitar' ? 'guitar' : 'piano'} />
+              <InputPicker instrument={firstInstr} />
             </div>
           )}
         </motion.div>

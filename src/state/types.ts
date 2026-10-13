@@ -1,5 +1,6 @@
 import type { BassStrings, MalletVariant, UkuleleTuning } from '../music/instruments';
 import type { NoteNaming } from '../music/pitch';
+import type { SongDef } from '../music/parse';
 
 export type TrackId =
   | 'piano-treble'
@@ -103,6 +104,38 @@ export interface ProfileSettings {
   bassStrings?: BassStrings;
 }
 
+/** Results for one practice passage (a section, or any measure range) of a song. */
+export interface PassageStat {
+  runs: number;
+  /** best accuracy 0..1 */
+  best: number;
+  /** consecutive runs at ≥ 90% */
+  streak: number;
+  /** fastest tempo (% of the song's tempo) played in time at ≥ 85% */
+  tempoPct: number;
+  lastAt: number;
+  /** practice-plan stages completed: "R", "L", "both", "t60", "t80", "t100" */
+  stages: string[];
+}
+
+/** A profile's practice record for one song. */
+export interface SongProgress {
+  startedAt: number;
+  lastAt: number;
+  ms: number;
+  sessions: number;
+  /** keyed "from-to" (1-based measures) */
+  passages: Record<string, PassageStat>;
+  /** mistakes per measure (1-based), slowly forgotten as you play it cleanly */
+  trouble: Record<number, number>;
+  /** best whole-song in-time tempo (% of the song's tempo) */
+  bestTempoPct: number;
+  /** "learn it by" target */
+  goal?: { date: string; tempoPct: number };
+  /** hidden from "Learning now" */
+  archived?: boolean;
+}
+
 export interface Profile {
   id: string;
   name: string;
@@ -119,6 +152,8 @@ export interface Profile {
   achievements: Record<string, number>;
   settings: ProfileSettings;
   totals: { notes: number; ms: number; lessons: number; perfect: number };
+  /** Songs being learned (by song id). */
+  songs?: Record<string, SongProgress>;
 }
 
 export interface PersistedData {
@@ -126,6 +161,8 @@ export interface PersistedData {
   version: 1;
   profiles: Record<string, Profile>;
   activeProfileId: string | null;
+  /** Songs imported on this device (shared by every profile), in the Clef Coach song format. */
+  songs?: Record<string, SongDef>;
 }
 
 export type InputMode = 'touch' | 'midi' | 'mic';

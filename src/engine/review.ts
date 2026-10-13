@@ -75,7 +75,7 @@ export function buildReviewLesson(track: TrackDef, tp?: TrackProgress): LessonDe
   }
   const keyItems = entries.filter(([k]) => k.startsWith('key:')).map(([k, s]) => ({ k, pr: reviewPriority(s, now) })).sort((a, b) => b.pr - a.pr);
   if (keyItems.length >= 2) {
-    const clef: Clef = track.clef === 'grand' || track.clef === 'fretboard' ? (track.instrument === 'bass' ? 'bass8vb' : track.instrument === 'guitar' ? 'treble8vb' : 'treble') : track.clef;
+    const clef: Clef = track.clef === 'grand' || track.clef === 'fretboard' || track.clef === 'chords' ? (track.instrument === 'bass' ? 'bass8vb' : track.instrument === 'guitar' ? 'treble8vb' : 'treble') : track.clef;
     steps.push({ type: 'keysig', clef, keys: keyItems.slice(0, 6).map(x => x.k.slice(4)), count: 6 });
   }
   if (!steps.length) return null;

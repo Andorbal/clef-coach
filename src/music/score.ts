@@ -291,3 +291,41 @@ export function buildVoice(specs: NoteSpec[], time: TimeSig, idPrefix: string, p
 export function rest(base: BaseDuration, dots = 0): NoteSpec {
   return { pitches: [], base, dots };
 }
+
+/**
+ * A copy of measures [from, to] (0-based, inclusive) as a score of its own, with
+ * ticks starting at 0 — for looping a phrase. Ties into or out of the passage
+ * become plain notes; the key and time signature in force at `from` become the
+ * opening ones; a pickup is kept only when the passage starts with it.
+ */
+export function sliceScore(score: Score, from: number, to: number): Score {
+  const a = Math.max(0, Math.min(from, score.measures - 1));
+  const b = Math.max(a, Math.min(to, score.measures - 1));
+  if (a === 0 && b === score.measures - 1) return score;
+  const start = measureStartTick(score, a);
+  const staves = score.staves.map(st => ({
+    ...st,
+    voices: st.voices.map(v => {
+      const notes = v.notes
+        .filter(n => n.measure >= a && n.measure <= b)
+        .map(n => ({ ...n, tick: n.tick - start, measure: n.measure - a }));
+      if (notes.length) {
+        if (notes[0].tiePrev) notes[0] = { ...notes[0], tiePrev: false };
+        const last = notes.length - 1;
+        if (notes[last].tieNext) notes[last] = { ...notes[last], tieNext: false };
+      }
+      return { notes };
+    }),
+  }));
+  const changes = (score.changes ?? []).filter(c => c.measure > a && c.measure <= b).map(c => ({ ...c, measure: c.measure - a }));
+  return {
+    ...score,
+    id: `${score.id}-m${a + 1}-${b + 1}`,
+    key: keyAt(score, a),
+    time: timeAt(score, a),
+    pickup: a === 0 ? score.pickup : undefined,
+    measures: b - a + 1,
+    staves,
+    changes: changes.length ? changes : undefined,
+  };
+}

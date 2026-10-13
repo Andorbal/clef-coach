@@ -71,7 +71,7 @@ function rhythmScore(def: RhythmDef, clef: Clef, seed: number, instrument: Instr
 
 export function RhythmTap({ def, ctx, onDone }: ActivityProps<RhythmDef>) {
   const tc = ctx.track.clef;
-  const clef: Clef = tc === 'bass' || tc === 'treble8vb' || tc === 'bass8vb' ? tc : tc === 'fretboard' && ctx.instrument === 'bass' ? 'bass8vb' : tc === 'fretboard' && ctx.instrument === 'guitar' ? 'treble8vb' : 'treble';
+  const clef: Clef = tc === 'bass' || tc === 'treble8vb' || tc === 'bass8vb' ? tc : (tc === 'fretboard' || tc === 'chords') && ctx.instrument === 'bass' ? 'bass8vb' : (tc === 'fretboard' || tc === 'chords') && ctx.instrument === 'guitar' ? 'treble8vb' : 'treble';
   const reps = def.reps ?? 2;
   const [rep, setRep] = useState(0);
   const [seed] = useState(() => Math.floor(Math.random() * 1e9));

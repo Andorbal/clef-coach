@@ -45,6 +45,10 @@ export interface MetronomeStartOptions {
    * player gets the tempo); onBeat keeps firing. Default false.
    */
   muted?: boolean;
+  /** Softer clicks between the beats: 1 (none), 2 (eighths), 3 (triplets), 4 (sixteenths). Default 1. */
+  subdivision?: number;
+  /** Accent the first beat of each bar (default true). */
+  accent?: boolean;
 }
 
 const LOOKAHEAD_MS = 25;
@@ -57,11 +61,11 @@ function clampBpm(bpm: number): number {
 
 const clickCache = new Map<string, AudioBuffer>();
 
-function clickBuffer(ctx: AudioContext, accent: boolean): AudioBuffer {
-  const key = `${ctx.sampleRate}:${accent ? 1 : 0}`;
+function clickBuffer(ctx: AudioContext, accent: boolean, sub = false): AudioBuffer {
+  const key = `${ctx.sampleRate}:${accent ? 1 : 0}:${sub ? 1 : 0}`;
   let b = clickCache.get(key);
   if (!b) {
-    const s = renderClickSamples(accent, ctx.sampleRate);
+    const s = renderClickSamples(accent, ctx.sampleRate, sub);
     b = ctx.createBuffer(1, s.length, ctx.sampleRate);
     b.getChannelData(0).set(s);
     clickCache.set(key, b);
@@ -86,6 +90,8 @@ export class Metronome {
   private _running = false;
   private volume = 0.8;
   private muted = false;
+  private subdivision = 1;
+  private accent = true;
   private onBeat?: (info: BeatInfo) => void;
 
   get running(): boolean {
@@ -118,6 +124,20 @@ export class Metronome {
     this.muted = !!m;
   }
 
+  /** Change the subdivision clicks (from the next scheduled beat). */
+  setSubdivision(n: number): void {
+    this.subdivision = Math.max(1, Math.min(6, Math.round(n)));
+  }
+
+  setAccent(on: boolean): void {
+    this.accent = on;
+  }
+
+  /** Change beats per bar from the next bar line on (keeps the beat grid). */
+  setBeatsPerBar(n: number): void {
+    this.beatsPerBar = Math.max(1, Math.round(n));
+  }
+
   setVolume(v: number): void {
     this.volume = Math.min(1, Math.max(0, v));
     if (this.out) this.out.gain.setTargetAtTime(this.volume, this.out.context.currentTime, 0.01);
@@ -134,6 +154,8 @@ export class Metronome {
     if ((ctx.state as string) !== 'running') ctx.resume().catch(() => {});
     if (opts.volume !== undefined) this.volume = Math.min(1, Math.max(0, opts.volume));
     this.muted = !!opts.muted;
+    this.subdivision = Math.max(1, Math.min(6, Math.round(opts.subdivision ?? 1)));
+    this.accent = opts.accent ?? true;
     this.bpm = clampBpm(opts.bpm);
     this.beatsPerBar = Math.max(1, Math.round(opts.beatsPerBar || 4));
     this.countInBeats = Math.max(0, Math.round((opts.countIn ?? 0) * this.beatsPerBar));
@@ -215,16 +237,23 @@ export class Metronome {
     const isCountIn = index < this.countInBeats;
 
     if (this.out && this.volume > 0 && (isCountIn || !this.muted)) {
-      const src = ctx.createBufferSource();
-      src.buffer = clickBuffer(ctx, beat === 0);
-      src.connect(this.out);
-      src.onended = () => {
-        src.disconnect();
-        this.sources.delete(src);
+      const click = (at: number, accent: boolean, sub: boolean) => {
+        const src = ctx.createBufferSource();
+        src.buffer = clickBuffer(ctx, accent, sub);
+        src.connect(this.out!);
+        src.onended = () => {
+          src.disconnect();
+          this.sources.delete(src);
+        };
+        src.start(at);
+        this.sources.add(src);
+        markAppSound(at + 0.05, { from: at, kind: 'click' });
       };
-      src.start(t);
-      this.sources.add(src);
-      markAppSound(t + 0.05, { from: t, kind: 'click' });
+      click(t, beat === 0 && (this.accent || isCountIn), false);
+      if (!isCountIn && this.subdivision > 1) {
+        const step = (this.timeOfIndex(index + 1) - t) / this.subdivision;
+        for (let k = 1; k < this.subdivision; k++) click(t + k * step, false, true);
+      }
     }
 
     const cb = this.onBeat;

@@ -250,8 +250,8 @@ export interface TrackDef {
   title: string;
   subtitle: string;
   description: string;
-  /** Primary clef shown in this track */
-  clef: Clef | 'grand' | 'fretboard';
+  /** Primary clef shown in this track ('chords' = a chord-shapes track) */
+  clef: Clef | 'grand' | 'fretboard' | 'chords';
   hand?: Hand;
   /** CSS colour for accents */
   accent: string;

@@ -4,6 +4,9 @@
 import { type AchievementDef, levelFromXp, newAchievements } from './achievements';
 import { dayKey, daysBetween } from './dates';
 import { type ItemResult, updateItem } from './srs';
+import { mergeSongProgress } from './songs';
+import { parseSongDoc } from '../songs/format';
+import type { SongDef } from '../music/parse';
 import {
   DEFAULT_SETTINGS,
   type LessonProgress,
@@ -199,6 +202,7 @@ export function makeExport(data: PersistedData, appVersion: string, profileIds?:
     appVersion,
     profiles,
     activeProfileId: data.activeProfileId && profiles[data.activeProfileId] ? data.activeProfileId : Object.keys(profiles)[0] ?? null,
+    ...(data.songs && Object.keys(data.songs).length ? { songs: data.songs } : {}),
   };
 }
 
@@ -245,6 +249,7 @@ export function parseImport(text: string): PersistedData {
         ? { notes: num(rp.totals.notes), ms: num(rp.totals.ms), lessons: num(rp.totals.lessons), perfect: num(rp.totals.perfect) }
         : base.totals,
       tracks: {},
+      songs: isObj(rp.songs) ? (rp.songs as Profile['songs']) : undefined,
     };
     if (isObj(rp.tracks)) {
       for (const [tid, rt] of Object.entries(rp.tracks)) {
@@ -262,7 +267,18 @@ export function parseImport(text: string): PersistedData {
   }
   if (!Object.keys(profiles).length) throw new ImportError('The backup contains no profiles.');
   const active = typeof raw.activeProfileId === 'string' && profiles[raw.activeProfileId] ? raw.activeProfileId : Object.keys(profiles)[0];
-  return { app: 'clef-coach', version: 1, profiles, activeProfileId: active };
+  // imported songs: keep the ones that still read cleanly
+  const songs: Record<string, SongDef> = {};
+  if (isObj(raw.songs)) {
+    for (const [id, doc] of Object.entries(raw.songs)) {
+      try {
+        songs[id] = parseSongDoc(doc, { id }).song;
+      } catch {
+        /* skip a damaged song rather than the whole backup */
+      }
+    }
+  }
+  return { app: 'clef-coach', version: 1, profiles, activeProfileId: active, ...(Object.keys(songs).length ? { songs } : {}) };
 }
 
 function mergeTrack(a: TrackProgress | undefined, b: TrackProgress | undefined): TrackProgress | undefined {
@@ -312,6 +328,8 @@ export function mergeProfiles(a: Profile, b: Profile): Profile {
   const achievements = { ...a.achievements };
   for (const [k, t] of Object.entries(b.achievements)) achievements[k] = achievements[k] ? Math.min(achievements[k], t) : t;
   const newer = (b.streak.lastDay ?? '') > (a.streak.lastDay ?? '') ? b : a;
+  const songs: NonNullable<Profile['songs']> = { ...a.songs };
+  for (const [id, sp] of Object.entries(b.songs ?? {})) songs[id] = mergeSongProgress(songs[id], sp)!;
   return {
     ...a,
     name: a.name,
@@ -327,6 +345,7 @@ export function mergeProfiles(a: Profile, b: Profile): Profile {
       lessons: Math.max(a.totals.lessons, b.totals.lessons),
       perfect: Math.max(a.totals.perfect, b.totals.perfect),
     },
+    songs: Object.keys(songs).length ? songs : undefined,
   };
 }
 
@@ -336,5 +355,6 @@ export function mergeData(cur: PersistedData, inc: PersistedData): PersistedData
   for (const [id, p] of Object.entries(inc.profiles)) {
     profiles[id] = profiles[id] ? mergeProfiles(profiles[id], p) : p;
   }
-  return { ...cur, profiles, activeProfileId: cur.activeProfileId ?? inc.activeProfileId };
+  const songs = { ...cur.songs, ...inc.songs };
+  return { ...cur, profiles, activeProfileId: cur.activeProfileId ?? inc.activeProfileId, ...(Object.keys(songs).length ? { songs } : {}) };
 }

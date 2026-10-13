@@ -8,25 +8,39 @@ import { TRACKS, totalLessons } from '../curriculum';
 import { summarizeTrack } from '../engine/progress';
 import { useApp, useProfile } from '../state/store';
 import type { TrackId } from '../state/types';
+import { InstrumentIcon } from '../components/InstrumentIcon';
+import { INSTRUMENT_IDS, type InstrumentId, instrumentDef, instrumentFromId } from '../music/instruments';
 import './learn.css';
+
+const GROUP_SUBS: Record<InstrumentId, string> = {
+  piano: 'Read both clefs and play with both hands.',
+  guitar: 'Standard notation, bass clef, the whole fretboard and chords.',
+  ukulele: 'Melodies in treble clef, chord shapes and strumming.',
+  bass: 'Bass clef bass lines, grooves and the whole neck.',
+  mallets: 'Marimba, xylophone, glockenspiel or vibes: sticking, then four-mallet chords.',
+};
 
 export default function Learn() {
   const profile = useProfile();
   const add = useApp(s => s.addTrack);
   const remove = useApp(s => s.removeTrack);
   if (!profile) return null;
-  const groups: { title: string; sub: string; ids: TrackId[] }[] = [
-    { title: 'Piano', sub: 'Read both clefs and play with both hands.', ids: ['piano-treble', 'piano-bass', 'piano-grand'] },
-    { title: 'Guitar', sub: 'Standard notation, bass clef, and the whole fretboard.', ids: ['guitar-treble', 'guitar-bass', 'guitar-fretboard'] },
-  ];
+  const mine = new Set(profile.trackOrder.map(t => instrumentFromId(t)));
+  // instruments you play first, then the rest
+  const order = [...INSTRUMENT_IDS].sort((a, b) => Number(mine.has(b)) - Number(mine.has(a)));
+  const groups: { instrument: InstrumentId; title: string; sub: string; ids: TrackId[] }[] = order
+    .map(i => ({ instrument: i, title: instrumentDef(i).name, sub: GROUP_SUBS[i], ids: TRACKS.filter(t => t.instrument === i).map(t => t.id) }))
+    .filter(g => g.ids.length);
   return (
     <div className="page learn">
       <MobileSettingsButton />
-      <PageHeader eyebrow="Learn" title="Choose your tracks" sub="Keep as many tracks going as you like — each remembers its own progress. Mix and match: treble and bass, piano and guitar." />
+      <PageHeader eyebrow="Learn" title="Choose your tracks" sub="Keep as many tracks going as you like — each remembers its own progress. Mix and match instruments, clefs and skills." />
       {groups.map((g, gi) => (
         <section key={g.title} className="learn-group">
           <div className="learn-group-head">
-            <h2 className="display">{g.title}</h2>
+            <h2 className="display learn-group-title">
+              <InstrumentIcon instrument={g.instrument} size={22} /> {g.title}
+            </h2>
             <span className="dim">{g.sub}</span>
           </div>
           <div className="learn-grid">
