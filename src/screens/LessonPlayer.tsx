@@ -147,8 +147,13 @@ export default function LessonPlayer() {
     setPhase('results');
   }, [track, lesson, recordOutcome, isTestOut, ref, testOut, lessonId, ctx?.settings.sfx]);
 
+  const doneSteps = useRef(new Set<string>());
   const onActivityDone = useCallback(
     (r: ActivityResult) => {
+      // an activity can only complete once per run (guards against late taps during the banner)
+      const key = `${runKey}:${stepIdx}`;
+      if (doneSteps.current.has(key)) return;
+      doneSteps.current.add(key);
       results.current[stepIdx] = r;
       const isLast = !lesson || stepIdx + 1 >= lesson.steps.length;
       if (r.ungraded || r.total === 0) {
@@ -163,7 +168,7 @@ export default function LessonPlayer() {
         else setStepIdx(i => i + 1);
       }, 1300);
     },
-    [stepIdx, lesson, finishLesson],
+    [stepIdx, lesson, finishLesson, runKey],
   );
 
   const retry = () => {

@@ -145,14 +145,15 @@ export function Flashcards({ def, ctx, onDone }: ActivityProps<FlashDef>) {
   }, [onDone]);
 
   const next = useCallback(() => {
+    if (idx + 1 >= cards.length) {
+      // stay locked: the activity is finished (it stays on screen during the feedback banner)
+      finish();
+      return;
+    }
     locked.current = false;
     setFeedback(null);
     setTries(0);
     cardStart.current = performance.now();
-    if (idx + 1 >= cards.length) {
-      finish();
-      return;
-    }
     if ((idx + 1) % ROW === 0) setStates({});
     setIdx(idx + 1);
   }, [idx, cards.length, finish, ROW]);
@@ -274,6 +275,7 @@ export function Flashcards({ def, ctx, onDone }: ActivityProps<FlashDef>) {
           maxScale={sequence ? 1.9 : 2.3}
           noteNames={(feedback && !feedback.ok && tries > 1) || showNames ? 'focus' : 'none'}
           naming={ctx.settings.naming}
+          labelSpace
         />
         {def.type !== 'keysig' && (
           <button

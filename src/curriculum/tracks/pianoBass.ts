@@ -85,7 +85,7 @@ export const pianoBass: TrackDef = {
       ]),
       lesson('pb2-4', 'First Songs', 'song', 'Two classics for the left hand alone', [
         piece('plh-mary-had-a-little-lamb'),
-        piece('plh-ode-to-joy'),
+        piece('plh-lantern-walk'),
       ]),
       lesson('pb2-5', 'Reading by Interval', 'learn', 'See the distance between notes', [
         tip('Intervals', 'Good readers see distances. A 2nd is a step (line→space), a 3rd a skip (line→line), then 4ths and 5ths. Pinky F to thumb C is a 5th — your whole hand.', { kind: 'staff', clef: 'bass', notes: ['F3', 'G3', 'F3', 'A3', 'F3', 'B3', 'F3', 'C4'] }),
@@ -116,8 +116,8 @@ export const pianoBass: TrackDef = {
         rhythm([4, 4], RH.rests, { tempo: 72 }),
         read(B, P.lhMid, { rhythms: RH.rests, maxLeap: 2, five: true, mode: 'tempo', tempo: 66 }),
       ]),
-      lesson('pb3-4', 'Folk Songs', 'song', 'Lightly Row and Au Clair de la Lune', [
-        piece('plh-lightly-row'),
+      lesson('pb3-4', 'Waltz & Moonlight', 'song', 'A quiet waltz and Au Clair de la Lune', [
+        piece('plh-quiet-waltz'),
         piece('plh-au-clair-de-la-lune'),
       ]),
       lesson('pb3-c', 'Checkpoint: Rhythm', 'checkpoint', 'Keep steady time while reading', [
@@ -153,7 +153,7 @@ export const pianoBass: TrackDef = {
         play(B, G2_C4, 12, { hand: 'L' }),
       ]),
       lesson('pb4-5', 'Songs Down Low', 'song', 'Two favourites in the lower positions', [
-        piece('plh-twinkle-twinkle'),
+        piece('plh-ode-to-joy'),
         piece('plh-london-bridge'),
       ]),
       lesson('pb4-c', 'Checkpoint: Down the Staff', 'checkpoint', 'Read from low G up to Middle C', [
@@ -247,9 +247,9 @@ export const pianoBass: TrackDef = {
         name(B, CHROMATIC, 16, { answers: 'accidentals' }),
         play(B, CHROMATIC, 12, { hand: 'L' }),
       ]),
-      lesson('pb7-6', 'Songs in G and F', 'song', 'Amazing Grace and Brahms’ Lullaby', [
-        piece('plh-amazing-grace'),
-        piece('plh-brahms-lullaby'),
+      lesson('pb7-6', 'Songs in G and F', 'song', 'Aura Lee in G and Frère Jacques in F', [
+        piece('plh-aura-lee'),
+        piece('plh-frere-jacques'),
       ]),
       lesson('pb7-c', 'Checkpoint: Sharps & Flats', 'checkpoint', 'Read with key signatures', [
         keysig(B, 'C G F D', 8),
@@ -279,7 +279,7 @@ export const pianoBass: TrackDef = {
       ]),
       lesson('pb8-4', 'Melodies with Crossings', 'song', 'Songs that need more than five fingers', [
         piece('plh-minuet-in-g'),
-        piece('plh-simple-gifts'),
+        piece('plh-climbing-song'),
       ]),
       lesson('pb8-c', 'Checkpoint: Scales', 'checkpoint', 'Smooth crossings in time', [
         scale('C', 'major', 'L', { mode: 'tempo', tempo: 84, fingering: 'first' }),
@@ -306,9 +306,9 @@ export const pianoBass: TrackDef = {
         scale('D', 'harmonic-minor', 'L'),
         read(B, 'D3 E3 F3 G3 A3', { key: 'Dm', rhythms: RH.eighths, maxLeap: 3, five: true, fingering: 'first' }),
       ]),
-      lesson('pb9-4', 'Folk Melodies in Minor', 'song', 'Greensleeves and Scarborough Fair', [
+      lesson('pb9-4', 'Melodies in Minor', 'song', 'Greensleeves and a Dorian air', [
         piece('plh-greensleeves'),
-        piece('plh-scarborough-fair'),
+        piece('plh-dorian-air'),
       ]),
       lesson('pb9-c', 'Checkpoint: Dotted & Minor', 'checkpoint', 'Dotted rhythms in minor keys', [
         keysig(B, 'C G F D Am Em Dm', 6),
@@ -338,7 +338,7 @@ export const pianoBass: TrackDef = {
       ]),
       lesson('pb10-4', 'Low and High Songs', 'song', 'Songs that leave the staff', [
         piece('plh-hall-of-the-mountain-king'),
-        piece('plh-volga-boatmen'),
+        piece('plh-boatmans-song'),
       ]),
       lesson('pb10-c', 'Checkpoint: Ledger Lines', 'checkpoint', 'Fluent across the whole range', [
         name(B, C2_E4, 20, { sequence: true }),
@@ -379,8 +379,8 @@ export const pianoBass: TrackDef = {
       lesson('pb11-6', 'Accompaniment Songs', 'song', 'Left-hand parts that hold a song together', [
         tip('Accompany the melody', 'In these pieces you play the real left-hand part while the app plays the melody. Listen to the tune and keep your pattern steady underneath it.'),
         piece('plh-canon-in-d'),
-        piece('p2-amazing-grace', { hands: 'L', title: 'Amazing Grace — left hand' }),
-        piece('p2-sonatina-in-c', { hands: 'L', title: 'Sonatina in C — left hand' }),
+        piece('p2-goin-home', { hands: 'L', title: 'Goin’ Home — left hand' }),
+        piece('p2-sonatina-classica', { hands: 'L', title: 'Sonatina Classica — left hand' }),
       ]),
       lesson('pb11-c', 'Checkpoint: Accompaniment', 'checkpoint', 'Read chords and patterns at a glance', [
         read(B, P.lhC, { rhythms: RH.qh, maxLeap: 3, five: true, dyads: { chance: 0.5, intervals: [3, 5] }, fingering: 'first' }),
@@ -452,7 +452,7 @@ export const pianoBass: TrackDef = {
         lhPiece('Barcarolle Bass', 'C', [6, 8], 'C3/q@5 G3/e@1 E3/q@3 G3/e@1 | F2/q@5 C3/e@1 A2/q@3 C3/e@1 | G2/q@5 D3/e@1 B2/q@3 D3/e@1 | C3/q.@5 [C3 E3 G3]@5,3,1 |'),
       ]),
       lesson('pb13-5', 'Cello Melodies', 'song', 'Singing melodies in the bass register', [
-        piece('plh-the-swan'),
+        piece('plh-cello-song'),
         piece('plh-cello-suite-prelude'),
       ]),
       lesson('pb13-c', 'Checkpoint: Rhythm Workshop', 'checkpoint', 'Mixed rhythms in time', [
@@ -481,9 +481,9 @@ export const pianoBass: TrackDef = {
         read(B, 'Ab1 Bb1 C2 Db2 Eb2 F2 G2 Ab2 Bb2 C3 Db3 Eb3', { key: 'Ab', rhythms: RH.syncopation, maxLeap: 4, harmonic: true, mode: 'tempo', tempo: 72, fingering: 'none' }),
       ]),
       lesson('pb14-4', 'Concert Pieces', 'song', 'Advanced left-hand parts from the concert repertoire', [
-        piece('p2-the-entertainer', { hands: 'L', title: 'The Entertainer — left hand' }),
+        piece('p2-ragtime', { hands: 'L', title: 'Ragtime Promenade — left hand' }),
         piece('p2-fur-elise', { hands: 'L', title: 'Für Elise — left hand' }),
-        piece('plh-prelude-in-e-minor'),
+        piece('plh-thunder-etude'),
       ]),
       lesson('pb14-c', 'Final Exam: Bass Clef', 'checkpoint', 'Prove your mastery', [
         name(B, P.lhFull, 30, { sequence: true }),

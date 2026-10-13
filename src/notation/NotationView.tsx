@@ -44,6 +44,8 @@ export interface NotationViewProps {
   maxScale?: number;
   className?: string;
   onRendered?: (r: RenderResult) => void;
+  /** Reserve space for note-name labels even while none are shown (avoids re-layout when hints appear). */
+  labelSpace?: boolean;
 }
 
 let instanceCounter = 0;
@@ -67,8 +69,11 @@ function NotationViewImpl(props: NotationViewProps) {
     maxScale = 2.1,
     className,
     onRendered,
+    labelSpace,
   } = props;
 
+  // reserve room under the staff when note names may be shown (so labels are never clipped)
+  const labelRoom = labelSpace || noteNames !== 'none' ? 18 : 0;
   const wrapRef = useRef<HTMLDivElement>(null);
   const svgHostRef = useRef<HTMLDivElement>(null);
   const headerHostRef = useRef<HTMLDivElement>(null);
@@ -110,6 +115,7 @@ function NotationViewImpl(props: NotationViewProps) {
           beatWidth,
           idPrefix: prefix,
           tailPad: layout === 'scroll' ? 600 : 0,
+          extraBelow: labelRoom,
           leadIn: layout === 'scroll' ? 24 : 12,
         });
         // fixed header clone for scroll layout
@@ -144,7 +150,7 @@ function NotationViewImpl(props: NotationViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [score, fingering, strings, timeSignature, barlines, beatWidth, prefix, layout]);
+  }, [score, fingering, strings, timeSignature, barlines, beatWidth, prefix, layout, labelRoom]);
 
   // Apply note states as classes on the SVG groups
   useEffect(() => {
@@ -162,6 +168,8 @@ function NotationViewImpl(props: NotationViewProps) {
     if (!result || !box.h) return 1;
     let s = box.h / result.height;
     if (layout === 'center' && box.w) s = Math.min(s, (box.w - 16) / result.width);
+    // narrow screens: keep at least ~4 beats of music visible after the clef so the eye can read ahead
+    if (layout === 'scroll' && box.w) s = Math.min(s, box.w / (result.headerWidth + 260));
     return Math.max(0.55, Math.min(maxScale, s));
   }, [result, box, layout, maxScale]);
 

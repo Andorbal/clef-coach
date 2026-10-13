@@ -63,10 +63,11 @@ export function parseVoice(text: string, time: TimeSig, pickupTicks = 0, label =
     inMeasure = 0;
   };
 
-  for (const tok of tokens) {
+  tokens.forEach((tok, ti) => {
     if (tok === '|') {
-      closeMeasure(false);
-      continue;
+      // the final barline closes the (possibly short, after a pickup) last measure
+      closeMeasure(ti === tokens.length - 1);
+      return;
     }
     const m = NOTE_RE.exec(tok);
     if (!m) throw new NotationError(`${label}: cannot parse token "${tok}" in measure ${measureIndex + 1}`);
@@ -91,7 +92,7 @@ export function parseVoice(text: string, time: TimeSig, pickupTicks = 0, label =
     }
     specs.push({ pitches, base, dots, triplet, fingers, strings, tieNext: !!tie });
     inMeasure += durationTicks(base, dots, triplet);
-  }
+  });
   if (inMeasure > 0) closeMeasure(true);
   return { specs, measures };
 }

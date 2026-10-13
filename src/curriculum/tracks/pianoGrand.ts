@@ -288,7 +288,7 @@ export const pianoGrand: TrackDef = {
           '[F3 A3 C4]/w@5,3,1 | [E3 Bb3 C4]/w@5,2,1 | [F3 A3 C4]/w@5,3,1 | [E3 Bb3 C4]/w@5,2,1 | [F3 A3 C4]/w@5,3,1 | [E3 Bb3 C4]/w@5,2,1 | [F3 A3 C4]/w@5,3,1 | [F3 A3 C4]/w@5,3,1 |', { prompt: 'Left hand: F chord F–A–C (5-3-1), C7 chord E–B♭–C (5-2-1).' }),
       ], [insight('F position', 'Right thumb on the F above Middle C, with B♭ under finger 4. Left pinky on the F below Middle C, with B♭ under finger 2. The key signature’s flat reminds you.', { kind: 'keys', notes: ['F3', 'G3', 'A3', 'Bb3', 'C4', 'F4', 'G4', 'A4', 'Bb4', 'C5'], fingers: [5, 4, 3, 2, 1, 1, 2, 3, 4, 5] })]),
       lesson('pg7-4', 'Songs in G and F', 'song', 'Both hands in new keys', [
-        piece('p2-simple-gifts'),
+        piece('p2-frere-jacques'),
         piece('p2-aura-lee'),
       ]),
       lesson('pg7-c', 'Checkpoint: Keys of G and F', 'checkpoint', 'Both hands with key signatures', [
@@ -319,8 +319,8 @@ export const pianoGrand: TrackDef = {
         both('broken', P.rhC, BROKEN_C, { five: true, rhythms: RH.qhw, maxLeap: 2, fingering: 'none', prompt: 'Left hand: root-position chords, fingers 5-1-3-1 every time.' }),
       ], [insight('Broken chords', 'Play the chord one note at a time — low, high, middle, high — with fingers 5-1-3-1. Keep the hand in its chord shape as it moves.', { kind: 'staff+keys', clef: 'bass', notes: ['C3/q', 'G3/q', 'E3/q', 'G3/q'], fingers: [5, 1, 3, 1], hand: 'L' })]),
       lesson('pg8-4', 'Waltzes and Ballads', 'song', 'Songs in 3/4 with a flowing left hand', [
-        piece('p2-amazing-grace'),
-        piece('p2-brahms-lullaby'),
+        piece('p2-goin-home'),
+        piece('p2-cradle-song'),
       ]),
       lesson('pg8-c', 'Checkpoint: Waltz & Broken Chords', 'checkpoint', 'Flowing accompaniments in time', [
         both('waltz', P.rhC, P.lhOctave, { five: true, time: [3, 4], rhythms: RH.waltz, maxLeap: 3, mode: 'tempo', tempo: 88, fingering: 'first' }),
@@ -357,7 +357,7 @@ export const pianoGrand: TrackDef = {
         duet('Bagpipe Scales', 'C', [4, 4],
           'C4/q@1 D4@2 E4@3 F4@1 | G4@2 A4@3 B4@4 C5@5 | C5@5 B4@4 A4@3 G4@2 | F4@1 E4@3 D4@2 C4@1 | [E4 G4]/w@3,5 | [E4 G4]/w@3,5 | [E4 G4]/w@3,5 | [E4 G4]/w@3,5 |',
           '[C3 G3]/w@5,1 | [C3 G3]/w@5,1 | [C3 G3]/w@5,1 | [C3 G3]/w@5,1 | C3/q@5 D3@4 E3@3 F3@2 | G3@1 A3@3 B3@2 C4@1 | C4@1 B3@2 A3@3 G3@1 | F3@2 E3@3 D3@4 C3@5 |', { prompt: 'First the right hand has the scale, then the left.' }),
-        piece('p2-joy-to-the-world'),
+        piece('p2-festive-march'),
       ]),
       lesson('pg9-c', 'Checkpoint: Scales', 'checkpoint', 'Scales hands together in time', [
         scale('C', 'major', 'both', { mode: 'tempo', tempo: 72, fingering: 'first' }),
@@ -430,7 +430,7 @@ export const pianoGrand: TrackDef = {
       ]),
       lesson('pg11-5', 'Songs on the Move', 'song', 'Pieces with moving hands', [
         piece('p2-greensleeves'),
-        piece('p2-musette-in-d'),
+        piece('p2-musette'),
       ]),
       lesson('pg11-c', 'Checkpoint: Moving Hands', 'checkpoint', 'Shifts and mixed rhythms in time', [
         both('blocked', P.rhOctave, CHORDS_C, { rhythms: RH.eighths, maxLeap: 3, mode: 'tempo', tempo: 66, fingering: 'first' }),
@@ -466,8 +466,8 @@ export const pianoGrand: TrackDef = {
         both('waltz', 'E4 F#4 G4 A4 B4', 'E3 F#3 G3 A3 B3 C4 D#4 E4', { key: 'Em', five: true, time: [3, 4], rhythms: RH.waltz, maxLeap: 3, fingering: 'first' }),
       ]),
       lesson('pg12-5', 'Two Lines, Two Hands', 'song', 'Repertoire for independent hands', [
-        piece('p2-minuet-in-d-minor'),
-        piece('p2-the-entertainer'),
+        piece('p2-minuet-in-a-minor'),
+        piece('p2-ragtime'),
       ]),
       lesson('pg12-c', 'Checkpoint: Independence', 'checkpoint', 'Independent lines in time', [
         both('counter', P.rhOctave, P.lhOctave, { rhythms: RH.eighths, maxLeap: 3, lhRhythms: { q: 3, h: 1.5, 'e e': 1 }, mode: 'tempo', tempo: 60, fingering: 'first' }),

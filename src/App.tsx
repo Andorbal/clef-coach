@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import type { ComponentType } from 'react';
 import { setMasterVolume, unlockAudio } from './audio/context';
 import { inputManager } from './audio/input/manager';
 import { micInput } from './audio/input/mic';
@@ -30,6 +31,12 @@ function RequireProfile({ children }: { children: React.ReactNode }) {
   const has = useApp(s => !!s.data.activeProfileId && !!s.data.profiles[s.data.activeProfileId]);
   if (!has) return <Navigate to="/welcome" replace />;
   return <>{children}</>;
+}
+
+/** Remount a screen whenever its URL changes (e.g. "next lesson" from a results screen). */
+function Keyed({ C }: { C: ComponentType }) {
+  const loc = useLocation();
+  return <C key={loc.pathname + loc.search} />;
 }
 
 function ScrollToTop() {
@@ -89,8 +96,8 @@ export default function App() {
         <Suspense fallback={<Fallback />}>
           <Routes>
             <Route path="/welcome" element={<Onboarding />} />
-            <Route path="/lesson/:trackId/:lessonId" element={<RequireProfile><LessonPlayer /></RequireProfile>} />
-            <Route path="/song/:songId" element={<RequireProfile><SongPlayer /></RequireProfile>} />
+            <Route path="/lesson/:trackId/:lessonId" element={<RequireProfile><Keyed C={LessonPlayer} /></RequireProfile>} />
+            <Route path="/song/:songId" element={<RequireProfile><Keyed C={SongPlayer} /></RequireProfile>} />
             <Route path="/studio/free" element={<RequireProfile><FreePlay /></RequireProfile>} />
             <Route path="/studio/fretboard" element={<RequireProfile><FretExplorer /></RequireProfile>} />
             <Route path="/studio/tuner" element={<RequireProfile><Tuner /></RequireProfile>} />
@@ -108,7 +115,7 @@ export default function App() {
                       <Routes>
                         <Route path="/" element={<Home />} />
                         <Route path="/learn" element={<Learn />} />
-                        <Route path="/track/:trackId" element={<TrackMap />} />
+                        <Route path="/track/:trackId" element={<Keyed C={TrackMap} />} />
                         <Route path="/songs" element={<Songs />} />
                         <Route path="/studio" element={<Studio />} />
                         <Route path="/progress" element={<Progress />} />

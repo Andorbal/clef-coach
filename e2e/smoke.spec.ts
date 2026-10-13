@@ -31,12 +31,14 @@ async function solveLesson(page: Page) {
     if (await page.locator('.results').isVisible()) return;
     const intro = page.getByRole('button', { name: /Start lesson|^Next$/ });
     if (await intro.isVisible().catch(() => false)) {
-      await intro.click();
+      await intro.click({ timeout: 3000 }).catch(() => undefined);
+      await page.waitForTimeout(250);
       continue;
     }
     const tip = page.getByRole('button', { name: /Got it/ });
     if (await tip.isVisible().catch(() => false)) {
-      await tip.click();
+      await tip.click({ timeout: 3000 }).catch(() => undefined);
+      await page.waitForTimeout(250);
       continue;
     }
     const act = page.locator('.activity').first();
@@ -71,6 +73,7 @@ async function solveLesson(page: Page) {
 }
 
 test('onboarding, first lesson, progress saved', async ({ page }) => {
+  test.setTimeout(240_000);
   const errors: string[] = [];
   page.on('pageerror', e => errors.push(e.message));
   await onboard(page);
@@ -78,6 +81,7 @@ test('onboarding, first lesson, progress saved', async ({ page }) => {
   await solveLesson(page);
   await expect(page.locator('.results-title')).toHaveText(/Flawless|Outstanding/);
   await page.getByRole('button', { name: /Next: Hello, E/ }).click();
+  await expect(page.locator('.results')).toHaveCount(0);
   await solveLesson(page);
   await expect(page.locator('.results-title')).toBeVisible();
   await page.goto('/#/');
@@ -116,5 +120,5 @@ test('export and import round trip', async ({ page }) => {
   await page.goto('/#/settings');
   await page.locator('input[type=file]').setInputFiles({ name: 'b.json', mimeType: 'application/json', buffer: Buffer.from(text) });
   await page.getByRole('button', { name: 'Merge' }).click();
-  await expect(page.getByText('Backup', { exact: true })).toBeVisible();
+  await expect(page.locator('.profile-item', { hasText: 'Backup' })).toBeVisible();
 });

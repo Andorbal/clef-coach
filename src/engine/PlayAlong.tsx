@@ -452,6 +452,7 @@ export function PlayAlong(props: PlayAlongProps) {
           strings={instrument === 'guitar' && fingeringMode !== 'none'}
           noteNames={showNames ? 'all' : hint ? 'focus' : 'none'}
           naming={ctx.settings.naming}
+          labelSpace
           ghosts={ghosts}
         />
         <AnimatePresence>

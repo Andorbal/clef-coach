@@ -39,7 +39,7 @@ export function Meet({ def, ctx, onDone }: ActivityProps<MeetDef>) {
 
   useComputerPiano(ctx.instrument === 'piano', def.clef === 'bass' ? 3 : 4);
   useNoteInput(e => {
-    if (e.type !== 'on' || !note) return;
+    if (e.type !== 'on' || !note || count >= reps) return;
     if (e.midi === midi) {
       setFlash('good');
       const c = count + 1;

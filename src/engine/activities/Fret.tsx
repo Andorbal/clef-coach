@@ -68,9 +68,12 @@ export function FretFind({ def, ctx, onDone }: ActivityProps<FindDef>) {
   const remainingStrings = [...new Set(targets.filter(t => !found.has(posKey(t))).map(t => t.string))].sort((a, b) => b - a);
   const currentString = tapMode ? null : remainingStrings[0] ?? null;
 
+  const finished = useRef(false);
   const completeRound = useCallback(
     (allFound: Set<string>) => {
+      if (finished.current) return;
       if (targets.every(t => allFound.has(posKey(t)))) {
+        if (round + 1 >= rounds) finished.current = true;
         if (ctx.settings.sfx) sfx.correct();
         const ok = mistakes.current === 0;
         if (ok) roundsOk.current++;
@@ -92,6 +95,7 @@ export function FretFind({ def, ctx, onDone }: ActivityProps<FindDef>) {
 
   const tryPos = useCallback(
     (p: FretPos) => {
+      if (finished.current) return;
       const hit = targets.find(t => t.string === p.string && t.fret === p.fret);
       if (hit && !found.has(posKey(hit))) {
         const nf = new Set(found);
@@ -166,15 +170,17 @@ export function FretQuiz({ def, ctx, onDone }: ActivityProps<QuizDef>) {
   const name = card ? spellMidi(midi, 1) : null;
 
   const next = useCallback(() => {
+    if (i + 1 >= cards.length) {
+      const r = results.current;
+      onDone({ total: r.length, correct: r.filter(x => x.correct).length, items: r, notes: r.length, responseMs: r.filter(x => x.correct).map(x => x.ms) });
+      return; // stay locked
+    }
     locked.current = false;
     setFb(null);
     setTries(0);
     setFlashMarks([]);
     start.current = performance.now();
-    if (i + 1 >= cards.length) {
-      const r = results.current;
-      onDone({ total: r.length, correct: r.filter(x => x.correct).length, items: r, notes: r.length, responseMs: r.filter(x => x.correct).map(x => x.ms) });
-    } else setI(i + 1);
+    setI(i + 1);
   }, [i, cards.length, onDone]);
 
   const resolve = useCallback(

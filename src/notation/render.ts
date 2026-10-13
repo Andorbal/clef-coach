@@ -80,6 +80,8 @@ export interface RenderOptions {
   leadIn?: number;
   /** Extra right padding after the last measure (so the last note can scroll to the playhead). */
   tailPad?: number;
+  /** Extra space below the lowest staff (e.g. for note-name labels). */
+  extraBelow?: number;
   idPrefix: string;
 }
 
@@ -259,7 +261,7 @@ export function renderScore(container: HTMLElement, score: Score, opts: RenderOp
     }
     staffTops.push(y);
   }
-  const height = staffTops[nStaves - 1] + 4 * LINE_SPACING + extents[nStaves - 1].below;
+  const height = staffTops[nStaves - 1] + 4 * LINE_SPACING + extents[nStaves - 1].below + (opts.extraBelow ?? 0);
   // VexFlow staves place the top line at y + spaceAbove*spacing; we use spaceAbove = 0 lines
   const staveOpts = { spaceAboveStaffLn: 0, spaceBelowStaffLn: 0 };
 

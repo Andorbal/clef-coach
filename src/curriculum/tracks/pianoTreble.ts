@@ -215,9 +215,9 @@ export const pianoTreble: TrackDef = {
         name(T, 'C4 C#4 D4 Eb4 E4 F4 F#4 G4 Ab4 A4 Bb4 B4 C5', 16, { answers: 'accidentals' }),
         play(T, 'C4 C#4 D4 Eb4 E4 F4 F#4 G4 Ab4 A4 Bb4 B4 C5', 12, { hand: 'R' }),
       ]),
-      lesson('pt7-5', 'Songs in G and F', 'song', 'Amazing Grace and Brahms’ Lullaby', [
-        piece('prh-amazing-grace'),
-        piece('prh-brahms-lullaby'),
+      lesson('pt7-5', 'Songs in G and F', 'song', 'Aura Lee in G major and Meadow in F', [
+        piece('prh-aura-lee'),
+        piece('prh-meadow-in-f'),
       ]),
       lesson('pt7-c', 'Checkpoint: Keys of G and F', 'checkpoint', 'Read with key signatures', [
         keysig(T, 'C G F', 6),
@@ -241,9 +241,9 @@ export const pianoTreble: TrackDef = {
         read(T, 'G4 A4 B4 C5 D5 E5 F#5 G5', { key: 'G', rhythms: RH.eighths, maxLeap: 2, fingering: 'all' }),
         read(T, P.rhF + ' D5 E5 F5', { key: 'F', rhythms: RH.eighths, maxLeap: 2, fingering: 'first' }),
       ]),
-      lesson('pt8-4', 'Minuet & Gifts', 'song', 'Minuet in G and Simple Gifts', [
+      lesson('pt8-4', 'Minuet & Country Dance', 'song', 'The Minuet in G and a quick country dance', [
         piece('prh-minuet-in-g'),
-        piece('prh-simple-gifts'),
+        piece('prh-country-dance'),
       ]),
       lesson('pt8-c', 'Checkpoint: Scales', 'checkpoint', 'Smooth crossings in time', [
         scale('C', 'major', 'R', { mode: 'tempo', tempo: 84, fingering: 'first' }),
@@ -256,6 +256,7 @@ export const pianoTreble: TrackDef = {
       lesson('pt9-1', 'Dotted Quarter', 'learn', 'Long–short: dotted quarter + eighth', [
         tip('The dot', 'A dotted quarter lasts 1½ beats, so it’s usually followed by an eighth: “1 – & 2”. You know it from the end of Ode to Joy.', { kind: 'staff', clef: 'treble', notes: ['E4/q.', 'D4/e', 'D4/h'], time: [4, 4] }),
         rhythm([4, 4], RH.dotted, { tempo: 66 }),
+        piece('prh-ode-to-joy-original'),
         read(T, P.rhC, { rhythms: RH.dotted, maxLeap: 2, five: true, mode: 'tempo', tempo: 63 }),
       ]),
       lesson('pt9-2', 'A Minor', 'learn', 'The relative minor of C', [
@@ -269,9 +270,9 @@ export const pianoTreble: TrackDef = {
         read(T, 'E4 F#4 G4 A4 B4', { key: 'Em', rhythms: RH.dotted, maxLeap: 3, five: true }),
         read(T, 'D4 E4 F4 G4 A4', { key: 'Dm', rhythms: RH.eighths, maxLeap: 3, five: true, fingering: 'first' }),
       ]),
-      lesson('pt9-4', 'Folk Melodies in Minor', 'song', 'Greensleeves and Scarborough Fair', [
+      lesson('pt9-4', 'Melodies in Minor', 'song', 'Greensleeves and a Dorian air', [
         piece('prh-greensleeves'),
-        piece('prh-scarborough-fair'),
+        piece('prh-dorian-air'),
       ]),
       lesson('pt9-c', 'Checkpoint: Dotted & Minor', 'checkpoint', 'Dotted rhythms in minor keys', [
         keysig(T, 'C G F Am Em Dm', 6),
@@ -327,9 +328,9 @@ export const pianoTreble: TrackDef = {
         read(T, 'A4 B4 C#5 D5 E5 F#5 G#5 A5', { key: 'A', rhythms: RH.dotted, maxLeap: 3, harmonic: true, fingering: 'first' }),
         read(T, 'Eb4 F4 G4 Ab4 Bb4 C5 D5 Eb5', { key: 'Eb', rhythms: RH.dotted, maxLeap: 3, harmonic: true, fingering: 'first' }),
       ]),
-      lesson('pt11-4', 'Classical Themes', 'song', 'Famous melodies', [
+      lesson('pt11-4', 'Classical Themes', 'song', 'Mozart and Dvořák', [
         piece('prh-eine-kleine-nachtmusik'),
-        piece('prh-morning-mood'),
+        piece('prh-largo-new-world'),
       ]),
       lesson('pt11-c', 'Checkpoint: Keys', 'checkpoint', 'Sight-read in unfamiliar keys', [
         keysig(T, 'G D A F Bb Eb', 8),
@@ -364,6 +365,7 @@ export const pianoTreble: TrackDef = {
         tip('Sixteenths', 'Sixteenth notes have two beams: four per beat. Count “1 e & a”.', { kind: 'staff', clef: 'treble', notes: ['C5/s', 'B4/s', 'A4/s', 'G4/s', 'F4/q'], time: [2, 4] }),
         rhythm([4, 4], RH.sixteenths, { tempo: 60 }),
         read(T, P.rhG, { rhythms: RH.sixteenths, maxLeap: 2, five: true }),
+        piece('prh-perpetual-motion', { title: 'Perpetual Motion (take it slowly)' }),
       ]),
       lesson('pt13-2', 'Triplets', 'learn', 'Three in the space of two', [
         tip('Triplets', 'A “3” over three eighth notes squeezes them into one beat: “tri-po-let”.', { kind: 'staff', clef: 'treble', notes: ['C5/e3', 'D5/e3', 'E5/e3', 'G5/q'], time: [2, 4] }),
@@ -380,9 +382,9 @@ export const pianoTreble: TrackDef = {
         rhythm([6, 8], RH.compound, { tempo: 60 }),
         read(T, P.rhG, { time: [6, 8], rhythms: RH.compound, maxLeap: 3, five: true }),
       ]),
-      lesson('pt13-5', 'Rhythmic Classics', 'song', 'Für Elise and more', [
+      lesson('pt13-5', 'Rhythmic Classics', 'song', 'Für Elise and the Mountain King', [
         piece('prh-fur-elise'),
-        piece('prh-swan-lake'),
+        piece('prh-mountain-king'),
       ]),
       lesson('pt13-c', 'Checkpoint: Rhythm Workshop', 'checkpoint', 'Mixed rhythms in time', [
         rhythm([4, 4], RH.advanced, { tempo: 66, reps: 1 }),
@@ -407,8 +409,8 @@ export const pianoTreble: TrackDef = {
         read(T, 'Ab3 Bb3 C4 Db4 Eb4 F4 G4 Ab4 Bb4 C5 Db5 Eb5', { key: 'Ab', rhythms: RH.syncopation, maxLeap: 4, harmonic: true, mode: 'tempo', tempo: 72, fingering: 'none' }),
       ]),
       lesson('pt14-4', 'Concert Pieces', 'song', 'Advanced right-hand repertoire', [
-        piece('prh-rondo-alla-turca'),
-        piece('prh-the-entertainer'),
+        piece('prh-toccata-in-a-minor'),
+        piece('prh-ragtime-strut'),
       ]),
       lesson('pt14-c', 'Final Exam: Treble Clef', 'checkpoint', 'Prove your mastery', [
         name(T, P.rhFull, 30, { sequence: true }),
