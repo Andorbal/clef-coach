@@ -148,11 +148,11 @@ export interface ChordSegment {
 }
 
 /** Build the score for a chord-play activity (the chord staff is the last staff), and which chord sounds when. */
-export function chordPlayScore(def: ChordPlayDef, instrument: InstrumentId, prefs: InstrumentPrefs = {}): { score: Score; chordStaff: number; song?: SongDef; segments: ChordSegment[] } | null {
+export function chordPlayScore(def: ChordPlayDef, instrument: InstrumentId, prefs: InstrumentPrefs = {}, songDef?: SongDef): { score: Score; chordStaff: number; song?: SongDef; segments: ChordSegment[] } | null {
   const clef = clefFor(instrument);
   const mallets = instrument === 'mallets' ? (4 as const) : undefined;
   if (def.song) {
-    const song = getSong(def.song);
+    const song = songDef ?? getSong(def.song);
     if (!song?.chords) return null;
     const melody = songToScore(song);
     const { events } = parseChordTimeline(song.chords, melody);

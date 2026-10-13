@@ -27,7 +27,7 @@
 import { parseChordSymbol } from '../music/chords';
 import { INSTRUMENT_IDS, type InstrumentId, familyOf, instrumentDef } from '../music/instruments';
 import { parseKey } from '../music/keys';
-import { NotationError, type SongDef, type SongSection, songToScore } from '../music/parse';
+import { NotationError, type SongDef, type SongSection, songToScore, unrollRepeats } from '../music/parse';
 import { midiOf } from '../music/pitch';
 import { type BaseDuration, type TimeSig, PPQ, durationTicks } from '../music/rhythm';
 import { type Clef, type Score, measureStartTick } from '../music/score';
@@ -282,7 +282,8 @@ const CHORD_DUR_RE = /\/([whqest])(\.{0,2})(3)?$/;
 
 /** Read the "chords" line ("C/h G7/h | C/w |") into timed events. */
 export function parseChordTimeline(text: string, score: Pick<Score, 'time' | 'pickup' | 'measures' | 'changes' | 'key'>): { events: ChordEvent[]; unknown: string[] } {
-  const tokens = text.split(/\s+/).filter(Boolean);
+  // repeats and endings are written out, as in the music
+  const tokens = /(^|\s):?\|\|?:?[12]?(?=\s|$)/.test(text) && /\|:|:\||\|[12]/.test(text) ? unrollRepeats(text) : text.split(/\s+/).filter(Boolean);
   const events: ChordEvent[] = [];
   const unknown: string[] = [];
   let tick = 0;

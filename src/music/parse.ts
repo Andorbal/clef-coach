@@ -105,32 +105,33 @@ export function unrollRepeats(text: string): string[] {
   const emit = (m: RawMeasure) => {
     out.push(...m.tokens, '|');
   };
+  // Each end-repeat is taken once. A repeat goes back to the last start-repeat, or to the
+  // bar after the previous repeat ended (or the beginning); first endings are skipped
+  // the second time through.
+  const taken = new Set<number>();
   let repeatStart = 0;
+  let second = false;
   let i = 0;
-  let pass = 1;
   let guard = 0;
   while (i < measures.length && guard++ < 10000) {
     const m = measures[i];
-    if (m.startRepeat && pass === 1) repeatStart = i;
-    if (m.volta === 1 && pass === 2) {
-      // skip the first ending on the second time through
-      i++;
-      continue;
-    }
-    if (m.volta === 2 && pass === 1) {
-      // reached the second ending without an end-repeat on the first: treat as plain
-      emit(m);
+    if (m.startRepeat && !second) repeatStart = i;
+    if (m.volta === 1 && second) {
       i++;
       continue;
     }
     emit(m);
-    if (m.endRepeat && pass === 1) {
-      pass = 2;
+    if (m.endRepeat && !taken.has(i)) {
+      taken.add(i);
+      second = true;
       i = repeatStart;
       continue;
     }
-    if (m.endRepeat && pass === 2) pass = 1;
-    if (pass === 2 && m.volta === 2) pass = 1;
+    if (m.endRepeat || (second && m.volta === 2)) {
+      // the repeat is done: what follows is a new section
+      second = false;
+      repeatStart = i + 1;
+    }
     i++;
   }
   return out;

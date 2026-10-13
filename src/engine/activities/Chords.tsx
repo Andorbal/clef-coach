@@ -8,13 +8,14 @@ import { motion } from 'framer-motion';
 import { Volume2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { sfx } from '../../audio/sfx';
-import { chordPlayScore } from '../../curriculum/chordScore';
+import { type ChordSegment, chordPlayScore } from '../../curriculum/chordScore';
+import type { FretMark, KeyMark } from '../../instruments';
 import type { ActivityDef } from '../../curriculum/types';
 import { ChordPicture, playView } from '../../instruments/ChordCell';
 import { CHORD_ROOTS } from '../../music/chordbook';
 import { type ChordSymbol, chordName, chordQuality, chordSymbolText, parseChordSymbol, rootPc } from '../../music/chords';
 import { type ChordView, chordViews, parseChordRef } from '../../music/chordViews';
-import { instrumentDef, isFretted, tuningFor } from '../../music/instruments';
+import { type InstrumentId, type InstrumentPrefs, instrumentDef, isFretted, tuningFor } from '../../music/instruments';
 import type { ItemResult } from '../../state/srs';
 import { type ActivityProps, prefsOf } from '../context';
 import { ActivityHeader, PlayAlong } from '../PlayAlong';
@@ -58,22 +59,7 @@ export function ChordPlayActivity({ def, ctx, onDone }: ActivityProps<PlayDef>) 
           ? `${fretted ? 'Strum' : 'Play'} on the beat and change shape in time — keep going even if a change isn't perfect yet.`
           : `${fretted ? 'Strum' : 'Play'} each chord. Take your time over the changes; the app waits for you.`);
   const staff = built.chordStaff;
-  const segments = built.segments;
-  const tuning = tuningFor(ctx.instrument, prefs).open;
-  // the whole shape of the chord being played, with the next note pulsing on top
-  const contextAt = (tick: number) => {
-    const seg = segments.find(sg => tick >= sg.tick && tick < sg.tick + sg.ticks) ?? (tick < (segments[0]?.tick ?? 0) ? segments[0] : undefined);
-    if (!seg) return {};
-    if (fretted) return { frets: seg.shape.notes.filter(n => n.string).map(n => ({ string: n.string!, fret: n.midi - tuning[n.string! - 1], finger: n.finger || undefined, color: 'hint' as const, root: n.root })) };
-    return {
-      keys: seg.shape.notes.map(n => ({
-        midi: n.midi,
-        color: 'hint' as const,
-        finger: ctx.instrument === 'mallets' ? undefined : n.finger,
-        label: ctx.instrument === 'mallets' && n.finger ? String(n.finger) : undefined,
-      })),
-    };
-  };
+  const contextAt = chordContextAt(built.segments, ctx.instrument, prefs);
   return (
     <PlayAlong
       ctx={ctx}
@@ -90,6 +76,29 @@ export function ChordPlayActivity({ def, ctx, onDone }: ActivityProps<PlayDef>) 
       onDone={onDone}
     />
   );
+}
+
+/**
+ * Marks for the whole shape of the chord sounding at a tick (the next note pulses on top
+ * of it). `offset` maps a sliced score's ticks back to the full score's.
+ */
+export function chordContextAt(segments: ChordSegment[], instrument: InstrumentId, prefs: InstrumentPrefs, offset = 0) {
+  const tuning = tuningFor(instrument, prefs).open;
+  const fretted = isFretted(instrument);
+  return (t: number): { frets?: FretMark[]; keys?: KeyMark[] } => {
+    const tick = t + offset;
+    const seg = segments.find(sg => tick >= sg.tick && tick < sg.tick + sg.ticks) ?? segments.find(sg => sg.tick >= tick);
+    if (!seg) return {};
+    if (fretted) return { frets: seg.shape.notes.filter(n => n.string).map(n => ({ string: n.string!, fret: n.midi - tuning[n.string! - 1], finger: n.finger || undefined, color: 'hint' as const, root: n.root })) };
+    return {
+      keys: seg.shape.notes.map(n => ({
+        midi: n.midi,
+        color: 'hint' as const,
+        finger: instrument === 'mallets' ? undefined : n.finger,
+        label: instrument === 'mallets' && n.finger ? String(n.finger) : undefined,
+      })),
+    };
+  };
 }
 
 // ---------------------------------------------------------------------------

@@ -30,7 +30,9 @@ import { familyOf, instrumentName, voiceFor } from '../music/instruments';
 import { keyDisplayName } from '../music/keys';
 import { type SongDef, songToScore } from '../music/parse';
 import { PPQ } from '../music/rhythm';
-import { type Score, type StepNote, buildSteps, sliceScore } from '../music/score';
+import { type Score, type StepNote, buildSteps, measureStartTick, sliceScore } from '../music/score';
+import { chordPlayScore } from '../curriculum/chordScore';
+import { chordContextAt } from '../engine/activities/Chords';
 import { malletHand } from '../music/sticking';
 import { NotationView } from '../notation/NotationView';
 import { alignLyrics, songChordSymbols, songSections } from '../songs/format';
@@ -81,6 +83,8 @@ interface RunConfig {
   accomp: number;
   fingering: FingeringMode;
   noteNames: boolean;
+  /** strum the song's chords (the app plays the tune) instead of the written part */
+  chords: boolean;
   /** the plan step being worked on (advances when it's done) */
   step?: PlanStep;
 }
@@ -122,6 +126,16 @@ export default function SongStudio() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [song, prefs.ukuleleTuning, prefs.bassStrings]);
   const sections = useMemo(() => (song && score ? songSections(song, score) : []), [song, score]);
+  // guitar and ukulele songs with a chord line can be strummed along
+  const strumScore = useMemo(() => {
+    if (!song?.chords || (song.instrument !== 'guitar' && song.instrument !== 'ukulele')) return null;
+    try {
+      return chordPlayScore({ type: 'chord-play', song: song.id, mode: 'tempo' }, song.instrument, prefs, song);
+    } catch {
+      return null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [song, prefs.ukuleleTuning]);
   const sp = profile?.songs?.[songId];
   const twoParts = song ? songHasTwoParts(song) : false;
   const family = song ? familyOf(song.instrument) : 'keyboard';
@@ -132,6 +146,7 @@ export default function SongStudio() {
   const [tempoPct, setTempoPct] = useState(70);
   const [part, setPart] = useState<SongPart>('all');
   const [strings, setStrings] = useState<number[] | null>(null);
+  const [chordsMode, setChordsMode] = useState(false);
   const [staves, setStaves] = useState<number[] | null>(null);
   const [loop, setLoop] = useState(true);
   const [speedBuilder, setSpeedBuilder] = useState(false);
@@ -187,7 +202,7 @@ export default function SongStudio() {
     [profile, song, track, device],
   );
 
-  const runScore = useMemo(() => (run && score ? sliceScore(score, run.passage.from - 1, run.passage.to - 1) : null), [run, score]);
+  const runScore = useMemo(() => (run && score ? sliceScore(run.chords && strumScore ? strumScore.score : score, run.passage.from - 1, run.passage.to - 1) : null), [run, score, strumScore]);
   const previewScore = useMemo(() => (current && score ? sliceScore(score, current.from - 1, current.to - 1) : null), [current, score]);
 
   // strings / staves used in the selected passage (for the part pickers)
@@ -200,6 +215,7 @@ export default function SongStudio() {
 
   const filterFor = useCallback(
     (cfg: RunConfig) => {
+      if (cfg.chords && strumScore) return (n: StepNote) => n.staff === strumScore.chordStaff;
       const malletOne = family === 'mallet' && !twoParts && cfg.part !== 'all';
       if (!cfg.strings && !cfg.staves && !malletOne) return undefined;
       return (n: StepNote) => {
@@ -209,7 +225,7 @@ export default function SongStudio() {
         return true;
       };
     },
-    [family, twoParts],
+    [family, twoParts, strumScore],
   );
 
   if (!song || !score || !ctx || !profile || !current || !whole) {
@@ -228,6 +244,7 @@ export default function SongStudio() {
     mode: step ? step.mode : mode,
     tempoPct: step ? (step.mode === 'tempo' ? step.tempoPct : 100) : mode === 'tempo' ? tempoPct : 100,
     part: step ? step.part : part,
+    chords: step ? false : chordsMode && !!strumScore,
     strings: step ? null : strings,
     staves: step ? null : staves,
     loop: step ? true : loop,
@@ -265,7 +282,8 @@ export default function SongStudio() {
     for (const [m, st] of Object.entries(r.measureStats ?? {})) measures[run.passage.from + Number(m)] = st;
     const partial = !!(run.strings || run.staves || (family === 'mallet' && !twoParts && run.part !== 'all'));
     const part: SongPart = twoParts ? run.part : run.part === 'all' || !partial ? 'all' : run.part;
-    recordRun(song.id, { from: run.passage.from, to: run.passage.to, mode: run.mode, tempoPct: run.tempoPct, part, partial, accuracy: acc, measures, ms }, twoParts, score.measures);
+    // strumming the chords is its own practice: it doesn't move the melody's plan on
+    if (!run.chords) recordRun(song.id, { from: run.passage.from, to: run.passage.to, mode: run.mode, tempoPct: run.tempoPct, part, partial, accuracy: acc, measures, ms }, twoParts, score.measures);
     recordOutcome({ trackId: track.id as TrackId, lessonId: `song:${song.id}`, lessonKind: 'song', accuracy: acc, stars: 0, passed: acc >= 0.7, ms, notes: r.notes, xp: Math.round(3 + acc * 7), items: r.items, practiceOnly: true });
     const clean = acc >= (run.mode === 'wait' ? 0.9 : 0.85);
     setLast({ acc, clean, tempoPct: run.tempoPct });
@@ -370,9 +388,10 @@ export default function SongStudio() {
                 countInBars={run.countIn}
                 autoStart={runNo > 1 && run.mode === 'tempo'}
                 accompVolume={run.accomp}
-                fingering={run.fingering}
+                fingering={run.chords ? 'none' : run.fingering}
                 noteNames={run.noteNames}
-                title={run.step?.title ?? run.passage.label}
+                contextAt={run.chords && strumScore ? chordContextAt(strumScore.segments, song.instrument, prefs, measureStartTick(strumScore.score, run.passage.from - 1)) : undefined}
+                title={run.step?.title ?? (run.chords ? `Chords · ${run.passage.label}` : run.passage.label)}
                 prompt={run.step?.why}
                 onDone={onRunDone}
               />
@@ -560,7 +579,24 @@ export default function SongStudio() {
                 <Segmented size="sm" value={part} onChange={setPart} options={partOptions} />
               </div>
             )}
-            {family === 'fretted' && usedStrings.length > 1 && (
+            {strumScore && (
+              <div className="set-row">
+                <span>
+                  Play
+                  <span className="faint toggle-sub">{chordsMode ? 'Strum the chords on every beat; the app plays the tune.' : 'The written part, note by note.'}</span>
+                </span>
+                <Segmented
+                  size="sm"
+                  value={chordsMode ? 'chords' : 'melody'}
+                  onChange={v => setChordsMode(v === 'chords')}
+                  options={[
+                    { value: 'melody', label: 'Melody' },
+                    { value: 'chords', label: 'Chords' },
+                  ]}
+                />
+              </div>
+            )}
+            {family === 'fretted' && usedStrings.length > 1 && !chordsMode && (
               <div className="set-row">
                 <span>
                   Strings

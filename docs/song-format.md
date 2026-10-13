@@ -136,8 +136,10 @@ Structure marks inside a voice:
 | `[K:G]` | key change from this bar on |
 | `[T:3/4]` | time-signature change from this bar on |
 
-Repeats are written out when the song loads, so practice follows the performance. All voices must
-use the same repeat marks. D.C. and D.S. must be written out by hand.
+Repeats are written out when the song loads, so practice follows the performance. All voices — and
+the `chords` line — must use the same repeat marks. Each repeat is taken once; a `:|` with no `|:`
+goes back to the bar after the previous repeat (or to the beginning). D.C. and D.S. must be written
+out by hand.
 
 ### Chord symbols
 
@@ -150,6 +152,9 @@ The `chords` line uses the same bars and durations as the notes:
 Symbols: `C Cm C7 Cmaj7 Cm7 C6 Cm6 Cdim Cdim7 Cm7b5 Caug C7#5 Csus2 Csus4 C7sus4 C5 Cadd9 Cm(add9)
 C6/9 C9 Cmaj9 Cm9 C7b9 C7#9 C11 Cm11 C13`, any root (`F#`, `Bb` …), and slash chords (`C/E`).
 `r` means no chord; a chord without a duration takes an equal share of its bar.
+
+Guitar and ukulele players can strum a song's chords in the Song Studio (*Play: Chords*) while the
+app plays the tune, with each chord's shape shown on the fretboard.
 
 ### Lyrics
 

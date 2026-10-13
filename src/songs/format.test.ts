@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseVoice, formatVoice, unrollRepeats } from '../music/parse';
+import { parseVoice, formatVoice, songToScore, unrollRepeats } from '../music/parse';
 import { parsePitch } from '../music/pitch';
 import { parseKey } from '../music/keys';
 import type { NoteSpec } from '../music/score';
@@ -152,5 +152,21 @@ describe('formatVoice edge cases', () => {
     const r = parseVoice('C4/w |', [4, 4], 0, 't', false);
     const out = formatVoice(r.specs, [4, 4], { changes: [{ measure: 1, key: parseKey('G') }] });
     expect(out).toBe('C4/w |');
+  });
+});
+
+describe('repeats', () => {
+  const bars = (t: string) => unrollRepeats(t).join(' ').split(' | ').map(x => x.replace(/ \|$/, '').trim());
+  it('takes each repeat once and goes back to the right place', () => {
+    expect(bars('|: A/w | B/w :| C/w |1 D/w :|2 E/w |')).toEqual(['A/w', 'B/w', 'A/w', 'B/w', 'C/w', 'D/w', 'C/w', 'E/w']);
+    // a repeat with no start sign goes back to the bar after the previous repeat
+    expect(bars('A/w | B/w :| C/w | D/w :|')).toEqual(['A/w', 'B/w', 'A/w', 'B/w', 'C/w', 'D/w', 'C/w', 'D/w']);
+    expect(bars('|: A/w |1 B/w :|2 C/w |')).toEqual(['A/w', 'B/w', 'A/w', 'C/w']);
+  });
+
+  it('unrolls the chord line like the music', () => {
+    const score = songToScore({ id: 'r', title: '', composer: '', instrument: 'piano', level: 1, key: 'C', time: [4, 4], tempo: 80, staves: [{ clef: 'treble', voices: ['|: C4/w |1 D4/w :|2 E4/w |'] }] });
+    const { events } = parseChordTimeline('|: C/w |1 G/w :|2 F/w |', score);
+    expect(events.map(e => e.symbol)).toEqual(['C', 'G', 'C', 'F']);
   });
 });
