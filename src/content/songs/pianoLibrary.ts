@@ -199,6 +199,49 @@ export const PIANO_LH: SongDef[] = [
 // ---------------------------------------------------------------------------
 
 export const PIANO_BOTH: SongDef[] = [
+  {
+    id: 'p2-silent-night',
+    title: 'Silent Night',
+    composer: 'Franz Xaver Gruber',
+    year: '1818',
+    arranger: 'Clef Coach',
+    license: 'Public domain (music 1818; English words John Freeman Young, 1859)',
+    instrument: 'piano',
+    level: 4,
+    key: 'C',
+    time: [6, 8],
+    tempo: 78,
+    blurb: 'The Christmas carol for both hands: the melody over a gently rocking left hand, phrase by phrase.',
+    staves: [
+      {
+        clef: 'treble',
+        hand: 'R',
+        voices: [
+          'G4/q.@3 A4/e@4 G4/q@3 | E4/h.@1 | G4/q.@3 A4/e@4 G4/q@3 | E4/h.@1 | D5/h@5 D5/q@5 | B4/h.@3 | C5/h@4 C5/q@4 | G4/h.@1 | A4/h@2 A4/q@2 | C5/q.@4 B4/e@3 A4/q@2 | G4/q.@1 A4/e@2 G4/q@1 | E4/h.@1 | A4/h@2 A4/q@2 | C5/q.@4 B4/e@3 A4/q@2 | G4/q.@1 A4/e@2 G4/q@1 | E4/h.@1 | D5/h@3 D5/q@3 | F5/q.@5 D5/e@3 B4/q@1 | C5/h.@2 | E5/h.@4 | C5/q.@5 G4/e@2 E4/q@1 | G4/q.@4 F4/e@3 D4/q@2 | C4/h.@1~ | C4/h. |',
+        ],
+      },
+      {
+        clef: 'bass',
+        hand: 'L',
+        voices: [
+          'C3/q.@5 [E3 G3]/q.@3,1 | C3/q.@5 [E3 G3]/q.@3,1 | C3/q.@5 [E3 G3]/q.@3,1 | C3/q.@5 [E3 G3]/q.@3,1 | G2/q.@5 [B2 F3]/q.@4,1 | G2/q.@5 [B2 F3]/q.@4,1 | C3/q.@5 [E3 G3]/q.@3,1 | C3/q.@5 [E3 G3]/q.@3,1 | F2/q.@5 [A2 C3]/q.@3,1 | F2/q.@5 [A2 C3]/q.@3,1 | C3/q.@5 [E3 G3]/q.@3,1 | C3/q.@5 [E3 G3]/q.@3,1 | F2/q.@5 [A2 C3]/q.@3,1 | F2/q.@5 [A2 C3]/q.@3,1 | C3/q.@5 [E3 G3]/q.@3,1 | C3/q.@5 [E3 G3]/q.@3,1 | G2/q.@5 [B2 F3]/q.@4,1 | G2/q.@5 [B2 F3]/q.@4,1 | C3/q.@5 [E3 G3]/q.@3,1 | C3/q.@5 [E3 G3]/q.@3,1 | C3/q.@5 [E3 G3]/q.@3,1 | G2/q.@5 [B2 F3]/q.@4,1 | C3/q.@5 [E3 G3]/q.@3,1 | [C2 C3]/h.@5,1 |',
+        ],
+      },
+    ],
+    chords: 'C/h. | C | C | C | G7 | G7 | C | C | F | F | C | C | F | F | C | C | G7 | G7 | C | C | C | G7 | C | C |',
+    sections: [
+      { name: 'Silent night, holy night', from: 1, to: 4 },
+      { name: 'All is calm, all is bright', from: 5, to: 8 },
+      { name: 'Round yon Virgin, Mother and Child', from: 9, to: 12 },
+      { name: 'Holy Infant so tender and mild', from: 13, to: 16 },
+      { name: 'Sleep in heavenly peace', from: 17, to: 20 },
+      { name: 'Sleep in heavenly peace (ending)', from: 21, to: 24 },
+    ],
+    lyrics: [
+      'Si- lent _ night, Ho- ly _ night, All is calm, All is bright, Round yon Vir- gin Mo- ther and _ Child, Ho- ly In- fant so ten- der and mild, Sleep in heav- en- ly peace, _ Sleep in heav- en- ly peace.',
+    ],
+    tags: ['christmas', 'carol'],
+  },
   both('p2-hot-cross-buns', 'Hot Cross Buns (hands together)', TRAD, TRAD, 2, 'C', [4, 4], 80, HOT_CROSS, 'C3/w@5 | C3/w@5 | G3/w@1 | C3/w@5 |', 'The left hand holds a low note while the right hand plays the tune.'),
   both('p2-mary-had-a-little-lamb', 'Mary Had a Little Lamb (hands together)', 'Lowell Mason (arr.)', '1830', 2, 'C', [4, 4], 84, MARY, 'C3/w@5 | C3/w@5 | G3/w@1 | C3/w@5 | C3/w@5 | C3/w@5 | G3/w@1 | C3/w@5 |', 'Both hands in C position: the left hand changes note only on beat one.'),
   both('p2-ode-to-joy', 'Ode to Joy (hands together)', 'Ludwig van Beethoven', '1824', 3, 'C', [4, 4], 80, ODE, 'C3/h@5 E3@3 | G3/h@1 D3@4 | C3/h@5 E3@3 | G3/h@1 G3@1 | C3/h@5 E3@3 | G3/h@1 D3@4 | C3/h@5 E3@3 | G3/h@1 C3@5 |', 'Half notes in the left hand under Beethoven’s tune.'),

@@ -33,7 +33,7 @@ import { PPQ } from '../music/rhythm';
 import { type Score, type StepNote, buildSteps, sliceScore } from '../music/score';
 import { malletHand } from '../music/sticking';
 import { NotationView } from '../notation/NotationView';
-import { songChordSymbols, songSections } from '../songs/format';
+import { alignLyrics, songChordSymbols, songSections } from '../songs/format';
 import { dayKey } from '../state/dates';
 import {
   LEVEL_NAMES,
@@ -162,6 +162,21 @@ export default function SongStudio() {
   const progress = song && score ? planProgress(song, score, sp) : { done: 0, total: 1 };
   const trouble = score ? troubleSpot(sp, score.measures) : null;
   const chordSymbols = useMemo(() => (song && score ? songChordSymbols(song, score) : []), [song, score]);
+  // lyrics of the selected passage, one line per verse
+  const passageLyrics = useMemo(() => {
+    if (!song?.lyrics?.length || !score || !current) return [];
+    const notes = score.staves[0].voices[0].notes.filter(n => !n.rest && !n.tiePrev && n.measure + 1 >= current.from && n.measure + 1 <= current.to);
+    return song.lyrics
+      .map(verse => {
+        const map = alignLyrics(verse, score);
+        return notes
+          .map(n => map.get(n.id) ?? '')
+          .filter(Boolean)
+          .join(' ')
+          .replace(/- /g, '');
+      })
+      .filter(Boolean);
+  }, [song, score, current?.from, current?.to]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // track whose colours, XP and item stats the song uses
   const group = song && getSong(song.id) ? songGroupDef(songGroup(song)) : null;
@@ -656,6 +671,16 @@ export default function SongStudio() {
             {previewScore && (
               <div className="paper studio-paper">
                 <NotationView score={previewScore} fingering={fingering !== 'none'} strings={family === 'fretted'} noteNames={noteNames ? 'all' : 'none'} naming={profile.settings.naming} showPlayhead={false} beatWidth={46} />
+              </div>
+            )}
+            {passageLyrics.length > 0 && (
+              <div className="studio-lyrics">
+                {passageLyrics.map((l, i) => (
+                  <p key={i}>
+                    {passageLyrics.length > 1 && <span className="faint">{i + 1}. </span>}
+                    {l}
+                  </p>
+                ))}
               </div>
             )}
           </section>

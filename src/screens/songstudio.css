@@ -377,3 +377,14 @@
     display: none;
   }
 }
+
+.studio-lyrics {
+  margin-top: 12px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  line-height: 1.5;
+}
+
+.studio-lyrics p {
+  margin: 0;
+}
