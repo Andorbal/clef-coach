@@ -1,5 +1,5 @@
 import { RH, inlinePiece, insight, interval, keysig, lesson, meet, name, piece, play, read, rhythm, scale, tip, unit } from '../builders';
-import type { ActivityDef, FingeringMode, RhythmCell, TrackDef } from '../types';
+import type { ActivityDef, FingeringMode, Insight, RhythmCell, TrackDef } from '../types';
 import type { TimeSig } from '../../music/rhythm';
 
 /**
@@ -38,6 +38,13 @@ const FULL = 'C4 D4 E4 F4 G4 A4 B4 C5 D5 E5 F5 G5 A5';
 // ---- Rhythm vocabularies for this track ----
 /** Island-strum syncopation, without sixteenths. */
 const SYNC: Record<RhythmCell, number> = { q: 2, 'e e': 2, 'e q e': 1.5, 'q. e': 1 };
+
+// ---- Fretboard activities ----
+type Frets = [number, number];
+const fretName = (strings: number[], frets: Frets, count: number, o: { accidentals?: boolean } = {}): ActivityDef => ({ type: 'fret-name', strings, frets, count, naturalsOnly: !o.accidentals });
+const fretPlay = (strings: number[], frets: Frets, count: number, o: { accidentals?: boolean } = {}): ActivityDef => ({ type: 'fret-play', strings, frets, count, naturalsOnly: !o.accidentals });
+const fretFind = (notes: string[], strings: number[], frets: Frets): ActivityDef => ({ type: 'fret-find', notes, strings, frets, rounds: notes.length });
+const fretsVisual = (positions: { string: number; fret: number; label?: string }[], minFret?: number, maxFret?: number): Insight['visual'] => ({ kind: 'frets', positions, minFret, maxFret });
 
 // ---- Inline notation helpers ----
 function upiece(title: string, key: string, time: TimeSig, voices: string[], o: { mode?: 'wait' | 'tempo'; tempo?: number; fingering?: FingeringMode; prompt?: string } = {}): ActivityDef {
@@ -402,6 +409,49 @@ export const ukuleleTreble: TrackDef = {
     ], ['♯ ♭ ♮', 'Chromatic scale', 'Finger = fret']),
 
     // ------------------------------------------------------------------ 10
+    unit('utfb', 'Know the Fretboard', 'Every note on all four strings up to the 12th fret, named and found by ear and by eye.', [
+      lesson('utfb-1', 'The C and E strings', 'learn', 'Name and play the natural notes on the C and E strings up to the 5th fret.', [
+        tip('Naturals on the neck', 'Between most natural notes there is one fret (a sharp or flat in between); between E and F, and between B and C, there is none. So on the C string: C open, D at fret 2, E at 4, F at 5. On the E string: E open, F at 1, G at 3, A at 5.', fretsVisual([
+          { string: 3, fret: 0, label: 'C' },
+          { string: 3, fret: 2, label: 'D' },
+          { string: 3, fret: 4, label: 'E' },
+          { string: 3, fret: 5, label: 'F' },
+          { string: 2, fret: 0, label: 'E' },
+          { string: 2, fret: 1, label: 'F' },
+          { string: 2, fret: 3, label: 'G' },
+          { string: 2, fret: 5, label: 'A' },
+        ], 0, 6)),
+        fretName([3, 2], [0, 5], 10),
+        fretPlay([3, 2], [0, 5], 8),
+      ]),
+      lesson('utfb-2', 'The A and G strings', 'learn', 'The outer strings up to the 5th fret.', [
+        tip('The outer strings', 'On the A string: A open, B at fret 2, C at 3, D at 5. The G string starts on G: A at fret 2, B at 4, C at 5. On a high-G ukulele the G string sounds above the C string — the same notes as the E string’s 3rd fret and up.', fretsVisual([
+          { string: 1, fret: 0, label: 'A' },
+          { string: 1, fret: 2, label: 'B' },
+          { string: 1, fret: 3, label: 'C' },
+          { string: 1, fret: 5, label: 'D' },
+          { string: 4, fret: 0, label: 'G' },
+          { string: 4, fret: 2, label: 'A' },
+          { string: 4, fret: 4, label: 'B' },
+          { string: 4, fret: 5, label: 'C' },
+        ], 0, 6)),
+        fretName([1, 4], [0, 5], 10),
+        fretPlay([1, 4], [0, 5], 8),
+      ]),
+      lesson('utfb-3', 'Find them all', 'practice', 'Find every C, G and A on the neck.', [
+        tip('The 12th fret', 'At the 12th fret (the double dot) every string starts again an octave higher: the notes from fret 12 up repeat the notes from the open strings.'),
+        fretFind(['C'], [1, 2, 3, 4], [0, 12]),
+        fretFind(['G', 'A'], [1, 2, 3, 4], [0, 12]),
+      ]),
+      lesson('utfb-4', 'Up to the 12th fret', 'practice', 'Name and play any note up to the 12th fret, sharps and flats included.', [
+        fretName([1, 2, 3, 4], [5, 12], 12, { accidentals: true }),
+        fretPlay([1, 2, 3, 4], [0, 12], 10),
+      ]),
+      lesson('utfb-c', 'Checkpoint: the fretboard', 'checkpoint', 'Prove you know the neck.', [
+        fretName([1, 2, 3, 4], [0, 12], 12, { accidentals: true }),
+        fretFind(['E', 'F'], [1, 2, 3, 4], [0, 12]),
+      ]),
+    ]),
     unit('ut10', 'Minor Keys', 'A minor and D minor: relative minors, the raised 7th and the Dorian sound.', [
       lesson('ut10-1', 'A Minor', 'learn', 'The relative minor of C', [
         meet(T, 'G#4', { frets: [at(4, 1, 1)], tips: ['G♯, the leading note of A minor, on the re-entrant G string: 1st fret, finger 1. It is also the 4th fret of the E string.'] }),
