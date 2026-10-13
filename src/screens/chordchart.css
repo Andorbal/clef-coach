@@ -1,0 +1,487 @@
+@import './settings.css';
+
+/* ---------- Chord chart ---------- */
+
+.page.chords-page {
+  max-width: 1640px;
+}
+
+.cc-instruments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.cc-builder {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px;
+}
+
+/* the chord set */
+.cc-tray {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.cc-tray-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.2s;
+}
+
+.cc-tray-chip.on {
+  border-color: rgba(244, 201, 122, 0.75);
+  background: linear-gradient(180deg, rgba(244, 201, 122, 0.2), rgba(244, 201, 122, 0.06));
+}
+
+.cc-tray-chip.playing {
+  box-shadow: 0 0 0 3px var(--gold-glow);
+}
+
+.cc-tray-name {
+  padding: 6px 4px 6px 16px;
+  font-size: 20px;
+  min-height: 40px;
+  color: var(--text);
+}
+
+.cc-tray-chip:not(:has(.cc-tray-x)) .cc-tray-name {
+  padding-right: 16px;
+}
+
+.cc-tray-x {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 40px;
+  color: var(--text-faint);
+  border-radius: 0 999px 999px 0;
+}
+
+.cc-tray-x:hover {
+  color: var(--bad);
+}
+
+.cc-add {
+  min-height: 40px;
+}
+
+.cc-type {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.cc-type .set-input {
+  width: 220px;
+  flex: none;
+  padding: 8px 12px;
+  font-size: 15px;
+}
+
+.cc-type .set-input.is-bad {
+  border-color: var(--bad);
+}
+
+/* root / quality picker */
+.cc-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.cc-row {
+  display: grid;
+  grid-template-columns: 128px 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.cc-row-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.cc-roots,
+.cc-qualities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cc-key {
+  min-width: 44px;
+  min-height: 36px;
+  padding: 0 11px;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-weight: 650;
+  font-size: 15px;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.cc-key:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.cc-key.on {
+  color: #241605;
+  background: linear-gradient(180deg, #ffe0a3, var(--gold));
+  border-color: rgba(255, 230, 180, 0.8);
+}
+
+.cc-row-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding-top: 6px;
+}
+
+.cc-bass,
+.cc-prog,
+.cc-transpose {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.cc-prog {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cc-prog .set-select {
+  min-width: 0;
+  max-width: 340px;
+  flex: 1;
+}
+
+/* options bar */
+.cc-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0 14px;
+}
+
+/* chords × instruments grid */
+.cc-grid {
+  display: grid;
+  gap: 0;
+  padding: 6px 10px 12px;
+  overflow-x: auto;
+}
+
+.cc-col-head {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 6px 10px;
+  border-radius: var(--r-md);
+  text-align: center;
+  transition: background 0.15s, box-shadow 0.2s;
+}
+
+.cc-col-head strong {
+  font-size: 26px;
+  line-height: 1.1;
+}
+
+.cc-col-head span.faint {
+  font-size: 12px;
+}
+
+.cc-col-head:hover {
+  background: var(--surface);
+}
+
+.cc-col-head.on {
+  background: linear-gradient(180deg, rgba(244, 201, 122, 0.13), rgba(244, 201, 122, 0));
+}
+
+.cc-col-head.on strong {
+  color: var(--gold);
+}
+
+.cc-col-head.playing strong {
+  text-shadow: 0 0 18px var(--gold-glow);
+}
+
+.cc-move {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  left: 6px;
+  display: flex;
+  justify-content: space-between;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+
+.cc-move span {
+  pointer-events: auto;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-size: 18px;
+}
+
+.cc-move span:last-child {
+  margin-left: auto;
+}
+
+.cc-move span:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.cc-col-head:hover .cc-move,
+.cc-col-head:focus-within .cc-move {
+  opacity: 1;
+}
+
+.cc-row-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 6px;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font-weight: 650;
+  font-size: 13px;
+  text-align: center;
+}
+
+.cc-grid-cell {
+  display: flex;
+  justify-content: center;
+  padding: 12px 6px;
+  border-top: 1px solid var(--border);
+  min-width: 0;
+  transition: background 0.2s;
+}
+
+.cc-grid-cell.playing {
+  background: rgba(244, 201, 122, 0.06);
+}
+
+/* every voicing of one chord */
+.cc-voicings {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cc-focus-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 16px;
+}
+
+.cc-focus-head h2 {
+  font-size: 44px;
+  line-height: 1;
+  margin: 0;
+}
+
+.cc-tones {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.cc-tone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 42px;
+  padding: 6px 8px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 11px;
+}
+
+.cc-tone strong {
+  font-size: 18px;
+}
+
+.cc-inst {
+  padding: 14px 16px 16px;
+}
+
+.cc-inst-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.cc-inst-head strong {
+  font-size: 19px;
+}
+
+.cc-inst-head .faint {
+  margin-left: auto;
+  font-size: 13px;
+}
+
+.cc-inst-body {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.cc-inst-body > .chord-cell {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 260px;
+}
+
+.cc-inst-body > .chord-cell:has(.chord-pic-keys) {
+  flex: 1 1 50%;
+}
+
+.cc-thumbs {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  gap: 8px;
+  align-content: start;
+}
+
+.cc-inst-body.keys {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.cc-inst-body.keys > .chord-cell {
+  align-self: center;
+  width: 100%;
+  max-width: 640px;
+}
+
+.cc-thumbs.keys {
+  width: 100%;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+}
+
+.cc-thumb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 4px;
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-size: 11px;
+  text-align: center;
+}
+
+.cc-thumb:hover {
+  background: var(--surface);
+}
+
+.cc-thumb.on {
+  border-color: rgba(244, 201, 122, 0.55);
+  background: rgba(244, 201, 122, 0.06);
+}
+
+.cc-thumb .chord-pic {
+  pointer-events: none;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.cc-wide-hint {
+  margin-top: 18px;
+  font-size: 13px;
+  text-align: center;
+}
+
+@media (max-width: 999px) {
+  .cc-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .cc-type {
+    width: 100%;
+  }
+
+  .cc-type .set-input {
+    flex: 1;
+    width: auto;
+  }
+
+  .cc-inst-body {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .cc-inst-body > .chord-cell {
+    min-width: 0;
+  }
+
+  .cc-tones {
+    margin-left: 0;
+  }
+
+  .cc-focus-head h2 {
+    font-size: 36px;
+  }
+}
+
+/* chords of a song (Song Studio) */
+.song-chord-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.song-chord {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.song-chord > strong {
+  font-size: 20px;
+}
+
+.song-chord-row:has(.chord-pic-keys) {
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+}

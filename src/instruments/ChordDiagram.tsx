@@ -64,7 +64,7 @@ export function ChordDiagram({
   const id = useSvgId('cd');
   const maxRel = Math.max(0, ...dots.map(d => d.fret - baseFret + 1), ...barres.map(b => b.fret - baseFret + 1));
   const rows = Math.max(frets ?? 4, maxRel);
-  const padL = 26;
+  const padL = 30;
   const padR = 12;
   const gap = (width - padL - padR) / Math.max(1, n - 1);
   const rowH = Math.min(34, gap * 1.25);
@@ -95,7 +95,7 @@ export function ChordDiagram({
         return <line key={`s${s}`} x1={xOf(s)} x2={xOf(s)} y1={top} y2={top + rows * rowH} className="cd-string" style={{ strokeWidth: 1 + (n - col(s) - 1 === 0 ? 0 : 0) }} />;
       })}
       {!nut && (
-        <text x={padL - 9} y={top + rowH * 0.5} dy="0.35em" className="cd-basefret">
+        <text x={padL - Math.min(gap, rowH) * 0.36 - 4} y={top + rowH * 0.5} dy="0.35em" className="cd-basefret">
           {baseFret}
         </text>
       )}

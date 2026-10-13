@@ -17,5 +17,7 @@ export function activityLabel(def: ActivityDef): string {
     case 'fret-play': return 'Find the fret';
     case 'fret-octave': return 'Octaves';
     case 'fret-shape': return 'Pattern';
+    case 'chord-play': return def.song ? 'Strum along' : def.pattern === 'pick' ? 'New chord' : 'Chord changes';
+    case 'chord-quiz': return 'Chord quiz';
   }
 }

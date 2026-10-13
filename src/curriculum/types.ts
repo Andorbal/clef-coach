@@ -14,7 +14,9 @@ export interface Insight {
     | { kind: 'keys'; notes: string[]; low?: string; high?: string; fingers?: number[]; hand?: Hand; sticking?: string[] }
     | { kind: 'frets'; positions: { string: number; fret: number; label?: string; finger?: number; root?: boolean }[]; minFret?: number; maxFret?: number }
     | { kind: 'staff+keys'; clef: Clef; notes: string[]; fingers?: number[]; hand?: Hand; sticking?: string[] }
-    | { kind: 'staff+frets'; clef: Clef; notes: string[]; positions: { string: number; fret: number; finger?: number }[] };
+    | { kind: 'staff+frets'; clef: Clef; notes: string[]; positions: { string: number; fret: number; finger?: number }[] }
+    /** chord diagrams (or marked keys / bars) on the lesson's instrument, in the player's tuning */
+    | { kind: 'chord'; chords: string[] };
 }
 
 /** Rhythm cells used by the melody generator. Each is a space-separated list of durations (r = rest). */
@@ -215,6 +217,32 @@ export type ActivityDef =
       direction?: 'up' | 'updown';
       mode: 'wait' | 'tempo';
       tempo?: number;
+    })
+  | (ActivityBase & {
+      /**
+       * Play chords, built at run time for the player's instrument and tuning.
+       *  pick:  each string (note) on its own, low to high, then the whole chord
+       *  strum: one chord per bar, struck in `rhythm`
+       *  song:  strum along with a library song's chords while the app plays the tune
+       */
+      type: 'chord-play';
+      chords?: string[];
+      pattern?: 'pick' | 'strum';
+      /** strums per bar, e.g. "w", "h h", "q q q q" (default: whole notes waiting, quarters in time) */
+      rhythm?: string;
+      /** times through the chord list (default 1; strum default 2) */
+      repeat?: number;
+      song?: string;
+      mode: 'wait' | 'tempo';
+      tempo?: number;
+      time?: TimeSig;
+    })
+  | (ActivityBase & {
+      /** Name the chord from its diagram — or, reversed, pick the diagram for a name. */
+      type: 'chord-quiz';
+      chords: string[];
+      count: number;
+      reverse?: boolean;
     })
   | (ActivityBase & {
       type: 'tip';

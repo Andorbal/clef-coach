@@ -26,6 +26,7 @@ export const GUITAR_TREBLE: SongDef[] = [
         'E4/q@0 E4@0 F4@1 G4@3 | G4@3 F4@1 E4@0 D4@3 | C4@1 C4@1 D4@3 E4@0 | D4/q.@3 C4/e@1 C4/h@1 |',
       ],
     }],
+    chords: 'C/w | G7/w | C/w | C/h G7/h | C/w | G7/w | C/w | G7/h C/h |',
     tags: ['classical', 'strings 1–2'],
   },
   {
@@ -91,6 +92,7 @@ export const GUITAR_TREBLE: SongDef[] = [
         'r/q E4@0 E4@0 D4@3 | C4/h.@1 C4/q@1 | E4/h@0 G4/h@3 | G4/q@3 F4/h.@1 | r/h E4/q@0 F4@1 | G4/h@3 E4/h@0 | C4/h@1 D4/h@3 | C4/w@1 |',
       ],
     }],
+    chords: 'N.C./h. | C/w | C/w | C/w | C/w | C/w | C/w | G7/w | G7/w | C/w | C7/w | F/w | F/h C/h | C/w | C/h G7/h | C/w |',
     tags: ['folk', 'pickup', 'strings 1–2'],
   },
   {
@@ -114,6 +116,7 @@ export const GUITAR_TREBLE: SongDef[] = [
         'E3/q@2 G3@0 G3/q.@0 A3/e@2 | G3/q@0 E3@2 C3/q.@3 D3/e@0 | E3/q@2 E3@2 D3@0 D3@0 | C3/h.@3 |',
       ],
     }],
+    chords: 'N.C./q | C/w | C/w | C/w | G7/w | C/w | C/w | C/h G7/h | C/w | F/w | F/w | C/w | G7/w | C/w | C/w | C/h G7/h | C/h. |',
     tags: ['folk', 'pickup', 'eighth notes'],
   },
   // ------------------------------------------------------------------ Originals, Level 1–2
@@ -233,6 +236,10 @@ export const GUITAR_TREBLE: SongDef[] = [
         'G4/h. | G4/q. F#4/e E4/q | D4/h B3/q | G3/q. A3/e B3/q | C4/q. B3/e A3/q | G#3/q. F#3/e G#3/q | A3/h.~ | A3/h |',
       ],
     }],
+    chords: 'N.C./q | Am/h. | C/h. | G/h. | Em/h. | Am/h. | F/h. | E/h. | E/h. | ' +
+      'Am/h. | C/h. | G/h. | Em/h. | Am/h. | E/h. | Am/h. | Am/h. | ' +
+      'C/h. | G/h. | G/h. | Em/h. | Am/h. | F/h. | E/h. | E/h. | ' +
+      'C/h. | G/h. | G/h. | Em/h. | Am/h. | E/h. | Am/h. | Am/h |',
     tags: ['folk', 'minor', 'renaissance'],
   },
   {
@@ -272,6 +279,7 @@ export const GUITAR_TREBLE: SongDef[] = [
         'E4/h E4/q | E4/h D4/e B3/e | B3/q. A3/e G3/q | D3/h. | r/q E3/q B3/q | A3/h G3/q | F#3/q E3/q D3/q | E3/h. |',
       ],
     }],
+    chords: 'Em/h. | Em/h. | D/h. | Em/h. | G/h. | Em/h. | A/h. | Em/h. | Em/h. | Em/h. | G/h. | D/h. | Em/h. | D/h. | D/h. | Em/h. |',
     tags: ['folk', 'dorian', 'waltz'],
   },
   // ------------------------------------------------------------------ Level 6–7 (two voices, up the neck)

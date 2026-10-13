@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { ArrowLeft, ArrowRight, Dumbbell, Gauge, Grid3x3, Piano, Timer, Waves } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Dumbbell, Gauge, Grid2x2, Grid3x3, Piano, Timer, Waves } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { InputChip, applyInputMode } from '../components/InputControl';
@@ -26,6 +26,7 @@ const TOOLS = [
   { to: '/studio/gym', title: 'Sight-reading Gym', body: 'Endless fresh music. Choose clef, range, key and rhythm.', icon: Dumbbell, color: 'teal' },
   { to: '/studio/scales', title: 'Scales & Fingering', body: 'Every major and minor scale with fingering, string numbers or sticking.', icon: Piano, color: 'violet' },
   { to: '/studio/fretboard', title: 'Fretboard Explorer', body: 'Every note and scale on the guitar, ukulele or bass neck — plus CAGED shapes.', icon: Grid3x3, color: 'green' },
+  { to: '/chords', title: 'Chord Chart', body: 'Any chord on piano, guitar, ukulele, bass and mallets — several side by side.', icon: Grid2x2, color: 'blue' },
   { to: '/studio/metronome', title: 'Metronome', body: 'Tap tempo, time signatures, subdivisions and a speed trainer.', icon: Timer, color: 'gold' },
   { to: '/studio/tuner', title: 'Tuner', body: 'A precise chromatic tuner for guitar, ukulele and bass.', icon: Gauge, color: 'coral' },
 ];

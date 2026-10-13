@@ -1,5 +1,6 @@
 import type { ActivityDef } from '../curriculum/types';
 import type { ActivityProps } from './context';
+import { ChordPlayActivity, ChordQuiz } from './activities/Chords';
 import { Flashcards } from './activities/Flashcards';
 import { FretFind, FretQuiz, FretShape } from './activities/Fret';
 import { Meet } from './activities/Meet';
@@ -35,6 +36,10 @@ export function Activity(props: ActivityProps<ActivityDef>) {
       return <FretQuiz {...props} def={def} />;
     case 'fret-shape':
       return <FretShape {...props} def={def} />;
+    case 'chord-play':
+      return <ChordPlayActivity {...props} def={def} />;
+    case 'chord-quiz':
+      return <ChordQuiz {...props} def={def} />;
     default:
       return null;
   }

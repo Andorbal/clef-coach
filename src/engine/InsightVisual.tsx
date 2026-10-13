@@ -10,6 +10,9 @@ import { type Clef, type Score, buildVoice } from '../music/score';
 import { NotationView } from '../notation/NotationView';
 import type { NoteNaming } from '../music/pitch';
 import { pianoRangeFor } from './InstrumentPanel';
+import { ChordPicture } from '../instruments/ChordCell';
+import { chordName, parseChordSymbol } from '../music/chords';
+import { chordViews } from '../music/chordViews';
 
 let visualCounter = 0;
 
@@ -57,6 +60,8 @@ export function InsightVisual({
     }
     return null;
   }, [visual, instrument, family]);
+
+  if (visual.kind === 'chord') return <ChordVisual chords={visual.chords} instrument={instrument} prefs={prefs} compact={compact} />;
 
   const keyNotes = visual.kind === 'keys' ? visual.notes : visual.kind === 'staff+keys' ? visual.notes.flatMap(s => s.replace(/[[\]]/g, '').split(/\s+/)).map(s => s.split('/')[0]).filter(Boolean) : [];
   const keyMidis = keyNotes.map(s => midiOf(parsePitch(s)));
@@ -132,6 +137,32 @@ export function InsightVisual({
           />
         </div>
       )}
+    </div>
+  );
+}
+
+/** Chord diagrams (fretted) or marked keys / bars, in the player's own tuning. Tap to hear. */
+function ChordVisual({ chords, instrument, prefs, compact }: { chords: string[]; instrument: InstrumentId; prefs: InstrumentPrefs; compact?: boolean }) {
+  const items = useMemo(
+    () =>
+      chords.map(sym => {
+        try {
+          const c = parseChordSymbol(sym);
+          return { sym, name: chordName(c), view: chordViews(c, instrument, prefs)[0] };
+        } catch {
+          return { sym, name: sym, view: undefined };
+        }
+      }),
+    [chords, instrument, prefs],
+  );
+  return (
+    <div className={`insight-visual insight-chords ${compact ? 'compact' : ''}`}>
+      {items.map(it => (
+        <figure key={it.sym} className="insight-chord">
+          <figcaption className="display">{it.name}</figcaption>
+          {it.view && <ChordPicture view={it.view} instrument={instrument} prefs={prefs} mode="fingers" size={items.length > 2 || compact ? 'md' : 'lg'} />}
+        </figure>
+      ))}
     </div>
   );
 }

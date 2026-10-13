@@ -23,6 +23,7 @@ const Tuner = lazy(() => import('./screens/StudioTools').then(m => ({ default: m
 const Gym = lazy(() => import('./screens/StudioTools').then(m => ({ default: m.Gym })));
 const Scales = lazy(() => import('./screens/StudioTools').then(m => ({ default: m.Scales })));
 const MetronomeTool = lazy(() => import('./screens/MetronomeTool'));
+const ChordChart = lazy(() => import('./screens/ChordChart'));
 const Progress = lazy(() => import('./screens/Progress'));
 const Settings = lazy(() => import('./screens/Settings'));
 const InstrumentsPreview = lazy(() => import('./dev/InstrumentsPreview'));
@@ -122,6 +123,7 @@ export default function App() {
                         <Route path="/songs" element={<Songs />} />
                         <Route path="/songs/import" element={<SongImport />} />
                         <Route path="/studio" element={<Studio />} />
+                        <Route path="/chords" element={<ChordChart />} />
                         <Route path="/progress" element={<Progress />} />
                         <Route path="/settings" element={<Settings />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
