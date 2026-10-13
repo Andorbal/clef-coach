@@ -134,6 +134,15 @@ export default function ChordChart() {
     setChords(list => [...list, sym]);
     setFocus(chords.length);
   };
+  /** A new chord for "Add": a neighbour of the last chord that isn't in the set yet. */
+  const nextChord = () => {
+    const last = tryChord(chords[chords.length - 1]) ?? current;
+    for (const semis of [5, 7, 9, 2, 4, 10, 3, 8, 1, 6, 11]) {
+      const sym = chordSymbolText(transposeChord(last, semis));
+      if (!chords.includes(sym)) return sym;
+    }
+    return chordSymbolText(last);
+  };
   const removeChord = (i: number) => {
     if (chords.length < 2) return;
     setChords(list => list.filter((_, j) => j !== i));
@@ -230,7 +239,7 @@ export default function ChordChart() {
             );
           })}
           {chords.length < MAX_CHORDS && (
-            <button className="chip-btn cc-add" onClick={() => addChord(chordSymbolText(transposeChord(current, 7)))} aria-label="Add a chord">
+            <button className="chip-btn cc-add" onClick={() => addChord(nextChord())} aria-label="Add a chord">
               <Plus size={15} /> Add chord
             </button>
           )}

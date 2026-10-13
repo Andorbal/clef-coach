@@ -195,7 +195,7 @@ export function ChordQuiz({ def, ctx, onDone }: ActivityProps<QuizDef>) {
   const target = viewOf(round.target);
 
   return (
-    <div className="activity chord-quiz">
+    <div className="activity chord-quiz" data-expected={nameOf(round.target)} data-reverse={def.reverse ? '1' : undefined}>
       <ActivityHeader title={title} prompt={prompt} badge={`${Math.min(idx + 1, rounds.length)} / ${rounds.length}`} progress={idx / rounds.length} />
       {def.reverse ? (
         <>
@@ -205,7 +205,7 @@ export function ChordQuiz({ def, ctx, onDone }: ActivityProps<QuizDef>) {
               const v = viewOf(sym);
               const state = feedback?.picked === sym ? (feedback.ok ? 'is-good' : 'is-bad') : reveal && sym === round.target ? 'is-reveal' : '';
               return (
-                <button key={sym} className={`cq-shape ${state}`} onClick={() => pick(sym)} aria-label={`Shape ${round.options.indexOf(sym) + 1}`}>
+                <button key={sym} className={`cq-shape ${state}`} onClick={() => pick(sym)} aria-label={`Shape ${round.options.indexOf(sym) + 1}`} data-chord={nameOf(sym)}>
                   {v && <ChordPicture view={v} instrument={ctx.instrument} prefs={prefs} mode="fingers" size="md" interactive={false} leftHanded={ctx.settings.leftHanded} />}
                 </button>
               );

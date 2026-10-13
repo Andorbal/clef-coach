@@ -57,3 +57,39 @@ test('import a song, learn its first phrase, progress is saved', async ({ page }
   await expect(page.getByRole('heading', { name: 'My songs' })).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+const MUSICXML = `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <work><work-title>Little Tune</work-title></work>
+  <identification><creator type="composer">A. Tester</creator></identification>
+  <part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions><key><fifths>0</fifths></key><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>
+      <harmony><root><root-step>C</root-step></root><kind>major</kind></harmony>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><notations><technical><fingering>1</fingering></technical></notations></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+    </measure>
+    <measure number="2">
+      <harmony><root><root-step>G</root-step></root><kind>dominant</kind></harmony>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>4</duration><type>whole</type></note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+test('import a MusicXML file', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await onboard(page, 'Reader');
+  await page.goto('/#/songs/import');
+  await page.locator('input[type="file"]').first().setInputFiles({ name: 'little-tune.musicxml', mimeType: 'application/vnd.recordare.musicxml+xml', buffer: Buffer.from(MUSICXML) });
+  await expect(page.getByRole('heading', { name: 'Check it over' })).toBeVisible();
+  await expect(page.locator('.import-fields input').first()).toHaveValue('Little Tune');
+  await expect(page.getByText('MusicXML', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /Save to my songs/ }).click();
+  await expect(page.locator('.studio-top').getByText('Little Tune')).toBeVisible();
+  await expect(page.getByText('Chords in this song')).toBeVisible();
+  expect(errors).toEqual([]);
+});
