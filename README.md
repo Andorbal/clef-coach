@@ -2,6 +2,11 @@
 
 **Learn to read music and play songs on piano, guitar, ukulele, bass guitar and mallet percussion — with your real instrument.**
 
+<p align="center">
+  <img src="docs/media/tempo-mode.gif" width="880" alt="Playing Ode to Joy in time on Clef Coach's piano: a one-bar count-in of 1 2 3 4, a beat light flashing with the metronome, the music scrolling past the playhead and each note turning green as it is played on the beat.">
+</p>
+<p align="center"><sub>Playing in time: a count-in, a beat light to follow, and every note judged as you play it.</sub></p>
+
 Clef Coach is an installable web app (PWA) that takes you from your very first note to advanced sight-reading and real songs. It listens to your instrument through **MIDI** or the **microphone**, shows real engraved notation, an accurate keyboard, fretboard or set of mallet bars, and teaches proper **fingering**, **sticking**, **hands-together** playing, **chords** and the **whole neck**.
 
 There's no account and no server. Progress lives on your device, and you can export or import it at any time.
@@ -40,6 +45,43 @@ There's no account and no server. Progress lives on your device, and you can exp
 - **Progress.** XP, streaks with streak freezes, a daily goal, a practice calendar, per-note mastery heatmaps on a keyboard or fretboard, and low-key milestones.
 - **Multiple players on one device**, plus **export/import** (download, share sheet, or paste) with merge or replace.
 
+## A look around
+
+<table>
+<tr>
+<td colspan="2" valign="top"><img src="docs/media/wait-mode.gif" alt="Wait mode. The music waits on every note. A wrong note appears in red on the staff, and the hint marks the right key and finger."><br><sub><b>Wait mode.</b> The music waits on every note. A wrong note appears in red on the staff, and the hint marks the right key and finger.</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><img src="docs/media/home.jpg" alt="Home. Pick up where you left off, with a daily goal and every track you follow."><br><sub><b>Home.</b> Pick up where you left off, with a daily goal and every track you follow.</sub></td>
+<td width="50%" valign="top"><img src="docs/media/track-map.jpg" alt="A learning path. Short lessons, a checkpoint per unit, and test-outs to skip ahead."><br><sub><b>A learning path.</b> Short lessons, a checkpoint per unit, and test-outs to skip ahead.</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><img src="docs/media/guitar-lesson.jpg" alt="Guitar. Standard notation over a true-to-scale fretboard, with string numbers and fingering."><br><sub><b>Guitar.</b> Standard notation over a true-to-scale fretboard, with string numbers and fingering.</sub></td>
+<td width="50%" valign="top"><img src="docs/media/fretboard.jpg" alt="Fretboard Explorer. Every A up to the 15th fret, octave shapes, CAGED and scale boxes."><br><sub><b>Fretboard Explorer.</b> Every A up to the 15th fret, octave shapes, CAGED and scale boxes.</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><img src="docs/media/song-studio.jpg" alt="Song Studio. A practice plan phrase by phrase, from “wait for me” to full speed."><br><sub><b>Song Studio.</b> A practice plan phrase by phrase, from “wait for me” to full speed.</sub></td>
+<td width="50%" valign="top"><img src="docs/media/songs.jpg" alt="Songs. A library for every instrument, plus anything you import or scan."><br><sub><b>Songs.</b> A library for every instrument, plus anything you import or scan.</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><img src="docs/media/chord-chart.jpg" alt="Chord chart. Any chord on every instrument, side by side."><br><sub><b>Chord chart.</b> Any chord on every instrument, side by side.</sub></td>
+<td width="50%" valign="top"><img src="docs/media/progress.jpg" alt="Progress. XP, streaks, a practice calendar and note mastery."><br><sub><b>Progress.</b> XP, streaks, a practice calendar and note mastery.</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><img src="docs/media/tempo-mode.jpg" alt="In time. Notes turn green when played on the beat; the dots at the top right flash with every beat."><br><sub><b>In time.</b> Notes turn green on the beat, and the dots at the top right flash with every click.</sub></td>
+<td width="50%" valign="top"><img src="docs/media/metronome.jpg" alt="Metronome. Tap tempo, any meter, subdivisions, accents and a speed trainer."><br><sub><b>Metronome.</b> Tap tempo, any meter, subdivisions, accents and a speed trainer.</sub></td>
+</tr>
+</table>
+
+<p align="center"><sub>And on a phone:</sub></p>
+<table align="center">
+<tr>
+<td width="33%" valign="top"><img src="docs/media/phone-home.jpg" alt="Clef Coach home screen on a phone."></td>
+<td width="33%" valign="top"><img src="docs/media/phone-song.jpg" alt="Learning Twinkle, Twinkle on a phone: notation above a piano keyboard."></td>
+<td width="33%" valign="top"><img src="docs/media/phone-chords.jpg" alt="The chord chart on a phone: C major on the piano, with fingering."></td>
+</tr>
+</table>
+
 ## Using your instrument
 
 | Input | Works on | Notes |
@@ -66,6 +108,7 @@ npm run clefsong -- help   # song file tools: validate, convert MusicXML/MIDI, s
 # Slower, opt-in browser runs
 SWEEP=1 npx playwright test sweep --project=ipad   # render every step of every lesson, fail on any error
 SHOTS=shots npx playwright test screens            # screenshot every screen into ./shots
+tools/readme-media.sh                              # re-record the README screenshots and GIFs (needs ffmpeg)
 ```
 
 Microphone and MIDI need a secure context: `localhost` or HTTPS.
