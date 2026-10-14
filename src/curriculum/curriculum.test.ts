@@ -1,3 +1,4 @@
+import { type InstrumentId, MALLET_VARIANTS, instrumentDef, isFretted, tuningFor } from '../music/instruments';
 import { describe, expect, it } from 'vitest';
 import { TRACKS } from './index';
 import { generateScore, genRhythm, makeRng, scaleScore } from './generate';
@@ -9,9 +10,16 @@ import { measureTicks } from '../music/rhythm';
 import { getSong } from '../content/songs';
 import type { ActivityDef, Insight } from './types';
 import { buildSteps } from '../music/score';
+import { chordPlayScore, chordShape } from './chordScore';
+import { chordViews, parseChordRef, tryChord } from '../music/chordViews';
+import { chordPcs, parseChordSymbol } from '../music/chords';
 
 function visualNotes(v: Insight['visual']) {
   if (!v) return;
+  if (v.kind === 'chord') {
+    v.chords.forEach(c => expect(tryChord(c), `chord ${c}`).toBeTruthy());
+    return;
+  }
   if ('notes' in v && v.kind !== 'keys') {
     const text = v.notes.join(' ');
     parseVoice(/\//.test(text) ? text : text.replace(/^(\[[^\]]*\]|\S+)/, '$1/w'), v.kind === 'staff' && v.time ? v.time : [4, 4], 0, 'visual', true);
@@ -19,8 +27,17 @@ function visualNotes(v: Insight['visual']) {
   if (v.kind === 'keys') v.notes.forEach(parsePitch);
 }
 
-function checkActivity(a: ActivityDef, instrument: 'piano' | 'guitar', where: string) {
-  const range = instrument === 'piano' ? [21, 108] : [40, 88];
+/** Range a track's notes must stay in (written pitch for mallets: the marimba's range; low-G ukulele). */
+function rangeOf(instrument: InstrumentId): [number, number] {
+  if (instrument === 'piano') return [21, 108];
+  if (instrument === 'mallets') return [MALLET_VARIANTS.marimba.low, MALLET_VARIANTS.marimba.high];
+  if (instrument === 'guitar') return [40, 88];
+  const t = tuningFor(instrument, { ukuleleTuning: 'low-g', bassStrings: 4 }).open;
+  return [Math.min(...t), Math.max(...t) + instrumentDef(instrument).fretted!.maxFret];
+}
+
+function checkActivity(a: ActivityDef, instrument: InstrumentId, where: string) {
+  const range = rangeOf(instrument);
   const inRange = (s: string) => {
     const m = midiOf(parsePitch(s));
     expect(m, `${where}: ${s} out of instrument range`).toBeGreaterThanOrEqual(range[0]);
@@ -29,7 +46,7 @@ function checkActivity(a: ActivityDef, instrument: 'piano' | 'guitar', where: st
   switch (a.type) {
     case 'meet':
       a.notes.forEach(inRange);
-      if (instrument === 'guitar' && a.frets) expect(a.frets.length, `${where}: frets per note`).toBe(a.notes.length);
+      if (a.frets) expect(a.frets.length, `${where}: frets per note`).toBe(a.notes.length);
       break;
     case 'name':
     case 'play':
@@ -87,15 +104,55 @@ function checkActivity(a: ActivityDef, instrument: 'piano' | 'guitar', where: st
     case 'fret-find':
     case 'fret-name':
     case 'fret-play':
-    case 'fret-octave':
-      expect(instrument).toBe('guitar');
-      a.strings.forEach(s => expect(s >= 1 && s <= 6, `${where}: string ${s}`).toBe(true));
+    case 'fret-octave': {
+      expect(isFretted(instrument), `${where}: fret activity needs a fretted instrument`).toBe(true);
+      const strings = tuningFor(instrument, { ukuleleTuning: 'low-g', bassStrings: 4 }).open.length;
+      a.strings.forEach(s => expect(s >= 1 && s <= strings, `${where}: string ${s}`).toBe(true));
       expect(a.frets[0]).toBeGreaterThanOrEqual(0);
       expect(a.frets[1]).toBeLessThanOrEqual(19);
       expect(a.frets[0]).toBeLessThanOrEqual(a.frets[1]);
       break;
+    }
     case 'fret-shape':
-      expect(instrument).toBe('guitar');
+      expect(isFretted(instrument), `${where}: fret activity needs a fretted instrument`).toBe(true);
+      // CAGED shapes are guitar chord shapes
+      if (a.shape.kind === 'caged') expect(instrument, `${where}: CAGED shape`).toBe('guitar');
+      break;
+    case 'chord-play': {
+      if (a.song) {
+        const song = getSong(a.song);
+        expect(song, `${where}: missing song ${a.song}`).toBeTruthy();
+        expect(song?.chords, `${where}: song has no chords`).toBeTruthy();
+      } else {
+        expect(a.chords?.length, `${where}: chords`).toBeGreaterThan(0);
+        a.chords!.forEach(c => expect(tryChord(c), `${where}: chord ${c}`).toBeTruthy());
+      }
+      a.shapes?.forEach(c => expect(tryChord(c), `${where}: shape ${c}`).toBeTruthy());
+      // every tuning the player might have
+      const tunings = instrument === 'ukulele' ? (['high-g', 'low-g', 'baritone'] as const) : (['high-g'] as const);
+      for (const ukuleleTuning of tunings) {
+        const built = chordPlayScore(a, instrument, { ukuleleTuning });
+        expect(built, `${where}: builds (${ukuleleTuning})`).toBeTruthy();
+        expect(buildSteps(built!.score).length, `${where}: steps`).toBeGreaterThan(0);
+      }
+      // the chosen shapes exist in standard tuning
+      for (const ref of [...(a.chords ?? []), ...(a.shapes ?? [])]) {
+        const { symbol, chart } = parseChordRef(ref);
+        if (!chart) continue;
+        const shape = chordShape(ref, instrument);
+        expect(shape?.notes.length, `${where}: ${ref}`).toBeGreaterThan(0);
+        const pcs = new Set(chordPcs(parseChordSymbol(symbol)));
+        shape!.notes.forEach(nn => expect(pcs.has(nn.midi % 12), `${where}: ${ref} note ${nn.name} is a chord tone`).toBe(true));
+      }
+      break;
+    }
+    case 'chord-quiz':
+      expect(a.count).toBeGreaterThan(0);
+      a.chords.forEach(c => {
+        const ch = tryChord(c);
+        expect(ch, `${where}: chord ${c}`).toBeTruthy();
+        expect(chordViews(ch!, instrument, {}).length, `${where}: ${c} has a voicing`).toBeGreaterThan(0);
+      });
       break;
     case 'tip':
       visualNotes(a.insight.visual);

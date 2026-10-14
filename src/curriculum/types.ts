@@ -11,10 +11,12 @@ export interface Insight {
   /** Optional visual: a few notes on a staff, a highlighted keyboard range, etc. */
   visual?:
     | { kind: 'staff'; clef: Clef; notes: string[]; labels?: boolean; key?: string; time?: TimeSig }
-    | { kind: 'keys'; notes: string[]; low?: string; high?: string; fingers?: number[]; hand?: Hand }
+    | { kind: 'keys'; notes: string[]; low?: string; high?: string; fingers?: number[]; hand?: Hand; sticking?: string[] }
     | { kind: 'frets'; positions: { string: number; fret: number; label?: string; finger?: number; root?: boolean }[]; minFret?: number; maxFret?: number }
-    | { kind: 'staff+keys'; clef: Clef; notes: string[]; fingers?: number[]; hand?: Hand }
-    | { kind: 'staff+frets'; clef: Clef; notes: string[]; positions: { string: number; fret: number; finger?: number }[] };
+    | { kind: 'staff+keys'; clef: Clef; notes: string[]; fingers?: number[]; hand?: Hand; sticking?: string[] }
+    | { kind: 'staff+frets'; clef: Clef; notes: string[]; positions: { string: number; fret: number; finger?: number }[] }
+    /** chord diagrams (or marked keys / bars) on the lesson's instrument, in the player's tuning */
+    | { kind: 'chord'; chords: string[] };
 }
 
 /** Rhythm cells used by the melody generator. Each is a space-separated list of durations (r = rest). */
@@ -53,8 +55,10 @@ export interface MelodyGen {
   dyads?: { chance: number; intervals: number[] };
   /** End on the tonic */
   cadence?: boolean;
-  /** Guitar position for fingering (index-finger fret); default 1 */
+  /** Fretted: position for fingering (index-finger fret); default 1 */
   guitarPosition?: number;
+  /** Mallets: two or four mallets (default 2, or 4 for a grand-staff part). */
+  mallets?: 2 | 4;
   /** Second staff (grand staff) */
   accomp?: { pattern: AccompPattern; pool: string[]; fivePosition?: boolean; rhythms?: Record<RhythmCell, number> };
   /** Use chromatic accidentals (passing tones) with this probability */
@@ -146,6 +150,8 @@ export type ActivityDef =
       /** guitar: position for fingering */
       guitarPosition?: number;
       clef?: Clef;
+      /** mallets: two or four mallets */
+      mallets?: 2 | 4;
     })
   | (ActivityBase & {
       type: 'interval';
@@ -213,6 +219,34 @@ export type ActivityDef =
       tempo?: number;
     })
   | (ActivityBase & {
+      /**
+       * Play chords, built at run time for the player's instrument and tuning.
+       *  pick:  each string (note) on its own, low to high, then the whole chord
+       *  strum: one chord per bar, struck in `rhythm`
+       *  song:  strum along with a library song's chords while the app plays the tune
+       */
+      type: 'chord-play';
+      chords?: string[];
+      pattern?: 'pick' | 'strum';
+      /** strums per bar, e.g. "w", "h h", "q q q q" (default: whole notes waiting, quarters in time) */
+      rhythm?: string;
+      /** times through the chord list (default 1; strum default 2) */
+      repeat?: number;
+      song?: string;
+      /** preferred shapes for a song's chords, e.g. ["F:xx3211"] (the small F) */
+      shapes?: string[];
+      mode: 'wait' | 'tempo';
+      tempo?: number;
+      time?: TimeSig;
+    })
+  | (ActivityBase & {
+      /** Name the chord from its diagram — or, reversed, pick the diagram for a name. */
+      type: 'chord-quiz';
+      chords: string[];
+      count: number;
+      reverse?: boolean;
+    })
+  | (ActivityBase & {
       type: 'tip';
       insight: Insight;
     });
@@ -246,8 +280,8 @@ export interface TrackDef {
   title: string;
   subtitle: string;
   description: string;
-  /** Primary clef shown in this track */
-  clef: Clef | 'grand' | 'fretboard';
+  /** Primary clef shown in this track ('chords' = a chord-shapes track) */
+  clef: Clef | 'grand' | 'fretboard' | 'chords';
   hand?: Hand;
   /** CSS colour for accents */
   accent: string;

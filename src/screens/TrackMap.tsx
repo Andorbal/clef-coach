@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, BookOpen, Brain, Check, Dumbbell, Flag, Lock, Music, Play, Sparkles, Zap } from 'lucide-react';
+import { ArrowLeft, BookOpen, Brain, Check, Dumbbell, Flag, Grid2x2, Lock, Music, Play, Sparkles, Zap } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { TrackBadge } from '../components/TrackBadge';
@@ -97,8 +97,13 @@ export default function TrackMap() {
           <Brain size={16} /> Smart Review
         </button>
         <button className="btn" onClick={() => navigate(`/lesson/${track.id}/endless`)}>
-          <Sparkles size={16} /> Sight-reading Gym
+          <Sparkles size={16} /> {track.clef === 'chords' ? 'Chord Gym' : 'Sight-reading Gym'}
         </button>
+        {track.clef === 'chords' && (
+          <button className="btn" onClick={() => navigate(`/chords?instruments=${track.instrument}`)}>
+            <Grid2x2 size={16} /> Chord chart
+          </button>
+        )}
         <span className="pill">
           <Stars value={1} size={12} /> {summary.stars} / {summary.maxStars}
         </span>
@@ -192,7 +197,7 @@ export default function TrackMap() {
           <div className="track-done card">
             <Sparkles size={28} className="gold-text" />
             <h2 className="display">Track complete</h2>
-            <p className="dim">Remarkable work. Keep your reading razor-sharp in the Sight-reading Gym — it never runs out.</p>
+            <p className="dim">{track.clef === 'chords' ? 'Remarkable work. Keep your changes quick and clean in the Chord Gym — it never runs out.' : 'Remarkable work. Keep your reading razor-sharp in the Sight-reading Gym — it never runs out.'}</p>
             <button className="btn btn-primary" onClick={() => navigate(`/lesson/${track.id}/endless`)}>
               Enter the Gym
             </button>

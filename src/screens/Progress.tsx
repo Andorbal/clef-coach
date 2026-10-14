@@ -8,6 +8,8 @@ import { getTrack } from '../curriculum';
 import type { TrackDef } from '../curriculum/types';
 import { summarizeTrack } from '../engine/progress';
 import { midiAt } from '../music/guitar';
+import { instrumentDef, isFretted, tuningFor } from '../music/instruments';
+import { prefsOf } from '../engine/context';
 import { type Pitch, isBlackKey, midiOf, parsePitch, pitchLabel, spellMidi, pitchToString } from '../music/pitch';
 import { ACHIEVEMENTS, levelFromXp } from '../state/achievements';
 import { dayKey, lastNDays, parseDayKey } from '../state/dates';
@@ -176,8 +178,11 @@ function KeyboardHeatmap({ tp, clefs, low, high }: { tp?: TrackProgress; clefs: 
   );
 }
 
-function FretHeatmap({ tp, mode }: { tp?: TrackProgress; mode: 'fret' | 'note' }) {
+function FretHeatmap({ tp, mode, tuning }: { tp?: TrackProgress; mode: 'fret' | 'note'; tuning: readonly number[] }) {
   const frets = 12;
+  const n = tuning.length;
+  const strings = Array.from({ length: n }, (_, i) => i + 1);
+  const at = (s: number, f: number) => midiAt(s, f, tuning);
   const W = 34;
   const H = 18;
   const noteStats = new Map<number, ItemStat>();
@@ -189,12 +194,12 @@ function FretHeatmap({ tp, mode }: { tp?: TrackProgress; mode: 'fret' | 'note' }
     }
   }
   return (
-    <svg className="fret-heat" viewBox={`0 0 ${(frets + 1) * W + 20} ${6 * H + 22}`} role="img" aria-label="Fretboard mastery">
-      {[1, 2, 3, 4, 5, 6].map(s =>
+    <svg className="fret-heat" viewBox={`0 0 ${(frets + 1) * W + 20} ${n * H + 22}`} role="img" aria-label="Fretboard mastery">
+      {strings.map(s =>
         Array.from({ length: frets + 1 }, (_, f) => {
-          const st = mode === 'fret' ? tp?.items[`fret:${s}:${f}`] : noteStats.get(midiAt(s, f));
+          const st = mode === 'fret' ? tp?.items[`fret:${s}:${f}`] : noteStats.get(at(s, f));
           const v = st ? mastery(st) : 0;
-          const name = pitchLabel(spellMidi(midiAt(s, f)));
+          const name = pitchLabel(spellMidi(at(s, f)));
           return (
             <g key={`${s}-${f}`}>
               <title>{`String ${s}, ${f === 0 ? 'open' : `fret ${f}`} (${name}): ${st ? `${Math.round(v * 100)}% mastery` : 'not practised yet'}`}</title>
@@ -204,13 +209,13 @@ function FretHeatmap({ tp, mode }: { tp?: TrackProgress; mode: 'fret' | 'note' }
         }),
       )}
       {[0, 3, 5, 7, 9, 12].map(f => (
-        <text key={f} x={20 + f * W + W / 2} y={6 * H + 15} textAnchor="middle" className="kb-label">
+        <text key={f} x={20 + f * W + W / 2} y={n * H + 15} textAnchor="middle" className="kb-label">
           {f}
         </text>
       ))}
-      {['e', 'B', 'G', 'D', 'A', 'E'].map((n, i) => (
+      {tuning.map((m, i) => (
         <text key={i} x={8} y={i * H + 13} textAnchor="middle" className="kb-label">
-          {n}
+          {spellMidi(m).step}
         </text>
       ))}
     </svg>
@@ -218,6 +223,8 @@ function FretHeatmap({ tp, mode }: { tp?: TrackProgress; mode: 'fret' | 'note' }
 }
 
 function TrackMastery({ track, tp }: { track: TrackDef; tp?: TrackProgress }) {
+  const profile = useProfile();
+  const tuning = tuningFor(track.instrument, profile ? prefsOf(profile.settings) : {}).open;
   const s = summarizeTrack(track, tp);
   const items = tp ? Object.entries(tp.items) : [];
   const weakest = items
@@ -226,13 +233,15 @@ function TrackMastery({ track, tp }: { track: TrackDef; tp?: TrackProgress }) {
     .sort((a, b) => a.m - b.m)
     .slice(0, 6);
   const mastered = items.filter(([, st]) => mastery(st) >= 0.7).length;
-  const isPiano = track.instrument === 'piano';
-  const low = track.id === 'piano-bass' ? 24 : track.id === 'piano-grand' ? 36 : 53;
-  const high = track.id === 'piano-bass' ? 64 : track.id === 'piano-grand' ? 84 : 84;
+  const keyboardLike = !isFretted(track.instrument);
+  const heatLo = Math.min(...track.heatmap.map(h => midiOf(parsePitch(h.low))));
+  const heatHi = Math.max(...track.heatmap.map(h => midiOf(parsePitch(h.high))));
+  const low = track.id === 'piano-bass' ? 24 : track.id === 'piano-grand' ? 36 : track.id === 'piano-treble' ? 53 : heatLo - (heatLo % 12);
+  const high = track.id === 'piano-bass' ? 64 : track.instrument === 'piano' ? 84 : heatHi + ((12 - (heatHi % 12)) % 12);
   const prettyKey = (k: string) => {
     const [kind, a, b] = k.split(':');
     if (kind === 'fret') return `String ${a}, ${b === '0' ? 'open' : `fret ${b}`}`;
-    return `${pitchToString(parsePitch(b))} · ${a === 'treble8vb' ? 'guitar' : a}`;
+    return `${pitchToString(parsePitch(b))} · ${a === 'treble8vb' || a === 'bass8vb' ? instrumentDef(track.instrument).short.toLowerCase() : a}`;
   };
   return (
     <div className="mastery card">
@@ -251,10 +260,10 @@ function TrackMastery({ track, tp }: { track: TrackDef; tp?: TrackProgress }) {
           </span>
         </div>
       </div>
-      {isPiano ? (
-        <KeyboardHeatmap tp={tp} clefs={track.id === 'piano-grand' ? ['treble', 'bass'] : [track.clef as string]} low={low} high={high} />
+      {keyboardLike ? (
+        <KeyboardHeatmap tp={tp} clefs={track.heatmap.map(h => h.clef)} low={low} high={high} />
       ) : (
-        <FretHeatmap tp={tp} mode={track.id === 'guitar-fretboard' ? 'fret' : 'note'} />
+        <FretHeatmap tp={tp} mode={track.clef === 'fretboard' ? 'fret' : 'note'} tuning={tuning} />
       )}
       <div className="ramp-legend">
         <span className="faint">Not yet</span>

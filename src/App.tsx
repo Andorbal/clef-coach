@@ -14,13 +14,16 @@ const Learn = lazy(() => import('./screens/Learn'));
 const TrackMap = lazy(() => import('./screens/TrackMap'));
 const LessonPlayer = lazy(() => import('./screens/LessonPlayer'));
 const Songs = lazy(() => import('./screens/Songs'));
-const SongPlayer = lazy(() => import('./screens/Songs').then(m => ({ default: m.SongPlayer })));
+const SongStudio = lazy(() => import('./screens/SongStudio'));
+const SongImport = lazy(() => import('./screens/SongImport'));
 const Studio = lazy(() => import('./screens/Studio'));
 const FreePlay = lazy(() => import('./screens/Studio').then(m => ({ default: m.FreePlay })));
 const FretExplorer = lazy(() => import('./screens/StudioTools').then(m => ({ default: m.FretExplorer })));
 const Tuner = lazy(() => import('./screens/StudioTools').then(m => ({ default: m.Tuner })));
 const Gym = lazy(() => import('./screens/StudioTools').then(m => ({ default: m.Gym })));
 const Scales = lazy(() => import('./screens/StudioTools').then(m => ({ default: m.Scales })));
+const MetronomeTool = lazy(() => import('./screens/MetronomeTool'));
+const ChordChart = lazy(() => import('./screens/ChordChart'));
 const Progress = lazy(() => import('./screens/Progress'));
 const Settings = lazy(() => import('./screens/Settings'));
 const InstrumentsPreview = lazy(() => import('./dev/InstrumentsPreview'));
@@ -97,12 +100,13 @@ export default function App() {
           <Routes>
             <Route path="/welcome" element={<Onboarding />} />
             <Route path="/lesson/:trackId/:lessonId" element={<RequireProfile><Keyed C={LessonPlayer} /></RequireProfile>} />
-            <Route path="/song/:songId" element={<RequireProfile><Keyed C={SongPlayer} /></RequireProfile>} />
+            <Route path="/song/:songId" element={<RequireProfile><Keyed C={SongStudio} /></RequireProfile>} />
             <Route path="/studio/free" element={<RequireProfile><FreePlay /></RequireProfile>} />
             <Route path="/studio/fretboard" element={<RequireProfile><FretExplorer /></RequireProfile>} />
             <Route path="/studio/tuner" element={<RequireProfile><Tuner /></RequireProfile>} />
             <Route path="/studio/gym" element={<RequireProfile><Gym /></RequireProfile>} />
             <Route path="/studio/scales" element={<RequireProfile><Scales /></RequireProfile>} />
+            <Route path="/studio/metronome" element={<RequireProfile><MetronomeTool /></RequireProfile>} />
             <Route path="/dev/instruments" element={<InstrumentsPreview />} />
             <Route path="/dev/notation" element={<NotationPreview />} />
             <Route path="/dev/icon" element={<IconPreview />} />
@@ -117,7 +121,9 @@ export default function App() {
                         <Route path="/learn" element={<Learn />} />
                         <Route path="/track/:trackId" element={<Keyed C={TrackMap} />} />
                         <Route path="/songs" element={<Songs />} />
+                        <Route path="/songs/import" element={<SongImport />} />
                         <Route path="/studio" element={<Studio />} />
+                        <Route path="/chords" element={<ChordChart />} />
                         <Route path="/progress" element={<Progress />} />
                         <Route path="/settings" element={<Settings />} />
                         <Route path="*" element={<Navigate to="/" replace />} />

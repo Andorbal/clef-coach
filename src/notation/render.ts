@@ -30,7 +30,9 @@ import {
 import { vexKeySpec } from '../music/keys';
 import { type Pitch, diatonicIndex, transposeOctaves, vexKey } from '../music/pitch';
 import { BASE_TICKS, PPQ, VEX_DURATION, measureTicks } from '../music/rhythm';
-import type { Clef, NoteEl, Score } from '../music/score';
+import { familyOf } from '../music/instruments';
+import { type Clef, type NoteEl, type Score, clefBase, clefOctave, keyAt, timeAt } from '../music/score';
+import { malletLabel } from '../music/sticking';
 
 export const INK = '#1c1915';
 const LINE_SPACING = 10; // VexFlow default (px between staff lines)
@@ -61,11 +63,17 @@ export function notationFontsReady(): Promise<void> {
 }
 
 export function writtenPitch(p: Pitch, clef: Clef): Pitch {
-  return clef === 'treble8vb' ? transposeOctaves(p, 1) : p;
+  const o = clefOctave(clef);
+  return o ? transposeOctaves(p, o) : p;
 }
 
 function vexClef(clef: Clef): 'treble' | 'bass' {
-  return clef === 'bass' ? 'bass' : 'treble';
+  return clefBase(clef);
+}
+
+/** VexFlow clef annotation ("8vb" under the clef for octave-transposing instruments). */
+function clefAnnotation(clef: Clef): string | undefined {
+  return clefOctave(clef) === 1 ? '8vb' : undefined;
 }
 
 export interface RenderOptions {
@@ -149,9 +157,13 @@ function staffExtents(score: Score, si: number, opts: RenderOptions): { above: n
     }
   }
   // stems (3.5 spaces) can extend beyond the notes; give room for (stacked) fingering text
-  const finger = opts.fingering ? (score.instrument === 'piano' ? 6 + 13 * maxChord : 30) : 0;
-  const above = Math.max(26, (dMax - lines.top) * HALF + 30) + (staff.hand === 'L' ? 0 : finger);
-  const below = Math.max(26, (lines.bottom - dMin) * HALF + 30) + (staff.hand === 'L' || score.instrument === 'guitar' ? finger : 0);
+  const family = familyOf(score.instrument);
+  const finger = opts.fingering ? (family === 'fretted' ? 30 : 6 + 13 * maxChord) : 0;
+  // piano: right-hand fingers above, left-hand below; mallets: sticking always above; fretted: string numbers below
+  const fingerAbove = family === 'mallet' || (family === 'keyboard' && staff.hand !== 'L');
+  const fingerBelow = family === 'fretted' || (family === 'keyboard' && staff.hand === 'L');
+  const above = Math.max(26, (dMax - lines.top) * HALF + 30) + (fingerAbove ? finger : 0);
+  const below = Math.max(26, (lines.bottom - dMin) * HALF + 30) + (fingerBelow ? finger : 0);
   return { above, below };
 }
 
@@ -178,8 +190,19 @@ function buildStaveNote(el: NoteEl, clef: Clef, score: Score, opts: RenderOption
   if (el.dots) Dot.buildAndAttach([note], { all: true });
   note.setAttribute('id', `${opts.idPrefix}${el.id}`);
   if (el.rest && el.base === 'w') note.setCenterAlignment(true); // whole-measure rests sit centred
-  if (!el.rest && opts.fingering && el.fingers) {
-    if (score.instrument === 'piano') {
+  const family = familyOf(score.instrument);
+  if (!el.rest && opts.fingering && el.fingers && family === 'mallet') {
+    // sticking above the notes, top mallet on top
+    for (let i = 0; i < el.pitches.length; i++) {
+      const f = el.fingers[i];
+      if (f === undefined || el.tiePrev) continue;
+      const a = new Annotation(malletLabel(f, score.mallets ?? 2));
+      a.setFont('Inter Variable, Inter, sans-serif', 11, 700);
+      a.setVerticalJustification(Annotation.VerticalJustify.TOP);
+      note.addModifier(a, 0);
+    }
+  } else if (!el.rest && opts.fingering && el.fingers) {
+    if (family === 'keyboard') {
       const order = el.pitches.map((_, i) => i);
       const below = hand === 'L';
       // closest-to-the-note first; stacking order keeps top note's finger on top
@@ -202,7 +225,7 @@ function buildStaveNote(el: NoteEl, clef: Clef, score: Score, opts: RenderOption
       });
     }
   }
-  if (!el.rest && opts.strings && el.strings && score.instrument === 'guitar' && !el.tiePrev) {
+  if (!el.rest && opts.strings && el.strings && family === 'fretted' && !el.tiePrev) {
     if (el.pitches.length === 1 && el.strings[0]) {
       const sn = new StringNumber(String(el.strings[0]));
       sn.setPosition(Modifier.Position.BELOW);
@@ -267,13 +290,13 @@ export function renderScore(container: HTMLElement, score: Score, opts: RenderOp
 
   // ---- header width (clef + key + time) ----
   const probe = new Stave(0, 0, 400, staveOpts);
-  probe.addClef(vexClef(score.staves[0].clef), 'default', score.staves[0].clef === 'treble8vb' ? '8vb' : undefined);
+  probe.addClef(vexClef(score.staves[0].clef), 'default', clefAnnotation(score.staves[0].clef));
   probe.addKeySignature(keySpec);
   if (timeSig) probe.addTimeSignature(timeSpec);
   const probes = [probe];
   for (let i = 1; i < nStaves; i++) {
     const p = new Stave(0, 0, 400, staveOpts);
-    p.addClef(vexClef(score.staves[i].clef), 'default', score.staves[i].clef === 'treble8vb' ? '8vb' : undefined);
+    p.addClef(vexClef(score.staves[i].clef), 'default', clefAnnotation(score.staves[i].clef));
     p.addKeySignature(keySpec);
     if (timeSig) p.addTimeSignature(timeSpec);
     probes.push(p);
@@ -283,13 +306,31 @@ export function renderScore(container: HTMLElement, score: Score, opts: RenderOp
   const headerWidth = Math.max(...probes.map(p => p.getNoteStartX())) + braceRoom + 6;
   const leadIn = opts.leadIn ?? 18;
 
+  // ---- key / time changes: width of the signatures drawn at the start of a measure ----
+  const changeAt = new Map<number, { key?: string; prevKey?: string; time?: string; width: number }>();
+  for (const c of score.changes ?? []) {
+    if (c.measure <= 0 || c.measure >= score.measures) continue;
+    const key = c.key ? vexKeySpec(c.key) : undefined;
+    const prevKey = c.key ? vexKeySpec(keyAt(score, c.measure - 1)) : undefined;
+    const time = c.time ? `${c.time[0]}/${c.time[1]}` : undefined;
+    const probeC = new Stave(0, 0, 400, { spaceAboveStaffLn: 0, spaceBelowStaffLn: 0 });
+    probeC.setBegBarType(BarlineType.NONE);
+    if (key) probeC.addKeySignature(key, prevKey);
+    if (time && timeSig) probeC.addTimeSignature(time);
+    Stave.formatBegModifiers([probeC]);
+    changeAt.set(c.measure, { key, prevKey, time: timeSig ? time : undefined, width: probeC.getNoteStartX() + 4 });
+  }
+
   // ---- build notes per measure ----
-  const mt = measureTicks(score.time);
-  type MeasureBuild = { voices: Voice[][]; built: BuiltNote[][]; beams: Beam[]; tuplets: Tuplet[]; width: number; formatter: Formatter };
+  type MeasureBuild = { voices: Voice[][]; built: BuiltNote[][]; beams: Beam[]; tuplets: Tuplet[]; width: number; formatter: Formatter; lead: number };
   const measures: MeasureBuild[] = [];
   const allBuilt = new Map<string, StaveNote>();
 
   for (let m = 0; m < score.measures; m++) {
+    const mTime = timeAt(score, m);
+    const mt = measureTicks(mTime);
+    const mTimeSpec = `${mTime[0]}/${mTime[1]}`;
+    const mKeySpec = vexKeySpec(keyAt(score, m));
     const voicesPerStaff: Voice[][] = [];
     const builtPerStaff: BuiltNote[][] = [];
     const beams: Beam[] = [];
@@ -311,7 +352,7 @@ export function renderScore(container: HTMLElement, score: Score, opts: RenderOp
           });
         }
         tuplets.push(...makeTuplets(built));
-        const v = new Voice({ numBeats: score.time[0], beatValue: score.time[1] });
+        const v = new Voice({ numBeats: mTime[0], beatValue: mTime[1] });
         v.setMode(Voice.Mode.SOFT);
         v.addTickables(built.map(b => b.vf));
         staffVoices.push(v);
@@ -322,13 +363,13 @@ export function renderScore(container: HTMLElement, score: Score, opts: RenderOp
         const stemmable = built.map(b => b.vf as StemmableNote);
         beams.push(
           ...Beam.generateBeams(stemmable, {
-            groups: Beam.getDefaultBeamGroups(timeSpec),
+            groups: Beam.getDefaultBeamGroups(mTimeSpec),
             maintainStemDirections: multi,
             beamRests: false,
           }),
         );
       });
-      if (staffVoices.length) Accidental.applyAccidentals(staffVoices, keySpec);
+      if (staffVoices.length) Accidental.applyAccidentals(staffVoices, mKeySpec);
       voicesPerStaff.push(staffVoices);
       builtPerStaff.push(staffBuilt);
     });
@@ -339,8 +380,9 @@ export function renderScore(container: HTMLElement, score: Score, opts: RenderOp
     const all = voicesPerStaff.flat();
     const minW = all.length ? formatter.preCalculateMinTotalWidth(all) : 40;
     const beats = (measureLen || mt) / PPQ;
-    const width = Math.max(minW * 1.35 + 28, beats * beatWidth + 24);
-    measures.push({ voices: voicesPerStaff, built: builtPerStaff, beams, tuplets, width, formatter });
+    const lead = changeAt.get(m)?.width ?? 0;
+    const width = Math.max(minW * 1.35 + 28, beats * beatWidth + 24) + lead;
+    measures.push({ voices: voicesPerStaff, built: builtPerStaff, beams, tuplets, width, formatter, lead });
   }
 
   const contentStart = headerWidth + leadIn;
@@ -362,7 +404,7 @@ export function renderScore(container: HTMLElement, score: Score, opts: RenderOp
     const s = new Stave(0, top, contentEnd - braceRoom, staveOpts);
     s.setBegBarType(BarlineType.NONE);
     s.setEndBarType(BarlineType.NONE);
-    s.addClef(vexClef(score.staves[si].clef), 'default', score.staves[si].clef === 'treble8vb' ? '8vb' : undefined);
+    s.addClef(vexClef(score.staves[si].clef), 'default', clefAnnotation(score.staves[si].clef));
     s.addKeySignature(keySpec);
     if (timeSig) s.addTimeSignature(timeSpec);
     lineStaves.push(s);
@@ -393,14 +435,17 @@ export function renderScore(container: HTMLElement, score: Score, opts: RenderOp
       s.setEndBarType(barlines ? (m === score.measures - 1 ? BarlineType.END : BarlineType.SINGLE) : BarlineType.NONE);
       // hide this stave's own lines: the continuous lines are already drawn
       s.setConfigForLines([0, 1, 2, 3, 4].map(() => ({ visible: false })));
+      const ch = changeAt.get(m);
+      if (ch?.key) s.addKeySignature(ch.key, ch.prevKey);
+      if (ch?.time) s.addTimeSignature(ch.time);
       return s;
     });
-    const noteStart = x + 10;
+    const noteStart = x + 10 + mb.lead;
     staves.forEach(s => s.setNoteStartX(noteStart));
     staves.forEach(s => s.setContext(ctx));
     mb.voices.forEach((vs, si) => vs.forEach(v => v.setStave(staves[si])));
     const all = mb.voices.flat();
-    if (all.length) mb.formatter.format(all, mb.width - 24);
+    if (all.length) mb.formatter.format(all, mb.width - 24 - mb.lead);
     // draw
     staves.forEach(s => s.draw());
     if (barlines && nStaves > 1) {

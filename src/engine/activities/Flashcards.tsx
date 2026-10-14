@@ -15,6 +15,7 @@ import type { ActivityDef } from '../../curriculum/types';
 import type { KeyMark, FretMark, MarkColor } from '../../instruments';
 import { keyDisplayName, parseKey } from '../../music/keys';
 import { positionsFor } from '../../music/guitar';
+import { instrumentDef, isFretted } from '../../music/instruments';
 import {
   INTERVAL_NAMES,
   type Pitch,
@@ -32,7 +33,7 @@ import {
 import { NotationView, type NoteState } from '../../notation/NotationView';
 import { reviewPriority } from '../../state/srs';
 import type { ActivityProps } from '../context';
-import { resolveVisibility } from '../context';
+import { resolveVisibility , ctxTuning} from '../context';
 import { InstrumentPanel, pianoRangeFor } from '../InstrumentPanel';
 import { useComputerPiano, useLetterKeys, useNoteInput, useNumberKeys } from '../input';
 import { ActivityHeader } from '../PlayAlong';
@@ -202,7 +203,7 @@ export function Flashcards({ def, ctx, onDone }: ActivityProps<FlashDef>) {
     const c = choices[n - 1];
     if (c) answer(c.id);
   });
-  useComputerPiano(ctx.instrument === 'piano' && (def.type === 'play'), clef === 'bass' ? 3 : 4);
+  useComputerPiano(!isFretted(ctx.instrument) && (def.type === 'play'), clef === 'bass' ? 3 : 4);
   useNoteInput(e => {
     if (e.type === 'off') {
       setHeldColor(h => {
@@ -239,8 +240,8 @@ export function Flashcards({ def, ctx, onDone }: ActivityProps<FlashDef>) {
   const playHint = def.type === 'play' && card ? card.pitches[0] : null;
   const keyMarks: KeyMark[] = hintsOn && playHint ? [{ midi: midiOf(playHint), color: def.hand === 'L' ? 'lh' : 'rh', pulse: true }] : [];
   const fretMarks: FretMark[] =
-    hintsOn && playHint && ctx.instrument === 'guitar'
-      ? positionsFor(midiOf(playHint), 12).map(p => ({ ...p, color: 'gold' as MarkColor, pulse: true }))
+    hintsOn && playHint && isFretted(ctx.instrument)
+      ? positionsFor(midiOf(playHint), 12, 0, ctxTuning(ctx)).map(p => ({ ...p, color: 'gold' as MarkColor, pulse: true }))
       : [];
 
   const range = useMemo(() => {
@@ -257,8 +258,8 @@ export function Flashcards({ def, ctx, onDone }: ActivityProps<FlashDef>) {
     (def.type === 'name'
       ? 'Tap the letter — or play the note.'
       : def.type === 'play'
-        ? ctx.instrument === 'guitar'
-          ? 'Play the written note on your guitar (or tap the fretboard).'
+        ? isFretted(ctx.instrument)
+          ? `Play the written note on your ${instrumentDef(ctx.instrument).short.toLowerCase()} (or tap the fretboard).`
           : 'Play the written note.'
         : def.type === 'interval'
           ? 'Count lines and spaces from the lower note, including both notes.'

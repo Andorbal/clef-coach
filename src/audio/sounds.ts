@@ -323,11 +323,12 @@ export function renderSfx(name: SfxName, sampleRate: number): StereoSamples {
  * Metronome click: a short woodblock-like "tock". The accented downbeat is
  * higher and a little louder. Mono, ~70 ms.
  */
-export function renderClickSamples(accent: boolean, sampleRate: number): Float32Array<ArrayBuffer> {
+export function renderClickSamples(accent: boolean, sampleRate: number, sub = false): Float32Array<ArrayBuffer> {
   const sr = sampleRate;
   const n = Math.round(0.07 * sr);
   const out = new Float32Array(n);
-  const f = accent ? 1760 : 1245;
+  // accent (downbeat) > beat > subdivision: higher and louder to softer and lower
+  const f = accent ? 1760 : sub ? 990 : 1245;
   addSoftDampedSine(out, 0, f, 1, 0.02, 0.0003, sr, 1e-6);
   addSoftDampedSine(out, 0, f * 2.36, 0.42, 0.008, 0.0002, sr, 1e-6);
   addSoftDampedSine(out, 0, f * 3.9, 0.12, 0.004, 0.0002, sr, 1e-6);
@@ -340,6 +341,6 @@ export function renderClickSamples(accent: boolean, sampleRate: number): Float32
   for (let i = 0; i < tn; i++) out[i] += tick[i] * 0.6;
   fadeOut(out, Math.round(0.02 * sr));
   const p = peakAbs(out);
-  if (p > 0) scaleInPlace(out, clamp(accent ? 0.8 : 0.56, 0, 1) / p);
+  if (p > 0) scaleInPlace(out, clamp(accent ? 0.8 : sub ? 0.3 : 0.56, 0, 1) / p);
   return out;
 }

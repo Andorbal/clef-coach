@@ -1,4 +1,5 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { isFretted, isKeyboard } from '../music/instruments';
 import { type NoteNaming, type Pitch, pitchLabel } from '../music/pitch';
 import type { NoteEl, Score } from '../music/score';
 import { scoreTotalTicks } from '../music/score';
@@ -238,8 +239,9 @@ function NotationViewImpl(props: NotationViewProps) {
                 if (noteNames === 'focus' && pos.id !== focusId) return null;
                 const geom = result.staves[pos.staff];
                 const lowest = Math.max(...el.pitches.map(p => yForPitch(geom, p)));
-                const fingerBelow = fingering && (score.staves[pos.staff].hand === 'L' || score.instrument === 'guitar');
-                const extra = fingerBelow ? 16 * (score.instrument === 'guitar' && strings ? 1.4 : el.pitches.length) : 0;
+                const fretted = isFretted(score.instrument);
+                const fingerBelow = fingering && ((isKeyboard(score.instrument) && score.staves[pos.staff].hand === 'L') || fretted);
+                const extra = fingerBelow ? 16 * (fretted && strings ? 1.4 : el.pitches.length) : 0;
                 const y = Math.max(geom.bottom + 26, lowest + 24) + extra;
                 const text = el.pitches.map(p => pitchLabel(p, naming)).reverse().join(' ');
                 const st = states?.[pos.id];

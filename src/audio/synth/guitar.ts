@@ -24,6 +24,7 @@
  */
 import { midiToFreq } from '../../music/pitch';
 import {
+  type BiquadType,
   applyBiquadCascade,
   biquadCoeffs,
   clamp,
@@ -40,17 +41,75 @@ import {
 export const GUITAR_LOWEST = 40; // E2
 export const GUITAR_HIGHEST = 88; // E6
 
+/** Which plucked-string instrument to model. */
+export type PluckedVariant = 'guitar' | 'ukulele' | 'bass';
+
+interface VariantSpec {
+  /** scales the fundamental decay time */
+  tau: number;
+  /** scales the high-frequency decay time */
+  tau2: number;
+  /** scales the excitation brightness */
+  bright: number;
+  /** pluck position (fraction of the string) */
+  beta: number;
+  /** pick/finger noise level */
+  pick: number;
+  /** scales the buffer length */
+  length: number;
+  /** body / pickup filter: [type, freq, Q, gain] */
+  body: [BiquadType, number, number, number][];
+}
+
+const VARIANTS: Record<PluckedVariant, VariantSpec> = {
+  guitar: {
+    tau: 1, tau2: 1, bright: 1, beta: 0.13, pick: 1, length: 1,
+    body: [
+      ['highpass', 55, 0.6, 0], // also removes any DC
+      ['peaking', 102, 2.2, 4.5], // air (Helmholtz) mode
+      ['peaking', 215, 2.5, 3], // top-plate mode
+      ['peaking', 420, 1.4, -1.5], // tame boxiness
+      ['peaking', 2600, 1.0, 1.5], // presence
+      ['highshelf', 6000, 0.7, -4], // warmth
+    ],
+  },
+  // a small nylon-strung body: higher air and plate modes, sweeter and shorter
+  ukulele: {
+    tau: 0.62, tau2: 0.85, bright: 0.72, beta: 0.19, pick: 0.45, length: 0.7,
+    body: [
+      ['highpass', 140, 0.6, 0],
+      ['peaking', 265, 2.2, 5],
+      ['peaking', 470, 2.4, 3.5],
+      ['peaking', 900, 1.4, -1.5],
+      ['peaking', 3000, 1.0, 1],
+      ['highshelf', 5000, 0.7, -6],
+    ],
+  },
+  // finger-plucked roundwound bass through a pickup: long, round, dark
+  bass: {
+    tau: 1.35, tau2: 1.3, bright: 0.45, beta: 0.22, pick: 0.3, length: 1.15,
+    body: [
+      ['highpass', 30, 0.6, 0],
+      ['peaking', 80, 1.2, 3],
+      ['peaking', 700, 1.0, 2],
+      ['lowpass', 3200, 0.7, 0],
+    ],
+  },
+};
+
 export interface GuitarRenderOptions {
   /** Override the buffer length in seconds. */
   duration?: number;
+  /** Instrument model (default guitar). */
+  variant?: PluckedVariant;
   seed?: number;
   /** Render into this (zero-filled) array, e.g. an AudioBuffer's channel data. */
   out?: Float32Array;
 }
 
 /** Number of samples renderGuitarSamples produces for a note at this rate. */
-export function guitarNoteLength(midi: number, sampleRate: number): number {
-  return Math.max(1, Math.round(guitarNoteDuration(clamp(Math.round(midi), 24, 108)) * sampleRate));
+export function guitarNoteLength(midi: number, sampleRate: number, variant: PluckedVariant = 'guitar'): number {
+  return Math.max(1, Math.round(guitarNoteDuration(clamp(Math.round(midi), 24, 108)) * VARIANTS[variant].length * sampleRate));
 }
 
 export function guitarNoteDuration(midi: number): number {
@@ -185,7 +244,8 @@ export function renderGuitarSamples(
   const v = clamp(velocity, 0, 1);
   const sr = sampleRate;
   const f0 = midiToFreq(m);
-  const len = opts.out ? opts.out.length : Math.max(1, Math.round((opts.duration ?? guitarNoteDuration(m)) * sr));
+  const vs = VARIANTS[opts.variant ?? 'guitar'];
+  const len = opts.out ? opts.out.length : Math.max(1, Math.round((opts.duration ?? guitarNoteDuration(m) * vs.length) * sr));
   const out: Float32Array = opts.out ?? new Float32Array(len);
   const rand = mulberry32(opts.seed ?? m * 104729 + 7);
 
@@ -193,7 +253,7 @@ export function renderGuitarSamples(
   const period = sr / f0;
   const excLen = Math.max(4, Math.round(period));
   const exc = new Float64Array(excLen);
-  const beta = 0.13 + 0.03 * rand(); // pluck position (fraction of the string)
+  const beta = vs.beta + 0.03 * rand(); // pluck position (fraction of the string)
   let noiseRms = 0;
   let triRms = 0;
   const noise = new Float64Array(excLen);
@@ -222,7 +282,7 @@ export function renderGuitarSamples(
     exc[i] = (noise[i] / noiseRms) * noiseMix + (tri[i] / triRms) * (1 - noiseMix);
   }
   // velocity → brightness (one-pole low-pass, run twice for a softer slope)
-  const cutoff = Math.min(sr * 0.45, (700 + 6500 * Math.pow(v, 1.3)) * interp([[40, 0.8], [64, 1], [88, 1.5]], m));
+  const cutoff = Math.min(sr * 0.45, (700 + 6500 * Math.pow(v, 1.3)) * vs.bright * interp([[40, 0.8], [64, 1], [88, 1.5]], m));
   const k = Math.exp((-2 * Math.PI * cutoff) / sr);
   for (let pass = 0; pass < 2; pass++) {
     let y = 0;
@@ -237,9 +297,9 @@ export function renderGuitarSamples(
   for (let i = 0; i < excLen; i++) exc[i] -= mean;
 
   // ---- strings -----------------------------------------------------------------
-  const tau1 = fundamentalTau(m);
+  const tau1 = fundamentalTau(m) * vs.tau;
   const fHigh = Math.max(2400, f0 * 2.5);
-  const tau2 = Math.min(tau1 * 0.45, interp([[40, 0.24], [64, 0.19], [88, 0.12]], m) * (0.85 + 0.3 * v));
+  const tau2 = Math.min(tau1 * 0.45, interp([[40, 0.24], [64, 0.19], [88, 0.12]], m) * vs.tau2 * (0.85 + 0.3 * v));
   const main = designLoop(f0, sr, tau1, tau2, fHigh);
   const second = designLoop(f0 * Math.pow(2, 1.1 / 1200), sr, tau1 * 1.4, tau2 * 1.25, fHigh);
   // Commuted synthesis: string loop and body are both linear & time-invariant,
@@ -248,14 +308,7 @@ export function renderGuitarSamples(
   // THAT into the strings. Same sound, ~40× less filtering work.
   const driven = new Float64Array(excLen + Math.round(0.12 * sr));
   driven.set(exc);
-  applyBiquadCascade(driven, [
-    biquadCoeffs('highpass', 55, 0.6, 0, sr), // also removes any DC
-    biquadCoeffs('peaking', 102, 2.2, 4.5, sr), // air (Helmholtz) mode
-    biquadCoeffs('peaking', 215, 2.5, 3, sr), // top-plate mode
-    biquadCoeffs('peaking', 420, 1.4, -1.5, sr), // tame boxiness
-    biquadCoeffs('peaking', 2600, 1.0, 1.5, sr), // presence
-    biquadCoeffs('highshelf', 6000, 0.7, -4, sr), // warmth
-  ]);
+  applyBiquadCascade(driven, vs.body.map(([type, f, q, gain]) => biquadCoeffs(type, Math.min(f, sr * 0.45), q, gain, sr)));
   runStrings(out, main, 0.75, second, 0.3, driven);
 
   // ---- pick noise ------------------------------------------------------------
@@ -266,7 +319,7 @@ export function renderGuitarSamples(
     filterInPlace(pick, 'highpass', 1800, 0.7, 0, sr);
     const ref = rmsRange(out, 0, Math.min(len, Math.round(0.05 * sr))) || 0.1;
     const pr = rmsRange(pick) || 1e-6;
-    const g = (ref * (0.12 + 0.25 * v)) / pr;
+    const g = (ref * (0.12 + 0.25 * v) * vs.pick) / pr;
     for (let i = 0; i < pickLen; i++) out[i] += pick[i] * g;
   }
 

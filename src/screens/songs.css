@@ -114,3 +114,80 @@
   font-size: 40px;
   color: var(--gold);
 }
+
+.song-instr {
+  margin-left: auto;
+  display: inline-flex;
+}
+
+.songs-filter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.songs-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  height: 38px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.songs-search input {
+  background: none;
+  border: 0;
+  outline: 0;
+  color: var(--text);
+  width: 180px;
+  font: inherit;
+}
+
+.learning-extra {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.learning-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.learning-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+}
+
+.learning-next {
+  font-size: 12px;
+}
+
+.learning-goal {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.learning-goal.behind {
+  color: var(--gold);
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}

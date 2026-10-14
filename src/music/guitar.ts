@@ -1,7 +1,11 @@
 /**
- * Guitar fretboard model: standard tuning, note locations, position fingering
- * and the common fretboard patterns (CAGED chords, pentatonic boxes, scale shapes).
- * Strings are numbered like guitarists do: 1 = high E ... 6 = low E.
+ * Fretted-instrument model: tunings, note locations, position fingering and the common
+ * fretboard patterns (CAGED chords, pentatonic boxes, scale shapes).
+ *
+ * Everything takes an optional tuning (open-string MIDI notes, string 1 first) and
+ * defaults to standard guitar, so it works for guitar, ukulele (including re-entrant
+ * high-G tuning) and 4/5-string bass alike. Strings are numbered like players do:
+ * 1 = the highest course (high E on a guitar, A on a ukulele, G on a bass).
  */
 import { type Step, pitchClass, spellMidi, STEP_SEMIS } from './pitch';
 
@@ -11,8 +15,11 @@ export const STRING_NAMES = ['E', 'B', 'G', 'D', 'A', 'E'] as const;
 export const MAX_FRET = 22;
 export const INLAY_FRETS = [3, 5, 7, 9, 12, 15, 17, 19, 21];
 
+/** Open-string MIDI notes, string 1 first. */
+export type TuningNotes = readonly number[];
+
 export interface FretPos {
-  string: number; // 1..6
+  string: number; // 1..N
   fret: number; // 0..22
 }
 
@@ -21,30 +28,48 @@ export interface FingeredPos extends FretPos {
   finger: number;
 }
 
-export function openMidi(string: number): number {
-  return STANDARD_TUNING[string - 1];
+/**
+ * How the fretting hand covers the neck:
+ *  'one-per-fret' – four fingers over four frets (guitar, ukulele, bass up the neck)
+ *  'simandl'      – bass in the low positions: index, middle and pinky over three
+ *                   frets (the ring finger helps the pinky)
+ */
+export type FingerSystem = 'one-per-fret' | 'simandl';
+
+export function openMidi(string: number, tuning: TuningNotes = STANDARD_TUNING): number {
+  return tuning[string - 1] ?? tuning[tuning.length - 1];
 }
 
-export function midiAt(string: number, fret: number): number {
-  return openMidi(string) + fret;
+export function midiAt(string: number, fret: number, tuning: TuningNotes = STANDARD_TUNING): number {
+  return openMidi(string, tuning) + fret;
 }
 
-/** All places a MIDI note can be played, from low strings to high. */
-export function positionsFor(midi: number, maxFret = 15, minFret = 0): FretPos[] {
+export function stringCount(tuning: TuningNotes = STANDARD_TUNING): number {
+  return tuning.length;
+}
+
+/** String numbers from the lowest-pitched course to the highest (guitar: 6..1; high-G ukulele: 3, 4, 2, 1). */
+export function stringsLowToHigh(tuning: TuningNotes = STANDARD_TUNING): number[] {
+  return tuning.map((m, i) => ({ m, s: i + 1 })).sort((a, b) => a.m - b.m || b.s - a.s).map(x => x.s);
+}
+
+/** All places a MIDI note can be played, from the last (lowest) string to string 1. */
+export function positionsFor(midi: number, maxFret = 15, minFret = 0, tuning: TuningNotes = STANDARD_TUNING): FretPos[] {
   const out: FretPos[] = [];
-  for (let s = 6; s >= 1; s--) {
-    const fret = midi - openMidi(s);
+  for (let s = tuning.length; s >= 1; s--) {
+    const fret = midi - openMidi(s, tuning);
     if (fret >= minFret && fret <= maxFret) out.push({ string: s, fret });
   }
   return out;
 }
 
 /** Every location of a pitch class within a fret window (e.g. "all the A's"). */
-export function allLocationsOfPitchClass(pc: number, minFret = 0, maxFret = 12, strings = [1, 2, 3, 4, 5, 6]): FretPos[] {
+export function allLocationsOfPitchClass(pc: number, minFret = 0, maxFret = 12, strings?: number[], tuning: TuningNotes = STANDARD_TUNING): FretPos[] {
   const out: FretPos[] = [];
-  for (const s of strings) {
+  for (const s of strings ?? tuning.map((_, i) => i + 1)) {
+    if (s < 1 || s > tuning.length) continue;
     for (let f = minFret; f <= maxFret; f++) {
-      if (pitchClass(midiAt(s, f)) === pc) out.push({ string: s, fret: f });
+      if (pitchClass(midiAt(s, f, tuning)) === pc) out.push({ string: s, fret: f });
     }
   }
   return out;
@@ -55,36 +80,47 @@ export function stepPitchClass(step: Step, alter = 0): number {
 }
 
 /** Name of the note at a fret, spelled with sharps unless flats requested. */
-export function noteNameAt(string: number, fret: number, preferFlats = false) {
-  return spellMidi(midiAt(string, fret), preferFlats ? -1 : 1);
+export function noteNameAt(string: number, fret: number, preferFlats = false, tuning: TuningNotes = STANDARD_TUNING) {
+  return spellMidi(midiAt(string, fret, tuning), preferFlats ? -1 : 1);
 }
 
-/** Lowest and highest MIDI pitches playable in standard tuning up to maxFret. */
-export function guitarRange(maxFret = 19): [number, number] {
-  return [STANDARD_TUNING[5], STANDARD_TUNING[0] + maxFret];
+/** Lowest and highest MIDI pitches playable up to maxFret. */
+export function guitarRange(maxFret = 19, tuning: TuningNotes = STANDARD_TUNING): [number, number] {
+  return [Math.min(...tuning), Math.max(...tuning) + maxFret];
+}
+
+/** Frets the hand spans without shifting, and the finger used at each offset from the index finger. */
+function handShape(system: FingerSystem): { span: number; finger: (offset: number) => number } {
+  if (system === 'simandl') return { span: 3, finger: o => (o <= 0 ? 1 : o === 1 ? 2 : 4) };
+  return { span: 4, finger: o => Math.min(4, Math.max(1, o + 1)) };
 }
 
 /**
- * Finger a melody (sequence of single notes or chords) on the guitar.
+ * Finger a melody (sequence of single notes or chords) on a fretted instrument.
  * Uses dynamic programming to minimise hand shifts and stay near `preferPosition`.
  * Any fixed string assignments (from authored notation) are respected.
  */
 export function fingerGuitarLine(
   events: { midis: number[]; strings?: (number | undefined)[] }[],
-  opts: { preferPosition?: number; maxFret?: number; allowOpen?: boolean } = {},
+  opts: { preferPosition?: number; maxFret?: number; allowOpen?: boolean; tuning?: TuningNotes; fingerSystem?: FingerSystem } = {},
 ): FingeredPos[][] {
+  const tuning = opts.tuning ?? STANDARD_TUNING;
   const maxFret = opts.maxFret ?? 15;
   const prefer = opts.preferPosition ?? 1;
   const allowOpen = opts.allowOpen ?? true;
+  // Simandl fingering is for the low positions; up the neck the hand opens up again
+  const systemAt = (pos: number): FingerSystem => (opts.fingerSystem === 'simandl' && pos < 7 ? 'simandl' : 'one-per-fret');
+  const reach = handShape(systemAt(prefer)).span - 1;
+  const lowestString = stringsLowToHigh(tuning)[0];
 
   // Candidate voicings per event
   const candidates: FretPos[][][] = events.map(ev => {
     const perNote = ev.midis.map((m, i) => {
       const fixed = ev.strings?.[i];
-      if (fixed) return [{ string: fixed, fret: m - openMidi(fixed) }];
-      let c = positionsFor(m, maxFret);
-      if (!allowOpen) c = c.filter(p => p.fret > 0 || positionsFor(m, maxFret).length === 1);
-      return c.length ? c : [{ string: 6, fret: Math.max(0, m - openMidi(6)) }];
+      if (fixed && fixed <= tuning.length) return [{ string: fixed, fret: m - openMidi(fixed, tuning) }];
+      let c = positionsFor(m, maxFret, 0, tuning);
+      if (!allowOpen) c = c.filter(p => p.fret > 0 || positionsFor(m, maxFret, 0, tuning).length === 1);
+      return c.length ? c : [{ string: lowestString, fret: Math.max(0, m - openMidi(lowestString, tuning)) }];
     });
     // cartesian product with distinct strings, limited
     let combos: FretPos[][] = [[]];
@@ -112,10 +148,10 @@ export function fingerGuitarLine(
     let cost = 0;
     if (h) {
       const span = h.hi - h.lo;
-      if (span > 3) cost += (span - 3) * 4;
+      if (span > reach) cost += (span - reach) * 4;
       // preference for the requested position
       const posLo = Math.max(1, prefer - 1);
-      const posHi = prefer + 3;
+      const posHi = prefer + reach;
       if (h.lo < posLo) cost += (posLo - h.lo) * 1.2;
       if (h.hi > posHi) cost += (h.hi - posHi) * 1.2;
       cost += h.lo * 0.03;
@@ -131,7 +167,7 @@ export function fingerGuitarLine(
     if (!ha || !hb) return 0;
     const lo = Math.min(ha.lo, hb.lo);
     const hi = Math.max(ha.hi, hb.hi);
-    const shift = hi - lo > 3 ? Math.min(Math.abs(hb.lo - ha.lo), Math.abs(hb.hi - ha.hi)) : 0;
+    const shift = hi - lo > reach ? Math.min(Math.abs(hb.lo - ha.lo), Math.abs(hb.hi - ha.hi)) : 0;
     return shift * 1.5;
   };
 
@@ -170,17 +206,20 @@ export function fingerGuitarLine(
   let handPos = Math.max(1, prefer);
   return chosen.map(combo => {
     const h = handOf(combo);
+    let shape = handShape(systemAt(handPos));
     if (h) {
+      const top = shape.span - 1;
       // a one-fret stretch below the position (index finger reaches back) is not a shift
-      const stretch = h.lo === handPos - 1 && h.hi <= handPos + 2 && h.lo >= 1;
-      if (!stretch && (h.lo < handPos || h.hi > handPos + 3)) {
+      const stretch = h.lo === handPos - 1 && h.hi <= handPos + top - 1 && h.lo >= 1;
+      if (!stretch && (h.lo < handPos || h.hi > handPos + top)) {
         // shift: keep index finger at the lowest fretted note when possible
-        handPos = h.hi - h.lo <= 3 ? (h.hi > handPos + 3 ? Math.max(h.lo, h.hi - 3) : h.lo) : h.lo;
+        handPos = h.hi - h.lo <= top ? (h.hi > handPos + top ? Math.max(h.lo, h.hi - top) : h.lo) : h.lo;
+        shape = handShape(systemAt(handPos));
       }
     }
     return combo.map(c => ({
       ...c,
-      finger: c.fret === 0 ? 0 : Math.min(4, Math.max(1, c.fret - handPos + 1)),
+      finger: c.fret === 0 ? 0 : shape.finger(c.fret - handPos),
     }));
   });
 }
@@ -256,21 +295,23 @@ export function scaleBox(
   startDegree: number,
   perString: number,
   minStartFret = 0,
+  tuning: TuningNotes = STANDARD_TUNING,
 ): FretPos[] {
-  // find start fret on string 6 for the starting degree
+  // find start fret on the lowest string for the starting degree
+  const low = tuning.length;
   const pc0 = scalePcs[startDegree % scalePcs.length];
-  let fret = ((pc0 - openMidi(6)) % 12 + 12) % 12;
+  let fret = ((pc0 - openMidi(low, tuning)) % 12 + 12) % 12;
   while (fret < minStartFret) fret += 12;
   const out: FretPos[] = [];
-  let midi = openMidi(6) + fret;
+  let midi = openMidi(low, tuning) + fret;
   const pcs = new Set(scalePcs.map(p => ((p % 12) + 12) % 12));
-  for (let s = 6; s >= 1; s--) {
+  for (let s = low; s >= 1; s--) {
     for (let k = 0; k < perString; k++) {
-      if (!(s === 6 && k === 0)) {
+      if (!(s === low && k === 0)) {
         // advance to the next scale tone
         do midi++; while (!pcs.has(pitchClass(midi)));
       }
-      out.push({ string: s, fret: midi - openMidi(s) });
+      out.push({ string: s, fret: midi - openMidi(s, tuning) });
     }
   }
   // Pentatonic boxes: when the B string pushes a note to a negative fret, it's invalid

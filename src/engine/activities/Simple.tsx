@@ -9,8 +9,9 @@ import { parsePitch } from '../../music/pitch';
 import { PPQ, beatTicks, measureTicks } from '../../music/rhythm';
 import { type NoteSpec, type Score, buildVoice, scoreTotalTicks } from '../../music/score';
 import { NotationView, type NoteState } from '../../notation/NotationView';
-import type { ActivityProps } from '../context';
-import { emptyResult } from '../context';
+import { type ActivityProps, emptyResult, prefsOf } from '../context';
+import type { InstrumentId } from '../../music/instruments';
+import type { Clef } from '../../music/score';
 import { InsightVisual } from '../InsightVisual';
 import { useNoteInput } from '../input';
 import { ActivityHeader } from '../PlayAlong';
@@ -35,7 +36,7 @@ export function TipActivity({ def, ctx, onDone }: ActivityProps<TipDef>) {
         <span className="eyebrow">Insight</span>
         <h2 className="display tip-title">{insight.title}</h2>
         <p className="tip-body">{insight.body}</p>
-        {insight.visual && <InsightVisual visual={insight.visual} naming={ctx.settings.naming} />}
+        {insight.visual && <InsightVisual visual={insight.visual} naming={ctx.settings.naming} instrument={ctx.instrument} prefs={prefsOf(ctx.settings)} />}
         <button className="btn btn-primary btn-lg tip-continue" onClick={() => onDone(emptyResult(true))}>
           Got it <ArrowRight size={18} />
         </button>
@@ -50,10 +51,10 @@ export function TipActivity({ def, ctx, onDone }: ActivityProps<TipDef>) {
 
 type RhythmDef = Extract<ActivityDef, { type: 'rhythm' }>;
 
-function rhythmScore(def: RhythmDef, clef: 'treble' | 'bass' | 'treble8vb', seed: number): Score {
+function rhythmScore(def: RhythmDef, clef: Clef, seed: number, instrument: InstrumentId): Score {
   const rng = makeRng(seed);
   const slots = genRhythm(rng, def.time, def.measures, def.cells, true);
-  const pitch = parsePitch(clef === 'bass' ? 'D3' : clef === 'treble8vb' ? 'B3' : 'B4');
+  const pitch = parsePitch(clef === 'bass' ? 'D3' : clef === 'treble8vb' ? 'B3' : clef === 'bass8vb' ? 'D2' : 'B4');
   const specs: NoteSpec[] = slots.flat().map(s => ({ pitches: s.rest ? [] : [pitch], base: s.base, dots: s.dots, triplet: s.triplet }));
   const id = `rh${seed}`;
   return {
@@ -64,16 +65,17 @@ function rhythmScore(def: RhythmDef, clef: 'treble' | 'bass' | 'treble8vb', seed
     tempo: def.tempo,
     measures: def.measures,
     staves: [{ clef, voices: [buildVoice(specs, def.time, id)] }],
-    instrument: clef === 'treble8vb' ? 'guitar' : 'piano',
+    instrument,
   };
 }
 
 export function RhythmTap({ def, ctx, onDone }: ActivityProps<RhythmDef>) {
-  const clef = ctx.track.clef === 'bass' ? 'bass' : ctx.track.clef === 'treble8vb' ? 'treble8vb' : 'treble';
+  const tc = ctx.track.clef;
+  const clef: Clef = tc === 'bass' || tc === 'treble8vb' || tc === 'bass8vb' ? tc : (tc === 'fretboard' || tc === 'chords') && ctx.instrument === 'bass' ? 'bass8vb' : (tc === 'fretboard' || tc === 'chords') && ctx.instrument === 'guitar' ? 'treble8vb' : 'treble';
   const reps = def.reps ?? 2;
   const [rep, setRep] = useState(0);
   const [seed] = useState(() => Math.floor(Math.random() * 1e9));
-  const score = useMemo(() => rhythmScore(def, clef, seed + rep), [def, clef, seed, rep]);
+  const score = useMemo(() => rhythmScore(def, clef, seed + rep, ctx.instrument), [def, clef, seed, rep, ctx.instrument]);
   const notes = useMemo(() => score.staves[0].voices[0].notes, [score]);
   const onsets = useMemo(() => notes.filter(n => !n.rest && !n.tiePrev), [notes]);
   const [phase, setPhase] = useState<'ready' | 'countin' | 'playing' | 'done'>('ready');

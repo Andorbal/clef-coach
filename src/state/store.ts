@@ -11,6 +11,8 @@ import {
   removeTrack,
   testOut,
 } from './logic';
+import { type SongRun, recordSongRun as recordSongRunLogic, newSongProgress } from './songs';
+import type { SongDef } from '../music/parse';
 import {
   DEFAULT_DEVICE,
   type DeviceSettings,
@@ -67,6 +69,14 @@ interface AppState {
   exportJson: (profileIds?: string[]) => string;
   importData: (d: PersistedData, mode: 'merge' | 'replace') => void;
   resetAll: () => void;
+  /** Add or replace a song in the device's library. */
+  saveSong: (song: SongDef) => void;
+  deleteSong: (id: string) => void;
+  /** Start learning a song (adds it to "Learning now"). */
+  startSong: (id: string) => void;
+  archiveSong: (id: string, archived: boolean) => void;
+  setSongGoal: (id: string, goal: { date: string; tempoPct: number } | null) => void;
+  recordSongRun: (id: string, run: SongRun, twoParts: boolean, totalMeasures: number) => void;
 }
 
 function initialData(): PersistedData {
@@ -142,6 +152,34 @@ export const useApp = create<AppState>((set, get) => {
     resetAll: () => {
       commit(emptyData());
     },
+    saveSong: song => {
+      const { data } = get();
+      commit({ ...data, songs: { ...data.songs, [song.id]: song } });
+    },
+    deleteSong: id => {
+      const { data } = get();
+      const songs = { ...data.songs };
+      delete songs[id];
+      // forget practice records of the deleted song in every profile
+      const profiles = Object.fromEntries(
+        Object.entries(data.profiles).map(([pid, p]) => {
+          if (!p.songs?.[id]) return [pid, p];
+          const ps = { ...p.songs };
+          delete ps[id];
+          return [pid, { ...p, songs: ps }];
+        }),
+      );
+      commit({ ...data, songs, profiles });
+    },
+    startSong: id =>
+      mutateProfile(p => (p.songs?.[id] && !p.songs[id].archived ? p : { ...p, songs: { ...p.songs, [id]: { ...(p.songs?.[id] ?? newSongProgress()), archived: false } } })),
+    archiveSong: (id, archived) => mutateProfile(p => (p.songs?.[id] ? { ...p, songs: { ...p.songs, [id]: { ...p.songs[id], archived } } } : p)),
+    setSongGoal: (id, goal) =>
+      mutateProfile(p => {
+        const sp = p.songs?.[id] ?? newSongProgress();
+        return { ...p, songs: { ...p.songs, [id]: { ...sp, goal: goal ?? undefined } } };
+      }),
+    recordSongRun: (id, run, twoParts, total) => mutateProfile(p => recordSongRunLogic(p, id, run, twoParts, total)),
   };
 });
 

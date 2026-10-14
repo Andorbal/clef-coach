@@ -6,7 +6,21 @@ import { onboard } from './helpers';
 test.skip(!process.env.SWEEP, 'content sweep only');
 test.describe.configure({ mode: 'parallel' });
 
-const TRACK_IDS = ['piano-treble', 'piano-bass', 'piano-grand', 'guitar-treble', 'guitar-bass', 'guitar-fretboard'];
+const TRACK_IDS = [
+  'piano-treble',
+  'piano-bass',
+  'piano-grand',
+  'guitar-treble',
+  'guitar-bass',
+  'guitar-fretboard',
+  'guitar-chords',
+  'ukulele-treble',
+  'ukulele-chords',
+  'bass-lines',
+  'bass-fretboard',
+  'mallets-two',
+  'mallets-four',
+];
 
 for (const trackId of TRACK_IDS) {
   test(`every step renders: ${trackId}`, async ({ page }) => {

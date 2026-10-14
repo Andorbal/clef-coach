@@ -1,11 +1,12 @@
 import type { ActivityDef, TrackDef } from '../curriculum/types';
+import { type InstrumentId, type InstrumentPrefs, tuningFor } from '../music/instruments';
 import type { Rng } from '../curriculum/generate';
 import type { ItemResult } from '../state/srs';
 import type { DeviceSettings, ItemStat, ProfileSettings } from '../state/types';
 
 export interface LessonCtx {
   track: TrackDef;
-  instrument: 'piano' | 'guitar';
+  instrument: InstrumentId;
   settings: ProfileSettings;
   device: DeviceSettings;
   /** item stats for SRS-weighted selection */
@@ -28,6 +29,8 @@ export interface ActivityResult {
   responseMs: number[];
   /** non-graded activity (tips) */
   ungraded?: boolean;
+  /** Graded steps per measure (index → total / clean), for finding trouble spots. */
+  measureStats?: Record<number, { total: number; clean: number }>;
 }
 
 export interface ActivityProps<T extends ActivityDef = ActivityDef> {
@@ -45,4 +48,14 @@ export function resolveVisibility(setting: 'auto' | 'always' | 'never', lessonWa
   if (setting === 'always') return true;
   if (setting === 'never') return false;
   return lessonWants;
+}
+
+/** Instrument preferences (mallet variant, ukulele tuning, bass strings) from the profile settings. */
+export function prefsOf(settings: Pick<ProfileSettings, 'malletVariant' | 'ukuleleTuning' | 'bassStrings'>): InstrumentPrefs {
+  return { malletVariant: settings.malletVariant, ukuleleTuning: settings.ukuleleTuning, bassStrings: settings.bassStrings };
+}
+
+/** Open-string notes for a fretted instrument in this context (guitar for anything else). */
+export function ctxTuning(ctx: { instrument: InstrumentId; settings: ProfileSettings }): number[] {
+  return tuningFor(ctx.instrument, prefsOf(ctx.settings)).open;
 }

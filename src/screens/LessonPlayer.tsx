@@ -5,7 +5,8 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { unlockAudio } from '../audio/context';
 import { sfx } from '../audio/sfx';
 import { synth } from '../audio/synth';
-import { micInput } from '../audio/input/mic';
+import { applyInstrument } from '../audio/instrument';
+import { preloadRangeFor, voiceFor } from '../music/instruments';
 import { InputChip, applyInputMode } from '../components/InputControl';
 import { Modal } from '../components/ui';
 import { allLessons, findLesson, getTrack } from '../curriculum';
@@ -13,7 +14,7 @@ import { makeRng } from '../curriculum/generate';
 import type { LessonDef } from '../curriculum/types';
 import { Activity } from '../engine/Activity';
 import { activityLabel } from '../engine/labels';
-import type { ActivityResult, LessonCtx } from '../engine/context';
+import { type ActivityResult, type LessonCtx, prefsOf } from '../engine/context';
 import { InsightVisual } from '../engine/InsightVisual';
 import { testOutLessonIds } from '../engine/progress';
 import { buildEndlessLesson, buildReviewLesson } from '../engine/review';
@@ -98,11 +99,12 @@ export default function LessonPlayer() {
   // and render the instrument's sounds ahead of time so the first note never hitches
   useEffect(() => {
     if (device.inputMode !== 'touch') applyInputMode(device.inputMode).catch(() => undefined);
-    const guitar = track?.instrument === 'guitar';
-    micInput.setNoteRange(guitar ? 40 : 21, guitar ? 88 : 108);
-    const lo = guitar ? 40 : 36;
-    const hi = guitar ? 76 : 84;
-    synth.preload(guitar ? 'guitar' : 'piano', Array.from({ length: hi - lo + 1 }, (_, i) => lo + i)).catch(() => undefined);
+    if (track && profile) {
+      const prefs = prefsOf(profile.settings);
+      applyInstrument(track.instrument, prefs);
+      const [lo, hi] = preloadRangeFor(track.instrument, prefs);
+      synth.preload(voiceFor(track.instrument, prefs), Array.from({ length: hi - lo + 1 }, (_, i) => lo + i)).catch(() => undefined);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -233,7 +235,7 @@ export default function LessonPlayer() {
                 </span>
                 <h1 className="display intro-title">{lesson.intro[introIdx].title}</h1>
                 <p className="intro-body">{lesson.intro[introIdx].body}</p>
-                {lesson.intro[introIdx].visual && <InsightVisual visual={lesson.intro[introIdx].visual!} naming={profile.settings.naming} />}
+                {lesson.intro[introIdx].visual && <InsightVisual visual={lesson.intro[introIdx].visual!} naming={profile.settings.naming} instrument={track.instrument} prefs={prefsOf(profile.settings)} />}
                 <div className="intro-actions">
                   <button
                     className="btn btn-primary btn-lg"

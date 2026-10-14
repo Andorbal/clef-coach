@@ -61,3 +61,14 @@
   align-items: center;
   margin-top: 10px;
 }
+
+.learn-group-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.learn-group-title svg {
+  color: var(--gold);
+  opacity: 0.9;
+}

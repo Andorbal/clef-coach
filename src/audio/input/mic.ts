@@ -323,6 +323,10 @@ export class MicInput {
   setNoteRange = (lowest: number, highest: number): void => {
     if (Number.isFinite(lowest) && Number.isFinite(highest) && lowest <= highest) {
       this.noteRange = [Math.round(lowest), Math.round(highest)];
+      // the detector's default 50 Hz – 2.5 kHz covers piano and guitar; widen it for
+      // a bass's low strings or a glockenspiel's top octave
+      const f = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
+      this.analyzer.setFreqRange(Math.min(50, f(lowest) * 0.93), Math.max(2500, f(highest) * 1.07));
     }
   };
 

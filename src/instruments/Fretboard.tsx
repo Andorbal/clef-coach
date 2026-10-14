@@ -1,5 +1,6 @@
 /**
- * Fretboard — a guitar neck seen as in tablature (string 1, high E, on top).
+ * Fretboard — a fretted neck seen as in tablature (string 1 on top). Works for any
+ * tuning and number of strings: guitar, ukulele (re-entrant or not) and 4/5-string bass.
  *
  * Fret spacing is real: the distance from the nut to fret n is proportional to
  * 1 − 2^(−n/12), rescaled so the requested window fills the width. The wood,
@@ -10,13 +11,14 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import type { PointerEvent as ReactPointerEvent, ReactElement } from 'react';
 import { stepLabel } from '../music/pitch';
 import type { NoteNaming } from '../music/pitch';
-import { midiAt, noteNameAt } from '../music/guitar';
+import { STANDARD_TUNING, midiAt, noteNameAt } from '../music/guitar';
+import { INSTRUMENTS, type FrettedLook } from '../music/instruments';
 import { clamp, ColorDefs, isCoarsePointer, useElementWidth, useSvgId } from './common';
 import type { MarkColor } from './common';
 import './Fretboard.css';
 
 export interface FretMark {
-  /** 1 = high E … 6 = low E */
+  /** 1 = highest course (high E on a guitar) … N */
   string: number;
   fret: number;
   color?: MarkColor;
@@ -38,6 +40,10 @@ export interface FretPressed {
 export type FretNoteNames = 'none' | 'marks' | 'all';
 
 export interface FretboardProps {
+  /** Open-string MIDI notes, string 1 first. Default: standard guitar. */
+  tuning?: readonly number[];
+  /** Strings, inlays and wood. Default: guitar (or derived from the tuning's string count). */
+  look?: FrettedLook;
   /** Default 0. When > 0 the window starts at this fret and a position number replaces the nut. */
   minFret?: number;
   /** Default 12. */
@@ -74,14 +80,19 @@ export interface FretboardProps {
 // ---------------------------------------------------------------------------
 
 const MAX_WINDOW_FRET = 24;
-const SINGLE_INLAYS = new Set([3, 5, 7, 9, 15, 17, 19, 21]);
-const DOUBLE_INLAYS = new Set([12, 24]);
-/** Plain strings 1–3, wound 4–6; relative gauges (.010 – .046). */
-const GAUGE = [1.0, 1.25, 1.6, 2.15, 2.7, 3.3];
+
+/** The look for a tuning when none is given: guitar, ukulele (4 nylon strings) or bass (5 heavy strings). */
+function defaultLook(tuning: readonly number[]): FrettedLook {
+  if (tuning.length === 6) return INSTRUMENTS.guitar.fretted!;
+  if (tuning.length === 5 || Math.min(...tuning) < 40) return INSTRUMENTS.bass.fretted!;
+  return INSTRUMENTS.ukulele.fretted!;
+}
 
 const distFromNut = (n: number) => 1 - Math.pow(2, -n / 12);
 
 interface FbLayout {
+  /** Number of strings. */
+  n: number;
   minFret: number;
   maxFret: number;
   start: number;
@@ -114,7 +125,9 @@ function computeLayout(
   containerW: number,
   minCell: number,
   showNumbers: boolean,
-  height?: number,
+  height: number | undefined,
+  n: number,
+  gauges: number[],
 ): FbLayout {
   const minFret = clamp(Math.round(minFretIn), 0, MAX_WINDOW_FRET - 1);
   const maxFret = clamp(Math.round(Math.max(maxFretIn, minFret + 1)), 1, MAX_WINDOW_FRET);
@@ -124,9 +137,11 @@ function computeLayout(
   const y0 = 12;
   const cw = containerW > 0 ? containerW : 720;
 
-  let s = height && height > 60 ? (height - y0 - 10 - numbersH) / 6 : clamp(cw / 24, 32, 46);
-  s = clamp(s, 18, 90);
-  const boardH = 6 * s;
+  // fewer strings sit a little further apart (a ukulele neck is narrow but its strings are wide-spaced)
+  const spread = n <= 4 ? 1.25 : n === 5 ? 1.1 : 1;
+  let s = height && height > 60 ? (height - y0 - 10 - numbersH) / n : clamp((cw / 24) * spread, 32, 46 * spread);
+  s = clamp(s, 18, n <= 4 ? 70 : 90);
+  const boardH = n * s;
 
   const openW = hasNut ? clamp(s * 1.4, 44, 64) : 0;
   const nutW = hasNut ? clamp(s * 0.24, 6, 10) : 0;
@@ -146,6 +161,7 @@ function computeLayout(
 
   const k = clamp(s / 38, 0.75, 1.3);
   return {
+    n,
     minFret,
     maxFret,
     start,
@@ -165,7 +181,7 @@ function computeLayout(
     wx,
     r: Math.min(s * 0.4, narrowest * scale * 0.4, 17),
     fw: clamp(s * 0.085, 2.6, 4.4),
-    gauge: GAUGE.map(g => g * k),
+    gauge: gauges.map(g => g * k),
     numbersY: y0 + boardH + 10 + 15,
     numbersH,
     scrollable: containerW > 0 && totalW > containerW + 0.5,
@@ -202,9 +218,12 @@ interface StaticProps {
   id: string;
   leftHanded: boolean;
   showFretNumbers: boolean;
+  look: FrettedLook;
 }
 
-const FretboardStatic = memo(function FretboardStatic({ lay, id, leftHanded, showFretNumbers }: StaticProps) {
+const FretboardStatic = memo(function FretboardStatic({ lay, id, leftHanded, showFretNumbers, look }: StaticProps) {
+  const SINGLE_INLAYS = new Set(look.inlays);
+  const DOUBLE_INLAYS = new Set(look.doubleInlays);
   const { y0, boardH, totalW, s, fw, wx, hasNut, boardL } = lay;
   const mx = (x: number) => (leftHanded ? totalW - x : x);
   const boardW = totalW - boardL;
@@ -221,7 +240,7 @@ const FretboardStatic = memo(function FretboardStatic({ lay, id, leftHanded, sho
     const cx = cellCenter(lay, f);
     const cell = wx[f] - wx[f - 1];
     const r = Math.min(s * 0.235, cell * 0.2, 10);
-    const ys = DOUBLE_INLAYS.has(f) ? [y0 + 2 * s, y0 + 4 * s] : SINGLE_INLAYS.has(f) ? [midY] : [];
+    const ys = DOUBLE_INLAYS.has(f) ? [y0 + boardH / 3, y0 + (boardH * 2) / 3] : SINGLE_INLAYS.has(f) ? [midY] : [];
     ys.forEach((cy, i) =>
       inlays.push(
         <g key={`${f}-${i}`}>
@@ -249,10 +268,10 @@ const FretboardStatic = memo(function FretboardStatic({ lay, id, leftHanded, sho
 
   const strings: ReactElement[] = [];
   const shadows: ReactElement[] = [];
-  for (let str = 1; str <= 6; str++) {
+  for (let str = 1; str <= lay.n; str++) {
     const y = stringY(lay, str);
     const t = lay.gauge[str - 1];
-    const wound = str >= 4;
+    const wound = look.wound[str - 1];
     shadows.push(
       <g key={str}>
         <rect x={boardL} y={y + t * 0.6 + s * 0.06} width={boardW} height={t * 2.4} rx={t} fill="#000000" opacity={0.16} />
@@ -284,9 +303,9 @@ const FretboardStatic = memo(function FretboardStatic({ lay, id, leftHanded, sho
       <defs>
         <linearGradient id={`${id}-wood`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#1f100a" />
-          <stop offset="0.06" stopColor="#3a1f13" />
-          <stop offset="0.5" stopColor="#4a2a18" />
-          <stop offset="0.94" stopColor="#371d11" />
+          <stop offset="0.06" stopColor={look.wood[0]} />
+          <stop offset="0.5" stopColor={look.wood[1]} />
+          <stop offset="0.94" stopColor={look.wood[2]} />
           <stop offset="1" stopColor="#1a0d07" />
         </linearGradient>
         <filter id={`${id}-grain`} x="0" y="0" width="100%" height="100%" colorInterpolationFilters="sRGB">
@@ -399,7 +418,7 @@ const FretboardStatic = memo(function FretboardStatic({ lay, id, leftHanded, sho
           <g>
             <rect x={lay.openW + lay.nutW} y={y0} width={6} height={boardH} fill={`url(#${id}-fret-shadow)`} />
             <rect x={lay.openW} y={y0 - 1.5} width={lay.nutW} height={boardH + 3} rx={1.5} fill={`url(#${id}-bone)`} />
-            {[1, 2, 3, 4, 5, 6].map(str => (
+            {Array.from({ length: lay.n }, (_, i) => i + 1).map(str => (
               <rect
                 key={str}
                 x={lay.openW}
@@ -545,6 +564,8 @@ const PressOver = memo(function PressOver({ x, y, r, color, marked, rootShape, t
 const posKey = (str: number, fret: number) => str * 100 + fret;
 
 export function Fretboard({
+  tuning = STANDARD_TUNING,
+  look: lookProp,
   minFret = 0,
   maxFret = 12,
   marks,
@@ -560,10 +581,13 @@ export function Fretboard({
   onRelease,
   height,
   minCellWidth,
-  ariaLabel = 'Guitar fretboard',
+  ariaLabel = 'Fretboard',
   className,
 }: FretboardProps) {
   const id = useSvgId('fb');
+  const look = lookProp ?? defaultLook(tuning);
+  const nStrings = tuning.length;
+  const gaugeKey = look.gauge.join(',');
   const rootRef = useRef<HTMLDivElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
@@ -571,8 +595,9 @@ export function Fretboard({
   const minCell = minCellWidth ?? (isCoarsePointer() ? 34 : 30);
 
   const lay = useMemo(
-    () => computeLayout(minFret, maxFret, containerW, minCell, showFretNumbers, height),
-    [minFret, maxFret, containerW, minCell, showFretNumbers, height],
+    () => computeLayout(minFret, maxFret, containerW, minCell, showFretNumbers, height, nStrings, Array.from({ length: nStrings }, (_, i) => look.gauge[i] ?? 2)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [minFret, maxFret, containerW, minCell, showFretNumbers, height, nStrings, gaugeKey],
   );
   const mx = useCallback((x: number) => (leftHanded ? lay.totalW - x : x), [leftHanded, lay.totalW]);
 
@@ -580,6 +605,8 @@ export function Fretboard({
   const [touched, setTouched] = useState<ReadonlyMap<number, { string: number; fret: number }>>(new Map());
   const pointers = useRef(new Map<number, { string: number; fret: number } | null>());
   const callbacks = useRef({ onTap, onRelease });
+  const tuningRef = useRef(tuning);
+  tuningRef.current = tuning;
   useLayoutEffect(() => {
     callbacks.current = { onTap, onRelease };
   });
@@ -608,7 +635,7 @@ export function Fretboard({
       if (leftHanded) x = lay.totalW - x;
       const { y0, boardH, s } = lay;
       if (y < y0 - s * 0.4 || y > y0 + boardH + s * 0.4) return null;
-      const str = clamp(Math.floor((y - y0) / s) + 1, 1, 6);
+      const str = clamp(Math.floor((y - y0) / s) + 1, 1, lay.n);
       if (x < 0 || x > lay.totalW) return null;
       if (lay.hasNut && x < lay.wx[0]) return { string: str, fret: 0 };
       if (!lay.hasNut && x < lay.wx[lay.start]) return null;
@@ -621,7 +648,7 @@ export function Fretboard({
   );
 
   const press = (pos: { string: number; fret: number }) => {
-    callbacks.current.onTap?.(pos, midiAt(pos.string, pos.fret));
+    callbacks.current.onTap?.(pos, midiAt(pos.string, pos.fret, tuningRef.current));
   };
   const release = (pos: { string: number; fret: number }) => {
     callbacks.current.onRelease?.(pos);
@@ -683,7 +710,7 @@ export function Fretboard({
 
   // ---- Keep marks in view when the neck scrolls ----------------------------
   const validMarks = useMemo(
-    () => (marks ?? []).filter(m => m.string >= 1 && m.string <= 6 && inWindow(lay, m.fret)),
+    () => (marks ?? []).filter(m => m.string >= 1 && m.string <= lay.n && inWindow(lay, m.fret)),
     [marks, lay],
   );
   const viewSig = useMemo(
@@ -749,10 +776,10 @@ export function Fretboard({
   // ---- Overlay content -------------------------------------------------------
   const nameAt = useCallback(
     (str: number, fret: number) => {
-      const p = noteNameAt(str, fret, preferFlats);
+      const p = noteNameAt(str, fret, preferFlats, tuning);
       return stepLabel(p.step, p.alter, naming);
     },
-    [preferFlats, naming],
+    [preferFlats, naming, tuning],
   );
 
   const markedKeys = useMemo(() => new Set(validMarks.filter(m => !m.ghost).map(m => posKey(m.string, m.fret))), [validMarks]);
@@ -763,14 +790,14 @@ export function Fretboard({
 
   // Pressed positions: external (detected) + touches on this board.
   const pressedMap = new Map<number, FretPressed>();
-  for (const p of pressed ?? []) if (p.string >= 1 && p.string <= 6 && inWindow(lay, p.fret)) pressedMap.set(posKey(p.string, p.fret), p);
+  for (const p of pressed ?? []) if (p.string >= 1 && p.string <= lay.n && inWindow(lay, p.fret)) pressedMap.set(posKey(p.string, p.fret), p);
   for (const [k, p] of touched) if (!pressedMap.has(k)) pressedMap.set(k, p);
   const pressedKeys = new Set(pressedMap.keys());
 
   const allNames: ReactElement[] = [];
   if (showNoteNames === 'all') {
     const fs = clamp(lay.s * 0.3, 9, 12);
-    for (let str = 1; str <= 6; str++) {
+    for (let str = 1; str <= lay.n; str++) {
       for (let f = lay.hasNut ? 0 : Math.max(1, lay.minFret); f <= lay.maxFret; f++) {
         if (markedKeys.has(posKey(str, f)) || pressedKeys.has(posKey(str, f))) continue;
         const name = nameAt(str, f);
@@ -880,7 +907,7 @@ export function Fretboard({
             onLostPointerCapture={endPointer}
             onContextMenu={e => e.preventDefault()}
           >
-            <FretboardStatic lay={lay} id={id} leftHanded={leftHanded} showFretNumbers={showFretNumbers} />
+            <FretboardStatic lay={lay} id={id} leftHanded={leftHanded} showFretNumbers={showFretNumbers} look={look} />
             <svg className="fb-svg fb-dyn" width={lay.totalW} height={lay.totalH} viewBox={`0 0 ${lay.totalW} ${lay.totalH}`} aria-hidden="true">
               <defs>
                 <ColorDefs id={id} />

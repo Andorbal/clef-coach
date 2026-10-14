@@ -5,6 +5,8 @@ import { setMasterVolume } from '../audio/context';
 import { micInput } from '../audio/input/mic';
 import { setSfxEnabled, setSfxVolume, sfx } from '../audio/sfx';
 import { InputPicker } from '../components/InputControl';
+import { useMyInstruments } from '../components/InstrumentIcon';
+import { type BassStrings, type InstrumentId, MALLET_VARIANTS, type MalletVariant } from '../music/instruments';
 import { PageHeader } from '../components/Shell';
 import { Avatar, Modal, Segmented, Toggle } from '../components/ui';
 import { ImportError, parseImport } from '../state/logic';
@@ -45,6 +47,7 @@ export default function Settings() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const myInstruments = useMyInstruments();
   if (!profile) return null;
   const s = profile.settings;
   const flash = (m: string) => {
@@ -86,7 +89,8 @@ export default function Settings() {
   );
 
   const profiles = Object.values(data.profiles);
-  const instrument = profile.trackOrder.some(t => t.startsWith('guitar')) && !profile.trackOrder.some(t => t.startsWith('piano')) ? 'guitar' : 'piano';
+  const instrument = myInstruments[0];
+  const plays = (i: InstrumentId) => myInstruments.includes(i);
 
   return (
     <div className="page settings">
@@ -132,8 +136,42 @@ export default function Settings() {
       </section>
 
       <section className="set-section card">
-        <h2 className="set-title">Your instrument</h2>
+        <h2 className="set-title">Your instrument{myInstruments.length > 1 ? 's' : ''}</h2>
         <InputPicker instrument={instrument} />
+        {(plays('mallets') || plays('ukulele') || plays('bass')) && (
+          <div className="set-instruments">
+            {plays('mallets') && (
+              <div className="set-row">
+                <span>
+                  Mallet instrument
+                  <span className="faint toggle-sub">{MALLET_VARIANTS[s.malletVariant ?? 'marimba'].blurb}</span>
+                </span>
+                <select className="set-select" value={s.malletVariant ?? 'marimba'} onChange={e => update({ malletVariant: e.target.value as MalletVariant })}>
+                  {Object.values(MALLET_VARIANTS).map(v => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {plays('ukulele') && (
+              <div className="set-row">
+                <span>
+                  Ukulele tuning
+                  <span className="faint toggle-sub">Most ukuleles use high G. Baritone ukuleles are tuned D G B E.</span>
+                </span>
+                <Segmented size="sm" value={s.ukuleleTuning ?? 'high-g'} onChange={v => update({ ukuleleTuning: v })} options={[{ value: 'high-g', label: 'High G' }, { value: 'low-g', label: 'Low G' }, { value: 'baritone', label: 'Baritone' }]} />
+              </div>
+            )}
+            {plays('bass') && (
+              <div className="set-row">
+                <span>Bass strings</span>
+                <Segmented size="sm" value={String(s.bassStrings ?? 4) as '4' | '5'} onChange={v => update({ bassStrings: Number(v) as BassStrings })} options={[{ value: '4', label: '4-string' }, { value: '5', label: '5-string' }]} />
+              </div>
+            )}
+          </div>
+        )}
         {device.inputMode === 'mic' && (
           <label className="slider-row">
             <span>
@@ -234,7 +272,7 @@ export default function Settings() {
           <span>Keyboard labels</span>
           <Segmented size="sm" value={s.keyLabels} onChange={v => update({ keyLabels: v })} options={[{ value: 'none', label: 'None' }, { value: 'c-only', label: 'C only' }, { value: 'white', label: 'All white' }]} />
         </div>
-        <Toggle checked={s.leftHanded} onChange={v => update({ leftHanded: v })} label="Left-handed guitar" sub="Mirror the fretboard." />
+        <Toggle checked={s.leftHanded} onChange={v => update({ leftHanded: v })} label="Left-handed fretboard" sub="Mirror the guitar, ukulele and bass necks." />
       </section>
 
       <section className="set-section card">

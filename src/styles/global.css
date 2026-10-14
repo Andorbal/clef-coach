@@ -334,3 +334,42 @@ p {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Toggleable chip button (filters, instrument variants, chord pickers) */
+.chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: 14px;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.chip-btn:hover {
+  color: var(--text);
+}
+
+.chip-btn.on {
+  color: var(--text);
+  border-color: rgba(244, 201, 122, 0.7);
+  background: linear-gradient(180deg, rgba(244, 201, 122, 0.18), rgba(244, 201, 122, 0.06));
+}
+
+.chip-btn:disabled {
+  opacity: 0.45;
+}
+
+/* Native select styled like the app's controls */
+.set-select {
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+}

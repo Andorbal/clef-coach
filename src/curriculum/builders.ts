@@ -161,6 +161,35 @@ export function rhythm(time: TimeSig, cells: Record<RhythmCell, number>, o: { me
   return { type: 'rhythm', time, cells, measures: o.measures ?? 2, tempo: o.tempo ?? 72, reps: o.reps ?? 2 };
 }
 
+// ---- Chords (built at run time for the player's instrument and tuning) ----
+/** Chord diagrams in a tip: "Em Am" or with shapes, "F:xx3211". */
+export function chordTip(title: string, body: string, chords: string): ActivityDef {
+  return tip(title, body, { kind: 'chord', chords: n(chords) });
+}
+
+export function chordInsight(title: string, body: string, chords: string): Insight {
+  return insight(title, body, { kind: 'chord', chords: n(chords) });
+}
+
+/** Each note of the chord on its own, then the whole chord. */
+export function pickChord(chords: string, o: { repeat?: number; title?: string; prompt?: string } = {}): ActivityDef {
+  return { type: 'chord-play', chords: n(chords), pattern: 'pick', mode: 'wait', repeat: o.repeat, title: o.title, prompt: o.prompt };
+}
+
+/** One chord per bar in a strumming rhythm ("w", "h h", "q q q q", "q e e q e e"), cycled `repeat` times. */
+export function strum(chords: string, o: { rhythm?: string; repeat?: number; mode?: 'wait' | 'tempo'; tempo?: number; time?: TimeSig; title?: string; prompt?: string } = {}): ActivityDef {
+  return { type: 'chord-play', chords: n(chords), pattern: 'strum', rhythm: o.rhythm, repeat: o.repeat, mode: o.mode ?? 'wait', tempo: o.tempo, time: o.time, title: o.title, prompt: o.prompt };
+}
+
+/** Strum a library song's chords while the app plays the tune. */
+export function strumAlong(song: string, o: { mode?: 'wait' | 'tempo'; tempo?: number; shapes?: string; title?: string; prompt?: string } = {}): ActivityDef {
+  return { type: 'chord-play', song, mode: o.mode ?? 'tempo', tempo: o.tempo, shapes: o.shapes ? n(o.shapes) : undefined, title: o.title, prompt: o.prompt };
+}
+
+export function chordQuiz(chords: string, count: number, o: { reverse?: boolean; title?: string; prompt?: string } = {}): ActivityDef {
+  return { type: 'chord-quiz', chords: n(chords), count, reverse: o.reverse, title: o.title, prompt: o.prompt };
+}
+
 // ---- Common pitch pools ----
 export const P = {
   // Piano RH

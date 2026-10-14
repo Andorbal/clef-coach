@@ -11,7 +11,7 @@ test('screens', async ({ page }) => {
   await page.goto('/#/lesson/piano-treble/pt1-1');
   await solveLesson(page);
   await page.waitForTimeout(1500);
-  for (const [name, path] of [['home', '/'], ['progress', '/progress'], ['songs', '/songs'], ['studio', '/studio'], ['settings', '/settings'], ['track-guitar', '/track/guitar-treble'], ['free', '/studio/free'], ['fretboard', '/studio/fretboard'], ['tuner', '/studio/tuner'], ['scales', '/studio/scales'], ['gym', '/studio/gym'], ['song-player', '/song/p2-fur-elise']] as const) {
+  for (const [name, path] of [['home', '/'], ['progress', '/progress'], ['songs', '/songs'], ['studio', '/studio'], ['settings', '/settings'], ['track-guitar', '/track/guitar-treble'], ['free', '/studio/free'], ['fretboard', '/studio/fretboard'], ['tuner', '/studio/tuner'], ['scales', '/studio/scales'], ['gym', '/studio/gym'], ['metronome', '/studio/metronome'], ['import', '/songs/import'], ['song-studio', '/song/p2-fur-elise']] as const) {
     await page.goto(`/#${path}`);
     await page.waitForTimeout(1300);
     await page.screenshot({ path: `${out}/S-${name}.png`, fullPage: name === 'progress' || name === 'songs' || name === 'settings' });
@@ -27,7 +27,7 @@ test('screens', async ({ page }) => {
   await page.screenshot({ path: `${out}/S-guitar-lesson.png` });
   await page.goto('/#/song/p2-fur-elise');
   await page.waitForTimeout(800);
-  await page.getByRole('button', { name: /^Play$/ }).click();
+  await page.getByRole('button', { name: /^Start$/ }).first().click();
   await page.waitForTimeout(1500);
   await page.screenshot({ path: `${out}/S-fur-elise.png` });
 });
