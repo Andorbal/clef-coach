@@ -283,7 +283,7 @@ export function PlayAlong(props: PlayAlongProps) {
         itemsRef.current.push({ key: `note:${staffClef(rawScore, n.staff, steps[i].tick)}:${pitchToString(n.pitch)}`, correct, ms });
       }
     },
-    [runtime, rawScore],
+    [runtime, rawScore, steps],
   );
 
   // ----- WAIT MODE input -----
@@ -416,7 +416,7 @@ export function PlayAlong(props: PlayAlongProps) {
       return;
     }
     rafRef.current = requestAnimationFrame(tick);
-  }, [secPerTick, gradedSteps, latency, stepTimeMs, tolerance, totalTicks, finish, runtime, rawScore, setPlayheadTick]);
+  }, [secPerTick, gradedSteps, latency, stepTimeMs, tolerance, totalTicks, finish, runtime, rawScore, steps, setPlayheadTick]);
 
   const startTempo = useCallback(async () => {
     await unlockAudio();
