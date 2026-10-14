@@ -6,12 +6,13 @@ import { sfx } from '../../audio/sfx';
 import type { ActivityDef } from '../../curriculum/types';
 import { genRhythm, makeRng } from '../../curriculum/generate';
 import { parsePitch } from '../../music/pitch';
-import { PPQ, beatTicks, measureTicks } from '../../music/rhythm';
+import { PPQ, beatTicks, beatsPerBar, measureTicks } from '../../music/rhythm';
 import { type NoteSpec, type Score, buildVoice, scoreTotalTicks } from '../../music/score';
 import { NotationView, type NoteState } from '../../notation/NotationView';
 import { type ActivityProps, emptyResult, prefsOf } from '../context';
 import type { InstrumentId } from '../../music/instruments';
 import type { Clef } from '../../music/score';
+import { BeatLight, createBeatBus } from '../BeatLight';
 import { InsightVisual } from '../InsightVisual';
 import { useNoteInput } from '../input';
 import { ActivityHeader } from '../PlayAlong';
@@ -80,6 +81,8 @@ export function RhythmTap({ def, ctx, onDone }: ActivityProps<RhythmDef>) {
   const onsets = useMemo(() => notes.filter(n => !n.rest && !n.tiePrev), [notes]);
   const [phase, setPhase] = useState<'ready' | 'countin' | 'playing' | 'done'>('ready');
   const [countIn, setCountIn] = useState<number | null>(null);
+  const meterBeats = beatsPerBar(def.time);
+  const beatBus = useMemo(createBeatBus, []);
   const [states, setStates] = useState<Record<string, NoteState>>({});
   const [tick, setTick] = useState<number | null>(null);
   const [pad, setPad] = useState<'good' | 'bad' | null>(null);
@@ -133,17 +136,17 @@ export function RhythmTap({ def, ctx, onDone }: ActivityProps<RhythmDef>) {
 
   const start = useCallback(async () => {
     await unlockAudio();
-    const beatsPerBar = def.time[1] === 8 && def.time[0] % 3 === 0 ? def.time[0] / 3 : def.time[0];
     const bpm = 60 / (beatTicks(def.time) * secPerTick);
     const m = new Metronome();
     metro.current = m;
     setPhase('countin');
     m.start({
       bpm,
-      beatsPerBar,
+      beatsPerBar: meterBeats,
       countIn: 1,
       onBeat: info => {
-        if (info.isCountIn) setCountIn(beatsPerBar - info.beat);
+        beatBus.emit(info);
+        if (info.isCountIn) setCountIn(info.beat + 1);
         else {
           setCountIn(null);
           setPhase(p => (p === 'countin' ? 'playing' : p));
@@ -152,7 +155,7 @@ export function RhythmTap({ def, ctx, onDone }: ActivityProps<RhythmDef>) {
     });
     t0.current = ctxTimeToPerfNow(m.startTime);
     raf.current = requestAnimationFrame(loop);
-  }, [def.time, secPerTick, loop]);
+  }, [def.time, secPerTick, loop, meterBeats, beatBus]);
 
   useEffect(() => () => {
     metro.current?.stop();
@@ -213,6 +216,7 @@ export function RhythmTap({ def, ctx, onDone }: ActivityProps<RhythmDef>) {
       <div className="stage-paper paper">
         <NotationView score={score} states={states} playheadTick={phase === 'playing' || phase === 'countin' ? tick ?? 0 : null} beatWidth={70} />
         {countIn !== null && <div className="count-in">{countIn}</div>}
+        <BeatLight bus={beatBus} beats={meterBeats} active={phase === 'countin' || phase === 'playing'} />
         {phase === 'ready' && (
           <div className="paper-overlay">
             <button className="btn btn-primary btn-lg" onClick={start}>

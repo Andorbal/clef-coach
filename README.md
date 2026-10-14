@@ -18,7 +18,7 @@ There's no account and no server. Progress lives on your device, and you can exp
 - **Endless content.** A harmony-aware generator writes fresh exercises with exactly the notes, rhythms, keys, leaps and accompaniment patterns each lesson calls for. You don't get "max level" and then refreshers forever: the **Sight-reading Gym** keeps going at your level.
 - **Real feedback**
   - *Wait mode*: the music waits for the right note or chord.
-  - *Tempo mode*: a count-in and metronome, with every note scored for timing.
+  - *Tempo mode*: a count-in in the song's meter (1 2 3 4, or 1 2 3 in 3/4) and a metronome with a flashing beat light you can follow even when the click is drowned out, with every note scored for timing.
   - Wrong notes appear as red "ghost" notes on the staff, so you see what you actually played.
 - **Fingering and sticking everywhere**
   - Standard scale fingerings, and five-finger positions that grow into thumb-under crossings.

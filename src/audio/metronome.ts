@@ -171,7 +171,11 @@ export class Metronome {
     this.nextIndex = 0;
     this._startTime = this.timeOfIndex(this.countInBeats);
     this._running = true;
-    this.schedule();
+    // Queue the first click right now. It is only START_DELAY_S away, and a
+    // busy main thread (a tablet rendering the screen that just started) can
+    // delay the first timer past it – which used to drop the first count-in
+    // beat ("3, 2, 1" in 4/4).
+    this.schedule(START_DELAY_S + 0.01);
     this.timer = setInterval(() => this.schedule(), LOOKAHEAD_MS);
   }
 
@@ -213,11 +217,11 @@ export class Metronome {
     return this.anchorTime + ((i - this.anchorIndex) * 60) / this.bpm;
   }
 
-  private schedule(): void {
+  private schedule(ahead = SCHEDULE_AHEAD_S): void {
     if (!this._running) return;
     const ctx = getAudioContext();
     const now = ctx.currentTime;
-    const horizon = now + SCHEDULE_AHEAD_S;
+    const horizon = now + Math.max(ahead, SCHEDULE_AHEAD_S);
     let guard = 0;
     while (this.timeOfIndex(this.nextIndex) < horizon && guard++ < 64) {
       const idx = this.nextIndex++;

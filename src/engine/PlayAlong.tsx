@@ -7,7 +7,7 @@
  */
 import { AnimatePresence, motion } from 'framer-motion';
 import { Ear, Lightbulb, Play, RotateCcw, Square } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ComponentProps, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { inputManager } from '../audio/input/manager';
 import type { NoteInputEvent } from '../audio/input/types';
 import { Metronome, ctxTimeToPerfNow } from '../audio/metronome';
@@ -17,12 +17,13 @@ import type { FingeringMode } from '../curriculum/types';
 import { type FretMark, type KeyMark, type MarkColor } from '../instruments';
 import { isFretted, isMallet, voiceFor } from '../music/instruments';
 import { type Pitch, pitchToString, spellMidi } from '../music/pitch';
-import { PPQ, beatTicks } from '../music/rhythm';
+import { PPQ, beatTicks, beatsPerBar } from '../music/rhythm';
 import { type PlayStep, type Score, type StepNote, buildSteps, scoreRange, scoreTotalTicks } from '../music/score';
 import { malletHand, malletLabel } from '../music/sticking';
 import { type GhostNote, NotationView, type NoteState } from '../notation/NotationView';
 import type { ItemResult } from '../state/srs';
 import { type ActivityResult, type LessonCtx, ctxTuning, prefsOf, resolveVisibility } from './context';
+import { BeatLight, createBeatBus } from './BeatLight';
 import { applyFingeringMode } from './fingeringView';
 import { InstrumentPanel, pianoRangeFor } from './InstrumentPanel';
 import { useComputerPiano, useNoteInput } from './input';
@@ -72,6 +73,39 @@ interface StepRuntime {
 
 const staffClef = (score: Score, staff: number) => score.staves[staff]?.clef ?? 'treble';
 
+type ContextMarks = { frets?: FretMark[]; keys?: KeyMark[] };
+
+/**
+ * The moving playhead, outside React state: it changes every animation frame,
+ * and only the notation needs it that often. Re-rendering the whole activity
+ * (fretboard or keyboard included) 60 times a second kept tablets busy and warm.
+ */
+function createPlayhead() {
+  let tick: number | null = null;
+  const subs = new Set<() => void>();
+  return {
+    get: (): number | null => tick,
+    set(t: number | null): void {
+      if (t === tick) return;
+      tick = t;
+      for (const cb of subs) cb();
+    },
+    subscribe(cb: () => void): () => void {
+      subs.add(cb);
+      return () => {
+        subs.delete(cb);
+      };
+    },
+  };
+}
+type Playhead = ReturnType<typeof createPlayhead>;
+
+/** NotationView following the playhead (the only part re-rendered on each frame). */
+function LiveNotation({ playhead, follow, ...props }: Omit<ComponentProps<typeof NotationView>, 'playheadTick'> & { playhead: Playhead; follow: boolean }) {
+  const tick = useSyncExternalStore(playhead.subscribe, playhead.get);
+  return <NotationView {...props} playheadTick={follow ? tick ?? 0 : null} />;
+}
+
 export function PlayAlong(props: PlayAlongProps) {
   const { ctx, score: rawScore, mode, onDone } = props;
   const tempo = props.tempo ?? rawScore.tempo ?? 80;
@@ -110,8 +144,16 @@ export function PlayAlong(props: PlayAlongProps) {
   const [stepStates, setStepStates] = useState<Record<number, NoteState>>({});
   const [ghosts, setGhosts] = useState<GhostNote[]>([]);
   const [hint, setHint] = useState(false);
-  const [playheadTick, setPlayheadTick] = useState<number | null>(null);
-  const [countIn, setCountIn] = useState<number | null>(null);
+  const playhead = useMemo(createPlayhead, []);
+  /** Tempo mode: contextAt(playhead), updated only when the marks actually change. */
+  const [tempoContext, setTempoContext] = useState<ContextMarks | null>(null);
+  const contextKeyRef = useRef('');
+  const contextAtRef = useRef(props.contextAt);
+  contextAtRef.current = props.contextAt;
+  /** Count-in number on screen (1, 2, 3, 4 in 4/4); `key` re-animates every beat. */
+  const [countIn, setCountIn] = useState<{ n: number; key: number } | null>(null);
+  const meterBeats = useMemo(() => beatsPerBar(rawScore.time), [rawScore.time]);
+  const beatBus = useMemo(createBeatBus, []);
   const [heldColor, setHeldColor] = useState<Record<number, MarkColor>>({});
   const [, force] = useState(0);
 
@@ -127,6 +169,21 @@ export function PlayAlong(props: PlayAlongProps) {
   const doneRef = useRef(false);
   const seqRef = useRef<{ stop(): void } | null>(null);
   const ghostSeq = useRef(0);
+
+  const setPlayheadTick = useCallback(
+    (t: number | null) => {
+      playhead.set(t);
+      if (mode !== 'tempo') return;
+      const at = contextAtRef.current;
+      const c = at && t !== null ? at(t) : null;
+      const key = c ? JSON.stringify(c) : '';
+      if (key !== contextKeyRef.current) {
+        contextKeyRef.current = key;
+        setTempoContext(c);
+      }
+    },
+    [playhead, mode],
+  );
 
   // skip leading steps that have nothing to play (other hand only) in wait mode
   const advanceFrom = useCallback(
@@ -359,7 +416,7 @@ export function PlayAlong(props: PlayAlongProps) {
       return;
     }
     rafRef.current = requestAnimationFrame(tick);
-  }, [secPerTick, gradedSteps, latency, stepTimeMs, tolerance, totalTicks, finish, runtime, rawScore]);
+  }, [secPerTick, gradedSteps, latency, stepTimeMs, tolerance, totalTicks, finish, runtime, rawScore, setPlayheadTick]);
 
   const startTempo = useCallback(async () => {
     await unlockAudio();
@@ -369,18 +426,19 @@ export function PlayAlong(props: PlayAlongProps) {
     mistakesRef.current = {};
     itemsRef.current = [];
     resetSteps();
-    const beatsPerBar = rawScore.time[1] === 8 && rawScore.time[0] % 3 === 0 ? rawScore.time[0] / 3 : rawScore.time[0];
     const bpm = (60 / (beatTicks(rawScore.time) * secPerTick));
     const metro = new Metronome();
     metroRef.current = metro;
     setPhase('countin');
     metro.start({
       bpm,
-      beatsPerBar,
+      beatsPerBar: meterBeats,
       countIn: props.countInBars ?? 1,
       muted: !(props.metronome ?? ctx.settings.metronome),
       onBeat: info => {
-        if (info.isCountIn) setCountIn(beatsPerBar - info.beat);
+        beatBus.emit(info);
+        // count the bar in as a musician would: 1, 2, 3, 4 in 4/4; 1, 2, 3 in 3/4
+        if (info.isCountIn) setCountIn(c => ({ n: info.beat + 1, key: (c?.key ?? 0) + 1 }));
         else {
           setCountIn(null);
           setPhase(p => (p === 'countin' ? 'playing' : p));
@@ -400,7 +458,7 @@ export function PlayAlong(props: PlayAlongProps) {
     if (autoEvents.length) seqRef.current = synth.playSequence(autoEvents, voice);
     cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(tick);
-  }, [rawScore, secPerTick, ctx.settings.metronome, props.metronome, props.countInBars, runtime, steps, tick, voice, accompVel]);
+  }, [rawScore, secPerTick, meterBeats, beatBus, ctx.settings.metronome, props.metronome, props.countInBars, runtime, steps, tick, voice, accompVel]);
 
   // looping practice: start straight away
   const autoStarted = useRef(false);
@@ -438,7 +496,7 @@ export function PlayAlong(props: PlayAlongProps) {
       rafRef.current = requestAnimationFrame(loop);
     };
     rafRef.current = requestAnimationFrame(loop);
-  }, [phase, steps, secPerTick, voice, totalTicks, mode]);
+  }, [phase, steps, secPerTick, voice, totalTicks, mode, setPlayheadTick]);
 
   // ----- view model -----
   const states = useMemo(() => {
@@ -457,8 +515,9 @@ export function PlayAlong(props: PlayAlongProps) {
 
   const mallets = isMallet(instrument);
   const showHint = hint || !!props.alwaysHint;
-  const tickNow = mode === 'wait' ? current?.tick : playheadTick ?? undefined;
-  const context = useMemo(() => (props.contextAt && tickNow !== undefined ? props.contextAt(tickNow) : null), [props.contextAt, tickNow]); // eslint-disable-line react-hooks/exhaustive-deps
+  const waitTick = mode === 'wait' ? current?.tick : undefined;
+  const waitContext = useMemo(() => (props.contextAt && waitTick !== undefined ? props.contextAt(waitTick) : null), [props.contextAt, waitTick]); // eslint-disable-line react-hooks/exhaustive-deps
+  const context = mode === 'wait' ? waitContext : tempoContext;
   const keyMarks: KeyMark[] = useMemo(() => {
     const ctxKeys = context?.keys ?? [];
     if (!showHint || !currentRt) return ctxKeys;
@@ -503,11 +562,12 @@ export function PlayAlong(props: PlayAlongProps) {
     <div className="activity playalong" data-expected={currentRt?.required.map(n => n.midi).join(',')} data-phase={phase}>
       <ActivityHeader title={props.title} prompt={props.prompt ?? defaultPrompt(mode, props.hands)} badge={props.badge} progress={progress} />
       <div className="stage-paper paper">
-        <NotationView
+        <LiveNotation
+          playhead={playhead}
+          follow={phase === 'preview' || (mode === 'tempo' && (phase === 'playing' || phase === 'countin'))}
           score={score}
           states={states}
           focusId={phase === 'playing' && mode === 'wait' ? focusId : undefined}
-          playheadTick={phase === 'preview' || (mode === 'tempo' && (phase === 'playing' || phase === 'countin')) ? playheadTick ?? 0 : null}
           fingering={fingeringMode !== 'none'}
           strings={fretted && fingeringMode !== 'none'}
           noteNames={showNames ? 'all' : hint ? 'focus' : 'none'}
@@ -517,17 +577,20 @@ export function PlayAlong(props: PlayAlongProps) {
         />
         <AnimatePresence>
           {countIn !== null && (
-            <motion.div key={countIn} className="count-in" initial={{ scale: 1.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ opacity: 0 }}>
-              {countIn}
+            <motion.div key={countIn.key} className="count-in" initial={{ scale: 1.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ opacity: 0 }}>
+              {countIn.n}
             </motion.div>
           )}
         </AnimatePresence>
+        {mode === 'tempo' && <BeatLight bus={beatBus} beats={meterBeats} active={phase === 'countin' || phase === 'playing'} />}
         {mode === 'tempo' && phase === 'ready' && (
           <div className="paper-overlay">
             <button className="btn btn-primary btn-lg" onClick={startTempo}>
               <Play size={18} /> Start — {Math.round(tempo)} bpm
             </button>
-            <span className="faint">A one-bar count-in will play first.</span>
+            <span className="faint">
+              {countInText(props.countInBars ?? 1, meterBeats)}
+            </span>
           </div>
         )}
       </div>
@@ -568,6 +631,11 @@ export function PlayAlong(props: PlayAlongProps) {
       />
     </div>
   );
+}
+
+function countInText(bars: number, beats: number): string {
+  const count = Array.from({ length: beats }, (_, i) => i + 1).join(' ');
+  return `${bars === 1 ? 'A one-bar' : bars === 2 ? 'A two-bar' : `A ${bars}-bar`} count-in plays first: ${count}.`;
 }
 
 function defaultPrompt(mode: 'wait' | 'tempo', hands?: 'R' | 'L' | 'both') {
