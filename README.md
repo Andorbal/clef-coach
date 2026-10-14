@@ -37,7 +37,7 @@ There's no account and no server. Progress lives on your device, and you can exp
   - **trouble spots** found from your mistakes, **lyrics** under each phrase, the song's **chords** drawn for your instrument;
   - a **goal date** (“Silent Night by Christmas Eve”) that paces how much to practise each day.
 - **Import your own songs**: MusicXML (from MuseScore, Finale, Sibelius, Dorico, Flat, Noteflight or any sheet-music scanner), MIDI, or Clef Coach song files. **Scan sheet music or tab with Claude** using your own Anthropic API key, or use the prompt with any AI assistant. Every file is checked bar by bar with errors that say exactly what to fix. See [docs/song-format.md](docs/song-format.md).
-- **Chord chart.** Any chord on every instrument — chord boxes for guitar, ukulele and bass, marked keys for piano, marked bars for mallets — with fingers, intervals or note names. On a tablet or laptop, compare several chords side by side on several instruments at once (guitar over piano, say), or see every voicing of one chord. Tap to hear.
+- **Chord chart.** Any chord on every instrument — chord boxes for guitar, ukulele and bass, marked keys for piano, marked bars for mallets — with fingers, intervals or note names, and each voicing written out in standard notation in the clef that instrument reads. On a tablet or laptop, compare several chords side by side on several instruments at once (guitar over piano, say), or see every voicing of one chord. Tap to hear.
 - **Studio**
   - Free Play: play anything and see it appear on the staff, with chord names.
   - Fretboard Explorer (guitar, ukulele, bass), a chromatic tuner, a scales-and-fingering reference and a sight-reading gym for every instrument.

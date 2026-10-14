@@ -485,3 +485,19 @@
 .song-chord-row:has(.chord-pic-keys) {
   grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
 }
+
+/* "Notation" is a way of showing every instrument, not an instrument: set it apart */
+.cc-notation-chip {
+  position: relative;
+  margin-left: 9px;
+}
+
+.cc-notation-chip::before {
+  content: '';
+  position: absolute;
+  left: -9px;
+  top: 22%;
+  bottom: 22%;
+  width: 1px;
+  background: var(--border-strong);
+}

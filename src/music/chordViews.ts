@@ -6,7 +6,7 @@
 import { type ChordSymbol, chordDegreeLabels, parseChordSymbol, rootLabel, rootPc, spellChordTone } from './chords';
 import { type FrettedVoicing, bassShapes, chartString, frettedVoicings, malletVoicings, parseChart, pianoVoicings } from './chordbook';
 import { type InstrumentId, type InstrumentPrefs, isFretted, malletVariant, tuningFor } from './instruments';
-import { spellMidi, stepLabel } from './pitch';
+import { type Pitch, type Step, STEP_SEMIS, spellMidi, stepLabel } from './pitch';
 
 export type LabelMode = 'fingers' | 'degrees' | 'notes';
 export type PianoHand = 'R' | 'L';
@@ -15,6 +15,9 @@ export interface FretNote {
   /** 1 = highest course */
   string: number;
   fret: number;
+  /** sounding pitch, and how it is written as a tone of the chord */
+  midi: number;
+  pitch: Pitch;
   /** fretting finger 1–4, 0 open */
   finger: number | null;
   degree: string;
@@ -39,6 +42,8 @@ export interface FrettedView {
 
 export interface KeyNote {
   midi: number;
+  /** spelled as a tone of the chord (written pitch for mallets) */
+  pitch: Pitch;
   hand: 'R' | 'L';
   /** piano finger 1–5 */
   finger?: number;
@@ -72,6 +77,19 @@ export function toneInfo(chord: ChordSymbol, pc: number): { degree: string; name
   if (chord.bass && rootPc(chord.bass) === pc) return { degree: INTERVALS[mod12(pc - r)], name: rootLabel(chord.bass) };
   const p = spellMidi(60 + pc, chord.root.alter < 0 ? -3 : 0);
   return { degree: INTERVALS[mod12(pc - r)], name: stepLabel(p.step, p.alter) };
+}
+
+/** Spell a MIDI note as a tone of the chord, with its octave: C dim7's B𝄫, not A. */
+export function spellInChord(chord: ChordSymbol, midi: number): Pitch {
+  const at = (step: Step, alter: number): Pitch => ({ step, alter, octave: Math.round((midi - STEP_SEMIS[step] - alter) / 12) - 1 });
+  const r = rootPc(chord.root);
+  const tone = chord.quality.tones.find(([s]) => mod12(r + s) === mod12(midi));
+  if (tone) {
+    const t = spellChordTone(chord.root, tone);
+    return at(t.step, t.alter);
+  }
+  if (chord.bass && rootPc(chord.bass) === mod12(midi)) return at(chord.bass.step, chord.bass.alter);
+  return spellMidi(midi, chord.root.alter < 0 ? -3 : 0);
 }
 
 function stringNamesOf(tuning: readonly number[]): string[] {
@@ -139,7 +157,10 @@ function frettedViews(chord: ChordSymbol, instrument: InstrumentId, prefs: Instr
   const out: FrettedView[] = [];
   if (instrument === 'bass') {
     for (const s of bassShapes(chord, tuning)) {
-      const notes = s.positions.map(p => ({ string: p.string, fret: p.fret, finger: p.finger, ...toneInfo(chord, mod12(tuning[p.string - 1] + p.fret)) }));
+      const notes = s.positions.map(p => {
+        const midi = tuning[p.string - 1] + p.fret;
+        return { string: p.string, fret: p.fret, finger: p.finger, midi, pitch: spellInChord(chord, midi), ...toneInfo(chord, mod12(midi)) };
+      });
       const fretted = notes.filter(x => x.fret > 0).map(x => x.fret);
       const lo = fretted.length ? Math.min(...fretted) : 1;
       const hi = fretted.length ? Math.max(...fretted) : 1;
@@ -163,7 +184,7 @@ function frettedViews(chord: ChordSymbol, instrument: InstrumentId, prefs: Instr
     const muted: number[] = [];
     v.frets.forEach((f, i) => {
       if (f === null) muted.push(i + 1);
-      else notes.push({ string: i + 1, fret: f, finger: v.fingers[i], ...toneInfo(chord, mod12(tuning[i] + f)) });
+      else notes.push({ string: i + 1, fret: f, finger: v.fingers[i], midi: tuning[i] + f, pitch: spellInChord(chord, tuning[i] + f), ...toneInfo(chord, mod12(tuning[i] + f)) });
     });
     // strum from the lowest-pitched string up (re-entrant ukulele: string 4 first)
     const strum = [...notes].sort((a, b) => b.string - a.string).map(x => tuning[x.string - 1] + x.fret);
@@ -187,7 +208,7 @@ function pianoViews(chord: ChordSymbol, hand: PianoHand): KeysView[] {
   return pianoVoicings(chord).map(v => {
     const both = v.lh.length < v.rh.length;
     const notes: KeyNote[] = [];
-    const add = (midis: number[], fingers: number[], h: 'R' | 'L') => midis.forEach((m, i) => notes.push({ midi: m, hand: h, finger: fingers[i], ...toneInfo(chord, mod12(m)) }));
+    const add = (midis: number[], fingers: number[], h: 'R' | 'L') => midis.forEach((m, i) => notes.push({ midi: m, pitch: spellInChord(chord, m), hand: h, finger: fingers[i], ...toneInfo(chord, mod12(m)) }));
     if (both) {
       add(v.lh, v.lhFingers, 'L');
       add(v.rh, v.rhFingers, 'R');
@@ -203,7 +224,7 @@ function malletViews(chord: ChordSymbol, prefs: InstrumentPrefs): KeysView[] {
   const low = Math.max(v.low, 48);
   const high = Math.min(v.high, 88);
   return malletVoicings(chord, { low, high }).map(mv => {
-    const notes = mv.midis.map((m, i) => ({ midi: m, hand: (mv.mallets[i] <= 2 ? 'L' : 'R') as 'L' | 'R', mallet: mv.mallets[i], ...toneInfo(chord, mod12(m)) }));
+    const notes = mv.midis.map((m, i) => ({ midi: m, pitch: spellInChord(chord, m), hand: (mv.mallets[i] <= 2 ? 'L' : 'R') as 'L' | 'R', mallet: mv.mallets[i], ...toneInfo(chord, mod12(m)) }));
     return { kind: 'keys', label: `${mv.name}${mv.count === 4 ? '' : ' · two mallets'}`, notes, midis: mv.midis, arpeggio: mv.name.startsWith('Arpeggio'), mallets: mv.count };
   });
 }

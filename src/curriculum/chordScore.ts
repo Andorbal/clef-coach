@@ -13,11 +13,11 @@
  */
 import { getSong } from '../content/songs';
 import { bassShapes, malletVoicings, pianoVoicings } from '../music/chordbook';
-import { frettedVoicingsFor, parseChordRef } from '../music/chordViews';
-import { type ChordSymbol, parseChordSymbol, rootPc, spellChordTone } from '../music/chords';
+import { frettedVoicingsFor, parseChordRef, spellInChord } from '../music/chordViews';
+import { type ChordSymbol, parseChordSymbol, rootPc } from '../music/chords';
 import { type InstrumentId, type InstrumentPrefs, isFretted, malletVariant, tuningFor } from '../music/instruments';
 import { type SongDef, songToScore } from '../music/parse';
-import { STEP_SEMIS, type Step, spellMidi } from '../music/pitch';
+import { pitchToString } from '../music/pitch';
 import { type TimeSig, beatTicks, measureTicks, splitTicks } from '../music/rhythm';
 import { type Clef, type Score, measureStartTick } from '../music/score';
 import { parseChordTimeline } from '../songs/format';
@@ -41,24 +41,9 @@ export interface ChordShape {
 }
 
 const mod12 = (x: number) => ((x % 12) + 12) % 12;
-const ACC: Record<number, string> = { [-2]: 'bb', [-1]: 'b', 0: '', 1: '#', 2: '##' };
-
-function named(step: Step, alter: number, midi: number): string {
-  const octave = Math.round((midi - STEP_SEMIS[step] - alter) / 12) - 1;
-  return `${step}${ACC[alter] ?? ''}${octave}`;
-}
-
-/** Spell a MIDI note as a tone of the chord (C dim7's B𝄫, not A). */
+/** Spell a MIDI note as a tone of the chord (C dim7's B𝄫, not A), as a text-notation pitch. */
 export function chordNoteName(chord: ChordSymbol, midi: number): string {
-  const r = rootPc(chord.root);
-  const tone = chord.quality.tones.find(([s]) => mod12(r + s) === mod12(midi));
-  if (tone) {
-    const t = spellChordTone(chord.root, tone);
-    return named(t.step, t.alter, midi);
-  }
-  if (chord.bass && rootPc(chord.bass) === mod12(midi)) return named(chord.bass.step, chord.bass.alter, midi);
-  const p = spellMidi(midi, chord.root.alter < 0 ? -3 : 0);
-  return named(p.step, p.alter, midi);
+  return pitchToString(spellInChord(chord, midi));
 }
 
 /** The first (easiest) voicing of a chord on an instrument, as notes with fingers and strings. */

@@ -1,8 +1,10 @@
 /**
  * One chord on one instrument: a chord box (guitar, ukulele, bass), marked piano keys
- * or marked mallet bars, with a voicing switcher. Tapping the picture plays it.
+ * or marked mallet bars, with a voicing switcher and, optionally, the same notes written
+ * on the staff. Tapping the picture (or the staff) plays it.
  */
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useMemo } from 'react';
 import { unlockAudio } from '../audio/context';
 import { synth } from '../audio/synth';
 import { ChordDiagram } from './ChordDiagram';
@@ -12,12 +14,15 @@ import type { KeyMark } from './PianoKeyboard';
 import { type InstrumentId, type InstrumentPrefs, malletVariant, voiceFor } from '../music/instruments';
 import { malletLabel } from '../music/sticking';
 import type { ChordView, FretNote, KeyNote, LabelMode } from '../music/chordViews';
+import { chordViewScore } from '../music/chordNotation';
+import { NotationView } from '../notation/NotationView';
 import './ChordCell.css';
 
 export type CellSize = 'sm' | 'md' | 'lg';
 
 const DIAGRAM_W: Record<CellSize, number> = { sm: 118, md: 164, lg: 230 };
 const KEYS_H: Record<CellSize, number> = { sm: 84, md: 112, lg: 150 };
+const STAFF_H: Record<CellSize, number> = { sm: 96, md: 120, lg: 156 };
 
 /** Play a voicing: strum a fretted chord low to high, roll an arpeggio, or strike it. */
 export async function playView(view: ChordView, instrument: InstrumentId, prefs: InstrumentPrefs): Promise<void> {
@@ -135,6 +140,32 @@ export function ChordPicture({
   );
 }
 
+/**
+ * The picture's notes written on the staff, in the clef the instrument reads (see
+ * chordViewScore): fingering or sticking with "Fingers", note names with "Notes".
+ */
+export function ChordStaff({ view, instrument, prefs, mode, size = 'md', onPlay }: { view: ChordView; instrument: InstrumentId; prefs: InstrumentPrefs; mode: LabelMode; size?: CellSize; onPlay?: () => void }) {
+  const score = useMemo(() => chordViewScore(view, instrument, prefs, { fingers: mode === 'fingers' }), [view, instrument, prefs, mode]);
+  if (!score) return null;
+  const play = () => {
+    void playView(view, instrument, prefs);
+    onPlay?.();
+  };
+  return (
+    <div
+      className={`chord-staff paper size-${size}`}
+      style={{ height: STAFF_H[size] + (score.staves.length > 1 ? STAFF_H[size] * 0.55 : 0) }}
+      onClick={play}
+      onKeyDown={e => e.key === 'Enter' && play()}
+      role="button"
+      tabIndex={0}
+      aria-label={`${view.label}, written on the staff. Play it`}
+    >
+      <NotationView score={score} layout="center" timeSignature={false} barlines={false} beatWidth={view.arpeggio ? 26 : 14} fingering={mode === 'fingers'} noteNames={mode === 'notes' ? 'all' : 'none'} showPlayhead={false} maxScale={2} />
+    </div>
+  );
+}
+
 /** A voicing with ‹ › to step through the others. */
 export function ChordCell({
   views,
@@ -146,6 +177,7 @@ export function ChordCell({
   size = 'md',
   leftHanded,
   onPlay,
+  notation,
 }: {
   views: ChordView[];
   index: number;
@@ -156,6 +188,8 @@ export function ChordCell({
   size?: CellSize;
   leftHanded?: boolean;
   onPlay?: () => void;
+  /** also write the voicing on the staff */
+  notation?: boolean;
 }) {
   if (!views.length) return <div className="chord-cell chord-cell-empty faint">No voicing on this instrument</div>;
   const i = Math.min(index, views.length - 1);
@@ -163,6 +197,7 @@ export function ChordCell({
   return (
     <div className={`chord-cell size-${size}`}>
       <ChordPicture view={view} instrument={instrument} prefs={prefs} mode={mode} size={size} leftHanded={leftHanded} onPlay={onPlay} />
+      {notation && <ChordStaff view={view} instrument={instrument} prefs={prefs} mode={mode} size={size} onPlay={onPlay} />}
       <div className="chord-cell-nav">
         <button className="btn btn-icon btn-ghost btn-xs" onClick={() => onIndex((i - 1 + views.length) % views.length)} disabled={views.length < 2} aria-label="Previous voicing">
           <ChevronLeft size={16} />

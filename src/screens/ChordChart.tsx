@@ -4,9 +4,10 @@
  * Pick a root and a quality (or type a symbol), collect a few chords, and choose the
  * instruments to show. On a large screen the chart lays the chords side by side, one row
  * per instrument (say guitar over piano), or shows every voicing of one chord. On a phone
- * it shows one chord on one instrument at a time. Tap any picture to hear it.
+ * it shows one chord on one instrument at a time. Tap any picture to hear it. "Notation"
+ * writes every picture's notes on the staff, in the clef that instrument reads.
  */
-import { ArrowDown, ArrowUp, Play, Plus, Square, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Music, Play, Plus, Square, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { InstrumentIcon, useMyInstruments } from '../components/InstrumentIcon';
@@ -75,6 +76,8 @@ export default function ChordChart() {
     const list = (params.get('instruments') ?? '').split(',').filter((s): s is InstrumentId => (INSTRUMENT_IDS as string[]).includes(s));
     return list.length ? list : mine;
   });
+  /** write each voicing on the staff too */
+  const [notation, setNotation] = useState(() => params.get('notation') === '1');
   const [mode, setMode] = useState<LabelMode>('fingers');
   const [hand, setHand] = useState<PianoHand>('R');
   const [layout, setLayout] = useState<'compare' | 'voicings'>('compare');
@@ -91,8 +94,8 @@ export default function ChordChart() {
   const view: 'compare' | 'voicings' = wide && chords.length > 1 ? layout : 'voicings';
 
   useEffect(() => {
-    setParams({ chords: chords.join(','), instruments: instruments.join(',') }, { replace: true });
-  }, [chords, instruments, setParams]);
+    setParams({ chords: chords.join(','), instruments: instruments.join(','), ...(notation ? { notation: '1' } : {}) }, { replace: true });
+  }, [chords, instruments, notation, setParams]);
 
   useEffect(() => () => playTimer.current.forEach(t => clearTimeout(t)), []);
 
@@ -217,6 +220,9 @@ export default function ChordChart() {
                 <InstrumentIcon instrument={i} size={16} /> {instrumentDef(i).short}
               </button>
             ))}
+            <button className={`chip-btn cc-notation-chip ${notation ? 'on' : ''}`} onClick={() => setNotation(n => !n)} aria-pressed={notation} title="Write each chord on the staff too">
+              <Music size={16} /> Notation
+            </button>
           </div>
         }
       />
@@ -437,6 +443,7 @@ export default function ChordChart() {
                     size={chords.length > 6 ? 'sm' : 'md'}
                     leftHanded={left}
                     onPlay={() => setFocus(i)}
+                    notation={notation}
                   />
                 </div>
               ))}
@@ -472,7 +479,7 @@ export default function ChordChart() {
                   <span className="faint">{views.length} voicing{views.length === 1 ? '' : 's'}</span>
                 </div>
                 <div className={`cc-inst-body ${views[0]?.kind === 'keys' ? 'keys' : ''}`}>
-                  <ChordCell views={views} index={sel} onIndex={n => setPick(chords[focusIdx], inst, n)} instrument={inst} prefs={prefs} mode={mode} size="lg" leftHanded={left} />
+                  <ChordCell views={views} index={sel} onIndex={n => setPick(chords[focusIdx], inst, n)} instrument={inst} prefs={prefs} mode={mode} size="lg" leftHanded={left} notation={notation} />
                   {wide && views.length > 1 && (
                     <div className={`cc-thumbs ${views[0]?.kind === 'keys' ? 'keys' : ''}`}>
                       {views.map((v, i) => (
