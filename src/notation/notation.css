@@ -113,10 +113,20 @@
 
 /* ---------- overlay ---------- */
 .playhead {
-  fill: rgba(229, 165, 75, 0.16);
-  stroke: rgba(229, 165, 75, 0.35);
-  stroke-width: 1;
-  transition: x 0.45s var(--ease-out);
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  background: rgba(229, 165, 75, 0.16);
+  border: 1px solid rgba(229, 165, 75, 0.35);
+  pointer-events: none;
+  /* moves with the music (same easing as .notation-content) */
+  transition: transform 0.55s var(--ease-out);
+  will-change: transform;
+}
+
+.playhead.no-ease {
+  transition: none;
 }
 
 .note-name rect {

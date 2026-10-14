@@ -95,9 +95,23 @@ p {
 .ambient .orb {
   position: absolute;
   border-radius: 50%;
-  filter: blur(80px);
   opacity: 0.35;
+  /* A soft glow drawn as a gradient (the profile of a disc under an 80px blur)
+     rather than with filter: blur, which the GPU would redo on every frame of the drift. */
+  background: radial-gradient(
+    closest-side,
+    var(--orb) 0%,
+    color-mix(in srgb, var(--orb) 92%, transparent) 35%,
+    color-mix(in srgb, var(--orb) 50%, transparent) 60%,
+    color-mix(in srgb, var(--orb) 16%, transparent) 80%,
+    transparent 100%
+  );
   animation: drift 28s ease-in-out infinite alternate;
+}
+
+/* Practice screens (usePracticeFocus): the background holds still. */
+.practicing .ambient .orb {
+  animation-play-state: paused;
 }
 
 @keyframes drift {

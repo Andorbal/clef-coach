@@ -90,8 +90,9 @@ export default function App() {
   return (
     <HashRouter>
       <div className="ambient">
-        <div className="orb" style={{ width: 520, height: 520, left: '-8%', top: '-12%', background: 'rgba(120,92,255,0.5)' }} />
-        <div className="orb" style={{ width: 420, height: 420, right: '-6%', top: '20%', background: 'rgba(244,201,122,0.35)', animationDelay: '-9s' }} />
+        {/* 160px larger than the glowing disc on every side: room for its soft edge */}
+        <div className="orb" style={{ width: 840, height: 840, left: 'calc(-8% - 160px)', top: 'calc(-12% - 160px)', ['--orb' as string]: 'rgba(120,92,255,0.5)' }} />
+        <div className="orb" style={{ width: 740, height: 740, right: 'calc(-6% - 160px)', top: 'calc(20% - 160px)', ['--orb' as string]: 'rgba(244,201,122,0.35)', animationDelay: '-9s' }} />
       </div>
       <ScrollToTop />
       <AudioSettingsSync />

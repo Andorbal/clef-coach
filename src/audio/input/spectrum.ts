@@ -409,11 +409,33 @@ export function verifyChord(
 export interface PitchSupportOptions {
   /** Per-bin noise magnitude (default: estimated from the spectrum). */
   noiseFloor?: number;
+  /** Strongest magnitude in the analysed band (default: measured). */
+  bandPeak?: number;
   /** Required peak height over the noise floor (default 4 ≈ 12 dB). */
   floorRatio?: number;
   /** …and over the strongest peak in the band, in dB (default −35). */
   relativeDb?: number;
   centsTolerance?: number;
+}
+
+function bandPeak(band: Float32Array): number {
+  let top = 0;
+  for (let k = 0; k < band.length; k++) if (band[k] > top) top = band[k];
+  return top;
+}
+
+/**
+ * Noise floor and strongest peak of a spectrum's analysed band, as
+ * {@link hasPitchSupport} measures them – compute once per spectrum and pass
+ * them in when checking several notes on the same frame.
+ */
+export function pitchSupportStats(magnitudes: Float32Array, sampleRate: number, fftSize: number): { noiseFloor: number; bandPeak: number } {
+  const binHz = sampleRate / fftSize;
+  const maxF = Math.min(5000, sampleRate * 0.45);
+  const kLo = Math.max(1, Math.floor(50 / binHz));
+  const kHi = Math.min(magnitudes.length - 1, Math.ceil(maxF / binHz));
+  const band = magnitudes.subarray(kLo, kHi);
+  return { noiseFloor: percentile(band, 0.35), bandPeak: bandPeak(band) };
 }
 
 /**
@@ -436,8 +458,7 @@ export function hasPitchSupport(
   const kHi = Math.min(magnitudes.length - 1, Math.ceil(maxF / binHz));
   const band = magnitudes.subarray(kLo, kHi);
   const floor = Math.max(opts.noiseFloor ?? percentile(band, 0.35), 1e-7);
-  let top = 0;
-  for (let k = 0; k < band.length; k++) if (band[k] > top) top = band[k];
+  const top = opts.bandPeak ?? bandPeak(band);
   const need = Math.max(floor * (opts.floorRatio ?? 4), top * Math.pow(10, (opts.relativeDb ?? -35) / 20));
   const f0 = midiFreq(midi);
   const tol = opts.centsTolerance ?? 40;

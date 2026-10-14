@@ -4,7 +4,7 @@
  * the level, high-frequency level and YIN pitch for the NoteTracker, plus a
  * lazily computed magnitude spectrum for spectral checks.
  */
-import { computeSpectrum, hasPitchSupport } from './spectrum';
+import { computeSpectrum, hasPitchSupport, pitchSupportStats } from './spectrum';
 import { detectPitch, rms } from './yin';
 import type { PitchResult } from './yin';
 import type { PitchFrame } from './tracker';
@@ -31,6 +31,8 @@ export class FrameAnalyzer {
   private sampleRate = 48000;
   private readonly spec: Float32Array;
   private specValid = false;
+  /** Noise floor / band peak of {@link spec} (one sort per frame, however many notes are checked). */
+  private stats: { noiseFloor: number; bandPeak: number } | null = null;
 
   constructor(opts: FrameAnalyzerOptions = {}) {
     this.pitchWindow = opts.pitchWindow ?? 4096;
@@ -62,6 +64,7 @@ export class FrameAnalyzer {
     this.buf = buf;
     this.sampleRate = sampleRate;
     this.specValid = false;
+    this.stats = null;
     const n = buf.length;
     const lw = Math.min(this.levelWindow, n - 1);
     const level = rms(buf, n - lw, n);
@@ -101,8 +104,11 @@ export class FrameAnalyzer {
   }
 
   /** Does the current frame's spectrum support `midi` (fundamental/octave peak present)? */
-  hasSupport = (midi: number): boolean =>
-    hasPitchSupport(this.spectrum(), this.sampleRate, this.fftSize, midi);
+  hasSupport = (midi: number): boolean => {
+    const spec = this.spectrum();
+    this.stats ??= pitchSupportStats(spec, this.sampleRate, this.fftSize);
+    return hasPitchSupport(spec, this.sampleRate, this.fftSize, midi, this.stats);
+  };
 
   /**
    * An unsupported pitch squeezed between two supported notes up to a minor

@@ -44,8 +44,12 @@ interface Scratch {
   m: number;
   re: Float64Array;
   im: Float64Array;
+  /** Half-size buffers for the inverse transform (see detectPitch). */
   pr: Float64Array;
   pi: Float64Array;
+  /** e^(+2πik/m), k < m/2. */
+  cosT: Float64Array;
+  sinT: Float64Array;
   x: Float64Array;
   cs: Float64Array;
   d: Float64Array;
@@ -57,17 +61,24 @@ const scratchBySize = new Map<number, Scratch>();
 function getScratch(m: number): Scratch {
   let s = scratchBySize.get(m);
   if (!s) {
+    const h = m >> 1;
     s = {
       m,
       re: new Float64Array(m),
       im: new Float64Array(m),
-      pr: new Float64Array(m),
-      pi: new Float64Array(m),
+      pr: new Float64Array(h),
+      pi: new Float64Array(h),
+      cosT: new Float64Array(h),
+      sinT: new Float64Array(h),
       x: new Float64Array(m),
       cs: new Float64Array(m + 1),
       d: new Float64Array(m),
       dp: new Float64Array(m),
     };
+    for (let k = 0; k < h; k++) {
+      s.cosT[k] = Math.cos((2 * Math.PI * k) / m);
+      s.sinT[k] = Math.sin((2 * Math.PI * k) / m);
+    }
     scratchBySize.set(m, s);
   }
   return s;
@@ -113,7 +124,7 @@ export function detectPitch(
   mean /= n;
   const m = nextPow2(n);
   const s = getScratch(m);
-  const { re, im, pr, pi, x, cs, d, dp } = s;
+  const { re, im, pr, pi, cosT, sinT, x, cs, d, dp } = s;
   let energy = 0;
   for (let i = 0; i < n; i++) {
     const v = buf[i] - mean;
@@ -122,31 +133,57 @@ export function detectPitch(
   }
   if (!(Math.sqrt(energy / n) >= minRms)) return null; // also catches NaN
 
-  // --- Cross term c(τ) = Σ_{j<W} x[j]·x[j+τ] via one complex FFT ----------
+  // --- Cross term c(τ) = Σ_{j<W} x[j]·x[j+τ] via FFTs ---------------------
   // Pack a = x[0..W) (zero padded) into the real part and b = x into the
-  // imaginary part, split the spectra, multiply conj(A)·B, inverse FFT.
+  // imaginary part, split the spectra and form P = conj(A)·B. c is real, so P
+  // is Hermitian and the inverse needs only a half-size complex FFT: with
+  // E[k] = (P[k] + P[k+h])/2 and O[k] = (P[k] − P[k+h])·e^(+2πik/m)/2
+  // (the spectra of c's even and odd samples), IFFT_h(E + i·O) = c[2n] + i·c[2n+1].
   for (let i = 0; i < m; i++) {
     re[i] = i < w ? x[i] : 0;
     im[i] = i < n ? x[i] : 0;
   }
-  const fft = getFFT(m);
-  fft.transform(re, im, false);
-  for (let k = 0; k < m; k++) {
-    const k2 = (m - k) & (m - 1);
-    const zr = re[k];
-    const zi = im[k];
-    const cr = re[k2];
-    const ci = -im[k2]; // conj(Z[M-k])
-    const ar = (zr + cr) * 0.5;
-    const ai = (zi + ci) * 0.5;
-    const br = (zi - ci) * 0.5;
-    const bi = -(zr - cr) * 0.5;
-    // conj(A)·B
-    pr[k] = ar * br + ai * bi;
-    pi[k] = ar * bi - ai * br;
+  getFFT(m).transform(re, im, false);
+  const h = m >> 1;
+  for (let k = 0; k < h; k++) {
+    // P[k]
+    let k2 = (m - k) & (m - 1);
+    let zr = re[k];
+    let zi = im[k];
+    let cr = re[k2];
+    let ci = -im[k2]; // conj(Z[M-k])
+    let ar = (zr + cr) * 0.5;
+    let ai = (zi + ci) * 0.5;
+    let br = (zi - ci) * 0.5;
+    let bi = -(zr - cr) * 0.5;
+    const p0r = ar * br + ai * bi; // conj(A)·B
+    const p0i = ar * bi - ai * br;
+    // P[k + h]
+    const kh = k + h;
+    k2 = (m - kh) & (m - 1);
+    zr = re[kh];
+    zi = im[kh];
+    cr = re[k2];
+    ci = -im[k2];
+    ar = (zr + cr) * 0.5;
+    ai = (zi + ci) * 0.5;
+    br = (zi - ci) * 0.5;
+    bi = -(zr - cr) * 0.5;
+    const p1r = ar * br + ai * bi;
+    const p1i = ar * bi - ai * br;
+    const er = (p0r + p1r) * 0.5;
+    const ei = (p0i + p1i) * 0.5;
+    const dr = (p0r - p1r) * 0.5;
+    const di = (p0i - p1i) * 0.5;
+    const c = cosT[k];
+    const sn = sinT[k];
+    const or = dr * c - di * sn;
+    const oi = dr * sn + di * c;
+    pr[k] = er - oi; // E + i·O
+    pi[k] = ei + or;
   }
-  fft.transform(pr, pi, true);
-  const invM = 1 / m;
+  getFFT(h).transform(pr, pi, true);
+  const invH = 1 / h;
 
   // --- Energy terms via prefix sums --------------------------------------
   cs[0] = 0;
@@ -159,7 +196,8 @@ export function detectPitch(
   let running = 0;
   for (let tau = 1; tau <= tauMax; tau++) {
     const e2 = cs[tau + w] - cs[tau];
-    let v = e1 + e2 - 2 * pr[tau] * invM;
+    const c = (tau & 1 ? pi[tau >> 1] : pr[tau >> 1]) * invH;
+    let v = e1 + e2 - 2 * c;
     if (v < 0) v = 0;
     d[tau] = v;
     running += v;

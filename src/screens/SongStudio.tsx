@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { unlockAudio } from '../audio/context';
 import { applyInputMode } from '../components/InputControl';
+import { usePracticeFocus } from '../components/usePracticeFocus';
 import { useInstrumentAudio } from '../audio/instrument';
 import { synth } from '../audio/synth';
 import { InputChip } from '../components/InputControl';
@@ -107,6 +108,7 @@ export default function SongStudio() {
   const profile = useProfile();
   const device = useDevice();
   const navigate = useNavigate();
+  usePracticeFocus();
   const recordOutcome = useApp(s => s.recordOutcome);
   const recordRun = useApp(s => s.recordSongRun);
   const startSong = useApp(s => s.startSong);

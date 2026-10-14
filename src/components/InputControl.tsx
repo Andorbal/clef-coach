@@ -10,6 +10,21 @@ import type { InputMode } from '../state/types';
 import { Modal } from './ui';
 import './InputControl.css';
 
+/**
+ * The mic level for a meter, in steps a meter can actually show: an unchanged
+ * step doesn't re-render (the input chip sits in frosted headers, where every
+ * repaint also redoes the blur behind it).
+ */
+function useMicLevel(active: boolean): number {
+  const [level, setLevel] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const t = setInterval(() => setLevel(Math.round(micInput.getLevel() * 24) / 24), 80);
+    return () => clearInterval(t);
+  }, [active]);
+  return level;
+}
+
 export function useInputStatus() {
   const [, setN] = useState(0);
   useEffect(() => inputManager.onStatus(() => setN(n => n + 1)), []);
@@ -31,12 +46,7 @@ export function InputChip({ instrument }: { instrument: InstrumentId }) {
   const device = useDevice();
   const status = useInputStatus();
   const [open, setOpen] = useState(false);
-  const [level, setLevel] = useState(0);
-  useEffect(() => {
-    if (!status.micActive) return;
-    const t = setInterval(() => setLevel(micInput.getLevel()), 80);
-    return () => clearInterval(t);
-  }, [status.micActive]);
+  const level = useMicLevel(status.micActive);
   const mode = device.inputMode;
   const label = mode === 'mic' ? (status.micActive ? 'Listening' : 'Mic off') : mode === 'midi' ? (status.midiDevices.length ? status.midiDevices[0].name : 'MIDI') : 'On-screen';
   const Icon = mode === 'mic' ? (status.micActive ? Mic : MicOff) : mode === 'midi' ? Usb : familyOf(instrument) === 'keyboard' ? Piano : Keyboard;
@@ -145,8 +155,8 @@ export function InputModal({ open, onClose, instrument }: { open: boolean; onClo
 /** Shows the last note heard from any input, so players can check their setup. */
 function LiveReadout() {
   const [last, setLast] = useState<{ name: string; source: string } | null>(null);
-  const [level, setLevel] = useState(0);
   const status = useInputStatus();
+  const level = useMicLevel(status.micActive);
   useEffect(
     () =>
       inputManager.subscribe(e => {
@@ -154,11 +164,6 @@ function LiveReadout() {
       }),
     [],
   );
-  useEffect(() => {
-    if (!status.micActive) return;
-    const t = setInterval(() => setLevel(micInput.getLevel()), 80);
-    return () => clearInterval(t);
-  }, [status.micActive]);
   return (
     <div className="live-readout">
       <span className="faint">Test it:</span>
