@@ -14,6 +14,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { unlockAudio } from '../audio/context';
 import { applyInputMode } from '../components/InputControl';
+import { usePracticeFocus } from '../components/usePracticeFocus';
+import { useListen } from '../components/useListen';
 import { useInstrumentAudio } from '../audio/instrument';
 import { synth } from '../audio/synth';
 import { InputChip } from '../components/InputControl';
@@ -107,6 +109,8 @@ export default function SongStudio() {
   const profile = useProfile();
   const device = useDevice();
   const navigate = useNavigate();
+  usePracticeFocus();
+  const listening = useListen();
   const recordOutcome = useApp(s => s.recordOutcome);
   const recordRun = useApp(s => s.recordSongRun);
   const startSong = useApp(s => s.startSong);
@@ -259,6 +263,7 @@ export default function SongStudio() {
   });
 
   const begin = async (cfg: RunConfig) => {
+    listening.stop();
     await unlockAudio();
     startSong(song.id);
     setLast(null);
@@ -314,12 +319,16 @@ export default function SongStudio() {
     }, 1400);
   };
 
-  const listen = async (p: Passage) => {
-    await unlockAudio();
+  /** Listen ⇄ Stop: one playback at a time, and it stops when you leave the page. */
+  const toggleListen = (p: Passage) => {
+    if (listening.playing) {
+      listening.stop();
+      return;
+    }
     const s = sliceScore(score, p.from - 1, p.to - 1);
     const secPerTick = 60 / ((song.tempo * (mode === 'tempo' ? tempoPct : 100)) / 100) / PPQ;
     const events = buildSteps(s).map(st => ({ midi: st.notes.map(n => n.midi), at: 0.15 + st.tick * secPerTick, duration: Math.max(0.12, st.notes[0].ticks * secPerTick * 0.95) }));
-    synth.playSequence(events, voiceFor(song.instrument, prefs));
+    void listening.play(events, voiceFor(song.instrument, prefs));
   };
 
   const passageOf = (from: number, to: number, label: string): Passage => ({ from, to, label });
@@ -683,8 +692,8 @@ export default function SongStudio() {
             </div>
             <Toggle checked={noteNames} onChange={setNoteNames} label="Note names" />
             <div className="studio-actions">
-              <button className="btn" onClick={() => listen(current)}>
-                <Ear size={16} /> Listen
+              <button className="btn" onClick={() => toggleListen(current)}>
+                {listening.playing ? <Square size={15} /> : <Ear size={16} />} {listening.playing ? 'Stop' : 'Listen'}
               </button>
               <button className="btn btn-primary btn-lg" onClick={() => begin(configFrom(current))}>
                 <Play size={18} /> Practise {current.label.toLowerCase().startsWith('whole') ? 'the whole song' : current.label}
@@ -700,8 +709,8 @@ export default function SongStudio() {
               <h2 className="display">
                 {current.label} <span className="faint">· bars {current.from}–{current.to}</span>
               </h2>
-              <button className="btn btn-sm btn-ghost" onClick={() => listen(current)} aria-label="Listen to this passage">
-                <Ear size={15} />
+              <button className="btn btn-sm btn-ghost" onClick={() => toggleListen(current)} aria-label={listening.playing ? 'Stop listening' : 'Listen to this passage'}>
+                {listening.playing ? <Square size={14} /> : <Ear size={15} />}
               </button>
             </div>
             {previewScore && (

@@ -1,7 +1,8 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useRef } from 'react';
 import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import type { ComponentType } from 'react';
-import { setMasterVolume, unlockAudio } from './audio/context';
+import { hasAudioContext, setMasterVolume, unlockAudio } from './audio/context';
+import { synth } from './audio/synth';
 import { inputManager } from './audio/input/manager';
 import { micInput } from './audio/input/mic';
 import { setSfxEnabled, setSfxVolume, sfx } from './audio/sfx';
@@ -50,6 +51,24 @@ function ScrollToTop() {
   return null;
 }
 
+/**
+ * Leaving a screen (back, a tab, a link) silences whatever it was playing — a song
+ * preview, a chord, the other hand. Screens stop their own playback too; this is the
+ * safety net for anything still ringing.
+ */
+function StopSoundOnNavigate() {
+  const { pathname } = useLocation();
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    if (hasAudioContext()) synth.stopAll();
+  }, [pathname]);
+  return null;
+}
+
 /** Apply device + profile audio settings once on start. */
 function AudioSettingsSync() {
   const device = useApp(s => s.device);
@@ -90,10 +109,12 @@ export default function App() {
   return (
     <HashRouter>
       <div className="ambient">
-        <div className="orb" style={{ width: 520, height: 520, left: '-8%', top: '-12%', background: 'rgba(120,92,255,0.5)' }} />
-        <div className="orb" style={{ width: 420, height: 420, right: '-6%', top: '20%', background: 'rgba(244,201,122,0.35)', animationDelay: '-9s' }} />
+        {/* 160px larger than the glowing disc on every side: room for its soft edge */}
+        <div className="orb" style={{ width: 840, height: 840, left: 'calc(-8% - 160px)', top: 'calc(-12% - 160px)', ['--orb' as string]: 'rgba(120,92,255,0.5)' }} />
+        <div className="orb" style={{ width: 740, height: 740, right: 'calc(-6% - 160px)', top: 'calc(20% - 160px)', ['--orb' as string]: 'rgba(244,201,122,0.35)', animationDelay: '-9s' }} />
       </div>
       <ScrollToTop />
+      <StopSoundOnNavigate />
       <AudioSettingsSync />
       <div className="app-root">
         <Suspense fallback={<Fallback />}>

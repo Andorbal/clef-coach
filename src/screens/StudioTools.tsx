@@ -155,6 +155,8 @@ export function Tuner() {
   const prefs = profile ? prefsOf(profile.settings) : {};
   useInstrumentAudio(instrument, prefs);
   const tuning = tuningFor(instrument, prefs);
+  // the tuner reads the mic directly (no note subscription): keep its analysis running
+  useEffect(() => micInput.retain(), []);
   useEffect(() => {
     if (!active) return;
     const t = setInterval(() => {

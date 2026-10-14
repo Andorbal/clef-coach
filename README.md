@@ -2,6 +2,11 @@
 
 **Learn to read music and play songs on piano, guitar, ukulele, bass guitar and mallet percussion — with your real instrument.**
 
+<p align="center">
+  <img src="docs/media/tempo-mode.gif" width="880" alt="Playing Ode to Joy in time on Clef Coach's piano: a one-bar count-in of 1 2 3 4, a beat light flashing with the metronome, the music scrolling past the playhead and each note turning green as it is played on the beat.">
+</p>
+<p align="center"><sub>Playing in time: a count-in, a beat light to follow, and every note judged as you play it.</sub></p>
+
 Clef Coach is an installable web app (PWA) that takes you from your very first note to advanced sight-reading and real songs. It listens to your instrument through **MIDI** or the **microphone**, shows real engraved notation, an accurate keyboard, fretboard or set of mallet bars, and teaches proper **fingering**, **sticking**, **hands-together** playing, **chords** and the **whole neck**.
 
 There's no account and no server. Progress lives on your device, and you can export or import it at any time.
@@ -18,7 +23,7 @@ There's no account and no server. Progress lives on your device, and you can exp
 - **Endless content.** A harmony-aware generator writes fresh exercises with exactly the notes, rhythms, keys, leaps and accompaniment patterns each lesson calls for. You don't get "max level" and then refreshers forever: the **Sight-reading Gym** keeps going at your level.
 - **Real feedback**
   - *Wait mode*: the music waits for the right note or chord.
-  - *Tempo mode*: a count-in and metronome, with every note scored for timing.
+  - *Tempo mode*: a count-in in the song's meter (1 2 3 4, or 1 2 3 in 3/4) and a metronome with a flashing beat light you can follow even when the click is drowned out, with every note scored for timing.
   - Wrong notes appear as red "ghost" notes on the staff, so you see what you actually played.
 - **Fingering and sticking everywhere**
   - Standard scale fingerings, and five-finger positions that grow into thumb-under crossings.
@@ -32,13 +37,50 @@ There's no account and no server. Progress lives on your device, and you can exp
   - **trouble spots** found from your mistakes, **lyrics** under each phrase, the song's **chords** drawn for your instrument;
   - a **goal date** (“Silent Night by Christmas Eve”) that paces how much to practise each day.
 - **Import your own songs**: MusicXML (from MuseScore, Finale, Sibelius, Dorico, Flat, Noteflight or any sheet-music scanner), MIDI, or Clef Coach song files. **Scan sheet music or tab with Claude** using your own Anthropic API key, or use the prompt with any AI assistant. Every file is checked bar by bar with errors that say exactly what to fix. See [docs/song-format.md](docs/song-format.md).
-- **Chord chart.** Any chord on every instrument — chord boxes for guitar, ukulele and bass, marked keys for piano, marked bars for mallets — with fingers, intervals or note names. On a tablet or laptop, compare several chords side by side on several instruments at once (guitar over piano, say), or see every voicing of one chord. Tap to hear.
+- **Chord chart.** Any chord on every instrument — chord boxes for guitar, ukulele and bass, marked keys for piano, marked bars for mallets — with fingers, intervals or note names, and each voicing written out in standard notation in the clef that instrument reads. On a tablet or laptop, compare several chords side by side on several instruments at once (guitar over piano, say), or see every voicing of one chord. Tap to hear.
 - **Studio**
   - Free Play: play anything and see it appear on the staff, with chord names.
   - Fretboard Explorer (guitar, ukulele, bass), a chromatic tuner, a scales-and-fingering reference and a sight-reading gym for every instrument.
   - Metronome: tap tempo, time signatures, subdivisions, accents and a speed trainer.
 - **Progress.** XP, streaks with streak freezes, a daily goal, a practice calendar, per-note mastery heatmaps on a keyboard or fretboard, and low-key milestones.
 - **Multiple players on one device**, plus **export/import** (download, share sheet, or paste) with merge or replace.
+
+## A look around
+
+<table>
+<tr>
+<td colspan="2" valign="top"><img src="docs/media/wait-mode.gif" alt="Wait mode. The music waits on every note. A wrong note appears in red on the staff, and the hint marks the right key and finger."><br><sub><b>Wait mode.</b> The music waits on every note. A wrong note appears in red on the staff, and the hint marks the right key and finger.</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><img src="docs/media/home.jpg" alt="Home. Pick up where you left off, with a daily goal and every track you follow."><br><sub><b>Home.</b> Pick up where you left off, with a daily goal and every track you follow.</sub></td>
+<td width="50%" valign="top"><img src="docs/media/track-map.jpg" alt="A learning path. Short lessons, a checkpoint per unit, and test-outs to skip ahead."><br><sub><b>A learning path.</b> Short lessons, a checkpoint per unit, and test-outs to skip ahead.</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><img src="docs/media/guitar-lesson.jpg" alt="Guitar. Standard notation over a true-to-scale fretboard, with string numbers and fingering."><br><sub><b>Guitar.</b> Standard notation over a true-to-scale fretboard, with string numbers and fingering.</sub></td>
+<td width="50%" valign="top"><img src="docs/media/fretboard.jpg" alt="Fretboard Explorer. Every A up to the 15th fret, octave shapes, CAGED and scale boxes."><br><sub><b>Fretboard Explorer.</b> Every A up to the 15th fret, octave shapes, CAGED and scale boxes.</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><img src="docs/media/song-studio.jpg" alt="Song Studio. A practice plan phrase by phrase, from “wait for me” to full speed."><br><sub><b>Song Studio.</b> A practice plan phrase by phrase, from “wait for me” to full speed.</sub></td>
+<td width="50%" valign="top"><img src="docs/media/songs.jpg" alt="Songs. A library for every instrument, plus anything you import or scan."><br><sub><b>Songs.</b> A library for every instrument, plus anything you import or scan.</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><img src="docs/media/chord-chart.jpg" alt="Chord chart. Any chord on every instrument, side by side."><br><sub><b>Chord chart.</b> Any chord on every instrument, side by side.</sub></td>
+<td width="50%" valign="top"><img src="docs/media/progress.jpg" alt="Progress. XP, streaks, a practice calendar and note mastery."><br><sub><b>Progress.</b> XP, streaks, a practice calendar and note mastery.</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><img src="docs/media/tempo-mode.jpg" alt="In time. Notes turn green when played on the beat; the dots at the top right flash with every beat."><br><sub><b>In time.</b> Notes turn green on the beat, and the dots at the top right flash with every click.</sub></td>
+<td width="50%" valign="top"><img src="docs/media/metronome.jpg" alt="Metronome. Tap tempo, any meter, subdivisions, accents and a speed trainer."><br><sub><b>Metronome.</b> Tap tempo, any meter, subdivisions, accents and a speed trainer.</sub></td>
+</tr>
+</table>
+
+<p align="center"><sub>And on a phone:</sub></p>
+<table align="center">
+<tr>
+<td width="33%" valign="top"><img src="docs/media/phone-home.jpg" alt="Clef Coach home screen on a phone."></td>
+<td width="33%" valign="top"><img src="docs/media/phone-song.jpg" alt="Learning Twinkle, Twinkle on a phone: notation above a piano keyboard."></td>
+<td width="33%" valign="top"><img src="docs/media/phone-chords.jpg" alt="The chord chart on a phone: C major on the piano, with fingering."></td>
+</tr>
+</table>
 
 ## Using your instrument
 
@@ -66,6 +108,7 @@ npm run clefsong -- help   # song file tools: validate, convert MusicXML/MIDI, s
 # Slower, opt-in browser runs
 SWEEP=1 npx playwright test sweep --project=ipad   # render every step of every lesson, fail on any error
 SHOTS=shots npx playwright test screens            # screenshot every screen into ./shots
+tools/readme-media.sh                              # re-record the README screenshots and GIFs (needs ffmpeg)
 ```
 
 Microphone and MIDI need a secure context: `localhost` or HTTPS.

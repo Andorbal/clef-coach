@@ -5,7 +5,7 @@ import { parseVoice, songToScore } from './parse';
 import { buildSteps } from './score';
 import { scaleFingering, fingerPianoLine } from './fingering';
 import { positionsFor, fingerGuitarLine, scaleBox, PENTATONIC_MINOR, transposePcs, cagedChord } from './guitar';
-import { PPQ } from './rhythm';
+import { PPQ, beatTicks, beatsPerBar } from './rhythm';
 
 describe('pitch', () => {
   it('parses and converts', () => {
@@ -132,5 +132,26 @@ describe('guitar', () => {
     expect(cagedChord(7, 'G').frets).toEqual([3, 2, 0, 0, 0, 3]);
     expect(cagedChord(2, 'D').frets).toEqual([null, null, 0, 2, 3, 2]);
     expect(cagedChord(9, 'E', 'major', 1).frets).toEqual([5, 7, 7, 6, 5, 5]);
+  });
+});
+
+describe('beats per bar (metronome and count-in)', () => {
+  it('counts the beat the meter is felt in', () => {
+    expect(beatsPerBar([4, 4])).toBe(4);
+    expect(beatsPerBar([3, 4])).toBe(3);
+    expect(beatsPerBar([2, 2])).toBe(2);
+    expect(beatsPerBar([2, 4])).toBe(2);
+    expect(beatsPerBar([6, 8])).toBe(2);
+    expect(beatsPerBar([9, 8])).toBe(3);
+    expect(beatsPerBar([12, 8])).toBe(4);
+    expect(beatsPerBar([3, 8])).toBe(3); // eighth-note beats, like beatTicks
+    expect(beatsPerBar([5, 4])).toBe(5);
+    expect(beatsPerBar([7, 8])).toBe(7);
+  });
+
+  it('agrees with beatTicks: beats × beat length = one bar', () => {
+    for (const t of [[4, 4], [3, 4], [2, 2], [6, 8], [9, 8], [12, 8], [3, 8], [5, 4], [7, 8]] as [number, number][]) {
+      expect(beatsPerBar(t) * beatTicks(t)).toBe((t[0] * PPQ * 4) / t[1]);
+    }
   });
 });

@@ -88,11 +88,16 @@ class InputManager {
     return this._status;
   }
 
-  /** Subscribe to note events from every source. Returns an unsubscribe function. */
+  /**
+   * Subscribe to note events from every source. Returns an unsubscribe function.
+   * The microphone only analyses while at least one subscriber is listening.
+   */
   subscribe = (cb: (e: NoteInputEvent) => void): (() => void) => {
     this.listeners.add(cb);
+    const releaseMic = micInput.retain();
     return () => {
       this.listeners.delete(cb);
+      releaseMic();
     };
   };
 

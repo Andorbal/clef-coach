@@ -42,6 +42,14 @@ export function beatTicks(time: TimeSig): number {
   return (PPQ * 4) / time[1];
 }
 
+/**
+ * Metronome beats per bar, matching {@link beatTicks}: 4 in 4/4, 3 in 3/4 and
+ * 3/8, 2 in 2/2 and 6/8, 4 in 12/8. This is also what a count-in counts.
+ */
+export function beatsPerBar(time: TimeSig): number {
+  return Math.max(1, Math.round(measureTicks(time) / beatTicks(time)));
+}
+
 export function ticksToSeconds(ticks: number, bpm: number): number {
   return (ticks / PPQ) * (60 / bpm);
 }

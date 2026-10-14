@@ -8,6 +8,7 @@ import { synth } from '../audio/synth';
 import { applyInstrument } from '../audio/instrument';
 import { preloadRangeFor, voiceFor } from '../music/instruments';
 import { InputChip, applyInputMode } from '../components/InputControl';
+import { usePracticeFocus } from '../components/usePracticeFocus';
 import { Modal } from '../components/ui';
 import { allLessons, findLesson, getTrack } from '../curriculum';
 import { makeRng } from '../curriculum/generate';
@@ -53,6 +54,7 @@ export default function LessonPlayer() {
   const device = useDevice();
   const recordOutcome = useApp(s => s.recordOutcome);
   const testOut = useApp(s => s.testOut);
+  usePracticeFocus();
   const track = getTrack(trackId);
   const tp = profile?.tracks[trackId as TrackId];
   const endlessRound = Number(search.get('round') ?? 0);

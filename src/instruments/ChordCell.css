@@ -48,6 +48,23 @@
   max-width: 640px;
 }
 
+/* the voicing on the staff (Notation) */
+.chord-staff {
+  width: 100%;
+  max-width: 300px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: transform 0.12s var(--ease-out);
+}
+
+.chord-staff:active {
+  transform: scale(0.98);
+}
+
+.chord-cell.size-lg .chord-staff {
+  max-width: 420px;
+}
+
 .chord-cell-nav {
   display: flex;
   align-items: center;

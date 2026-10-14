@@ -136,6 +136,23 @@ class FakeContext {
     const p = () => new FakeParam(0);
     return Object.assign(new FakeNode(this), { threshold: p(), knee: p(), ratio: p(), attack: p(), release: p() });
   }
+  createMediaStreamSource() {
+    return new FakeNode(this);
+  }
+  /** Analyser reads, so tests can tell how hard the mic poller works. */
+  analyserReads = 0;
+  createAnalyser() {
+    const ctx = this;
+    return Object.assign(new FakeNode(this), {
+      fftSize: 2048,
+      smoothingTimeConstant: 0.8,
+      getFloatTimeDomainData(buf: Float32Array) {
+        ctx.analyserReads++;
+        ctx.currentTime += 0.018; // audio keeps flowing between polls
+        buf.fill(0);
+      },
+    });
+  }
 }
 
 const g = globalThis as unknown as { window?: unknown };
@@ -358,6 +375,78 @@ describe('runtime with a fake AudioContext', () => {
     const r = await a.inputManager.enableMidi();
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/MIDI/);
+  });
+
+  it('metronome: the first count-in beat survives a main-thread stall right after start', async () => {
+    vi.useFakeTimers();
+    const a = await audio();
+    const c = ctx();
+    c.currentTime = 200;
+    const n0 = c.sources.length;
+    const beats: number[] = [];
+    const m = new a.Metronome();
+    m.start({ bpm: 120, beatsPerBar: 4, countIn: 1, onBeat: (b) => b.isCountIn && beats.push(b.beat + 1) });
+    // the page is busy for 300 ms: audio runs on, no timer fires
+    c.currentTime += 0.3;
+    for (let i = 0; i < 100; i++) {
+      c.currentTime += 0.025;
+      vi.advanceTimersByTime(25);
+    }
+    expect(srcFor(n0)[0].startAt).toBeCloseTo(200.12, 6);
+    expect(beats).toEqual([1, 2, 3, 4]);
+    m.stop();
+    vi.useRealTimers();
+  });
+
+  it('mic: analyses only while something listens, a slow level meter otherwise', async () => {
+    vi.useFakeTimers();
+    const track = { stop: vi.fn(), addEventListener: vi.fn() };
+    const stream = { getTracks: () => [track], getAudioTracks: () => [track] };
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: vi.fn(async () => stream) } });
+    vi.stubGlobal('document', { addEventListener: vi.fn(), removeEventListener: vi.fn(), visibilityState: 'visible' });
+    try {
+      const a = await audio();
+      const mic = a.micInput;
+      const c = ctx();
+      expect((await mic.start()).ok).toBe(true);
+      expect(mic.active).toBe(true);
+      expect(mic.analysing).toBe(false);
+      const reads = () => {
+        const before = c.analyserReads;
+        vi.advanceTimersByTime(1000);
+        return c.analyserReads - before;
+      };
+      const idle = reads();
+      expect(idle).toBeGreaterThan(5);
+      expect(idle).toBeLessThan(20);
+
+      const off = a.inputManager.subscribe(() => {});
+      expect(mic.analysing).toBe(true);
+      expect(reads()).toBeGreaterThan(45);
+      const release = mic.retain(); // e.g. the tuner
+      off();
+      expect(mic.analysing).toBe(true);
+      release();
+      release(); // idempotent
+      // a hand-over (one screen leaves, the next arrives) doesn't interrupt the analysis
+      vi.advanceTimersByTime(500);
+      const again = a.inputManager.subscribe(() => {});
+      vi.advanceTimersByTime(3000);
+      expect(mic.analysing).toBe(true);
+      again();
+      // nobody listening for a moment: down to the level meter
+      vi.advanceTimersByTime(2000);
+      expect(mic.analysing).toBe(false);
+      expect(reads()).toBeLessThan(20);
+
+      mic.stop();
+      expect(mic.active).toBe(false);
+      expect(track.stop).toHaveBeenCalled();
+      expect(reads()).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
   });
 
   it('clock mapping round-trips', async () => {

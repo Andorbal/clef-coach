@@ -57,3 +57,27 @@ test('chord lesson: name the chords, then strum them', async ({ page }) => {
   await expect(page.getByText('Strum along: Twinkle', { exact: false })).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test('chord chart: Notation writes each picture on the staff', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await onboard(page, 'Reader');
+  await page.goto('/#/chords?chords=C,G7,Am&instruments=guitar,piano');
+  const wide = (page.viewportSize()?.width ?? 0) >= 1000;
+  await expect(page.locator('.chord-staff')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Notation' }).click();
+  // one staff per picture: every chord on every instrument shown (phones: one picture)
+  const staves = page.locator('.chord-staff');
+  await expect(staves).toHaveCount(wide ? 6 : 1);
+  await expect(staves.first().locator('svg .vf-stavenote').first()).toBeVisible();
+  // the guitar's open C, written as played: five notes in one chord
+  await expect(staves.first().locator('.vf-stavenote')).toHaveCount(1);
+  await expect(staves.first().locator('.vf-notehead')).toHaveCount(5);
+  expect(page.url()).toContain('notation=1');
+  // the choice survives a reload (it lives in the URL)
+  await page.reload();
+  await expect(page.locator('.chord-staff')).toHaveCount(wide ? 6 : 1);
+  await page.getByRole('button', { name: 'Notation' }).click();
+  await expect(page.locator('.chord-staff')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});

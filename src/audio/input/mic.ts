@@ -4,6 +4,12 @@
  *   getUserMedia (no AEC/NS/AGC) → high-pass 40 Hz → AnalyserNode(8192) → (muted) destination
  *                                                      ↑ polled ~55×/s with setInterval
  *
+ * The full analysis below only runs while something is listening for notes
+ * ({@link MicInput.retain} – the input manager retains it for each note
+ * subscriber). Otherwise the stream stays open (no new permission prompt or
+ * audio-route change when a lesson starts) and a slow tick only measures the
+ * level for the input meter, so browsing the app doesn't keep the CPU busy.
+ *
  * Per frame (all the DSP lives in pure, unit-tested modules):
  *  1. FrameAnalyzer: short-window RMS + high-frequency level (onsets, meter,
  *     adaptive noise floor – calibrated during the first 0.6 s, then tracked
@@ -38,7 +44,7 @@ import {
   setRecordingSession,
 } from '../context';
 import { ChordTracker } from './chord';
-import { AssistRouter, buildAssistFrame, computeSpectrum, FrameAnalyzer, harmonicPeak, NoteTracker, verifyChord } from './pitch';
+import { AssistRouter, buildAssistFrame, computeSpectrum, FrameAnalyzer, harmonicPeak, NoteTracker, rms, verifyChord } from './pitch';
 import type { PitchResult, TrackerControl, TrackerEvent } from './pitch';
 import type { InputResult, NoteInputEvent } from './types';
 
@@ -46,6 +52,14 @@ const ANALYSER_SIZE = 8192; // time-domain history (≈170 ms @ 48 kHz)
 const PITCH_WINDOW = 4096; // YIN window (≈85 ms)
 const LEVEL_WINDOW = 1024; // short level/transient window for onsets (≈21 ms)
 const POLL_MS = 18; // ≈55 frames/s
+/** Level-meter-only polling while nothing listens for notes. */
+const IDLE_POLL_MS = 80;
+/**
+ * Keep analysing this long after the last listener leaves: a lesson moving to
+ * its next step releases and retains in one go, and a reset in between could
+ * hear a note still ringing from the last step as a new one.
+ */
+const IDLE_AFTER_MS = 1500;
 const CALIBRATE_MS = 600;
 /** Chords whose lowest note is below this use the long (8192) window. */
 const LONG_WINDOW_BELOW = 48;
@@ -95,6 +109,12 @@ export class MicInput {
   private analyser: AnalyserNode | null = null;
   private sink: GainNode | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
+  /** True while {@link timer} runs the full note analysis (not the idle level meter). */
+  private fullRate = false;
+  /** Number of {@link retain} holders. */
+  private demand = 0;
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastLevelAt = 0;
   private starting: Promise<InputResult> | null = null;
   private visHandler: (() => void) | null = null;
 
@@ -143,6 +163,29 @@ export class MicInput {
     this.stateListeners.add(cb);
     return () => this.stateListeners.delete(cb);
   };
+
+  /**
+   * Run the full note analysis until the returned function is called. The
+   * input manager retains it for each note subscriber; screens that read the
+   * mic another way (the tuner) retain it themselves. Safe to call before the
+   * mic is started.
+   */
+  retain = (): (() => void) => {
+    this.demand++;
+    this.updateTimer();
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.demand--;
+      this.updateTimer();
+    };
+  };
+
+  /** Is the full note analysis running (mic open and someone listening)? */
+  get analysing(): boolean {
+    return this.fullRate;
+  }
 
   /** Request the mic and start listening. Call from a user gesture (iOS). */
   start = (): Promise<InputResult> => {
@@ -240,9 +283,47 @@ export class MicInput {
     this.lastCtxTime = -1;
     this.tracker.reset();
     this.resetChord(performance.now());
-    this.timer = setInterval(this.tick, POLL_MS);
+    this.updateTimer();
     this.notifyState();
     return { ok: true };
+  }
+
+  /** Full analysis while retained, the idle level meter otherwise (mic open only). */
+  private updateTimer(): void {
+    if (!this.stream) return;
+    const want = this.demand > 0;
+    if (want) this.cancelIdle();
+    if (this.timer !== null && want === this.fullRate) return;
+    if (this.timer !== null && !want) {
+      this.idleTimer ??= setTimeout(() => {
+        this.idleTimer = null;
+        if (this.demand === 0 && this.stream) this.setRate(false);
+      }, IDLE_AFTER_MS);
+      return;
+    }
+    this.setRate(want);
+  }
+
+  private cancelIdle(): void {
+    if (this.idleTimer !== null) clearTimeout(this.idleTimer);
+    this.idleTimer = null;
+  }
+
+  private setRate(want: boolean): void {
+    if (this.timer !== null) clearInterval(this.timer);
+    const now = performance.now();
+    if (want) {
+      // stale detector state from before the pause must not leak into the new frames
+      this.tracker.reset(now);
+      this.resetChord(now);
+      this.lastCtxTime = -1;
+    } else {
+      this.flush(now); // close the notes we reported; nobody hears the rest
+      this.tuner = null;
+    }
+    this.fullRate = want;
+    this.lastLevelAt = now;
+    this.timer = setInterval(want ? this.tick : this.idleTick, want ? POLL_MS : IDLE_POLL_MS);
   }
 
   /** Stop listening and release the microphone (tracks are stopped). */
@@ -250,6 +331,8 @@ export class MicInput {
     const wasActive = this.active || this.stream !== null;
     if (this.timer !== null) clearInterval(this.timer);
     this.timer = null;
+    this.fullRate = false;
+    this.cancelIdle();
     this.flush(performance.now());
     try {
       this.source?.disconnect();
@@ -402,10 +485,13 @@ export class MicInput {
     this.monoNote = null;
   }
 
-  private updateLevel(level: number): void {
+  private updateLevel(level: number, now: number): void {
     const db = 20 * Math.log10(Math.max(level, 1e-6));
     const v = Math.min(1, Math.max(0, (db + 60) / 60));
-    this.level = v > this.level ? v : this.level * 0.88 + v * 0.12;
+    // release: ×0.88 per 18 ms analysis frame, whatever the polling rate
+    const keep = Math.pow(0.88, Math.min(10, Math.max(0, now - this.lastLevelAt) / POLL_MS));
+    this.lastLevelAt = now;
+    this.level = v > this.level ? v : this.level * keep + v * (1 - keep);
   }
 
   private updateNoiseFloor(level: number, now: number, voiced: boolean): void {
@@ -460,6 +546,22 @@ export class MicInput {
     };
   }
 
+  /** Nothing listens for notes: keep the level meter (and the first calibration) going, nothing else. */
+  private idleTick = (): void => {
+    const ctx = this.ctx;
+    const analyser = this.analyser;
+    if (!ctx || !analyser || (ctx.state as string) !== 'running') return;
+    if (ctx.currentTime === this.lastCtxTime) return;
+    this.lastCtxTime = ctx.currentTime;
+    analyser.getFloatTimeDomainData(this.buf);
+    const now = performance.now();
+    const level = rms(this.buf, ANALYSER_SIZE - LEVEL_WINDOW, ANALYSER_SIZE);
+    this.updateLevel(level, now);
+    // Without pitch, only what is safe on level alone: the start-up
+    // calibration and following a room that got quieter.
+    if (now < this.calibrateUntil || this.calib.length || level < this.noiseFloor) this.updateNoiseFloor(level, now, false);
+  };
+
   private tick = (): void => {
     const ctx = this.ctx;
     const analyser = this.analyser;
@@ -481,7 +583,7 @@ export class MicInput {
     const frameTime = now - this.inputLatencyMs - (LEVEL_WINDOW / 2 / sr) * 1000;
     const frame = this.analyzer.analyze(this.buf, sr, frameTime, this.noiseFloor * 1.5, tr.activeNote !== null);
     const level = frame.rms;
-    this.updateLevel(level);
+    this.updateLevel(level, now);
     let pitch: PitchResult | null = frame.pitch;
     this.updateNoiseFloor(level, now, !!pitch && pitch.clarity > 0.6);
 

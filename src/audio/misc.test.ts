@@ -3,7 +3,8 @@ import { keyboardOctaveDelta, keyboardToMidi } from './input/keyboard';
 import { parseMidiMessage } from './input/midi';
 import { audibleDuration, renderClickSamples, renderSfx, SFX_NAMES, SFX_PITCHES } from './sounds';
 import { generateImpulseResponse } from './dsp/reverb';
-import { peakAbs, rmsRange } from './dsp/util';
+import { mulberry32, peakAbs, rmsRange } from './dsp/util';
+import { getFFT } from './dsp/fft';
 import { computeSpectrum, detectPitch } from './input/pitch';
 
 describe('keyboardToMidi', () => {
@@ -117,5 +118,62 @@ describe('sound design renders', () => {
     for (let i = 0; i < ir.left.length; i++) dot += ir.left[i] * ir.right[i];
     const norm = Math.sqrt(rmsRange(ir.left) ** 2 * rmsRange(ir.right) ** 2) * ir.left.length;
     expect(Math.abs(dot / norm)).toBeLessThan(0.2);
+  });
+});
+
+describe('FFT', () => {
+  /** Naive O(n²) DFT for reference. */
+  function dft(re: Float64Array, im: Float64Array, inverse: boolean): [Float64Array, Float64Array] {
+    const n = re.length;
+    const or = new Float64Array(n);
+    const oi = new Float64Array(n);
+    const sgn = inverse ? 1 : -1;
+    for (let k = 0; k < n; k++) {
+      let sr = 0;
+      let si = 0;
+      for (let t = 0; t < n; t++) {
+        const a = (sgn * 2 * Math.PI * ((k * t) % n)) / n;
+        const c = Math.cos(a);
+        const s = Math.sin(a);
+        sr += re[t] * c - im[t] * s;
+        si += re[t] * s + im[t] * c;
+      }
+      or[k] = sr;
+      oi[k] = si;
+    }
+    return [or, oi];
+  }
+
+  it('matches a naive DFT forwards and backwards for every size from 2 to 4096', () => {
+    const rnd = mulberry32(7);
+    for (let n = 2; n <= 4096; n *= 2) {
+      const re = Float64Array.from({ length: n }, () => rnd() * 2 - 1);
+      const im = Float64Array.from({ length: n }, () => rnd() * 2 - 1);
+      for (const inverse of [false, true]) {
+        const [er, ei] = dft(re, im, inverse);
+        const r = re.slice();
+        const i = im.slice();
+        getFFT(n).transform(r, i, inverse);
+        let err = 0;
+        for (let k = 0; k < n; k++) err = Math.max(err, Math.abs(r[k] - er[k]), Math.abs(i[k] - ei[k]));
+        expect(err, `n=${n} inverse=${inverse}`).toBeLessThan(1e-9 * n);
+      }
+    }
+  });
+
+  it('round-trips (inverse is unscaled)', () => {
+    const rnd = mulberry32(3);
+    const n = 1024;
+    const re = Float64Array.from({ length: n }, () => rnd() - 0.5);
+    const im = new Float64Array(n);
+    const r = re.slice();
+    const i = im.slice();
+    const f = getFFT(n);
+    f.transform(r, i, false);
+    f.transform(r, i, true);
+    for (let k = 0; k < n; k++) {
+      expect(r[k] / n).toBeCloseTo(re[k], 12);
+      expect(i[k] / n).toBeCloseTo(0, 12);
+    }
   });
 });

@@ -191,6 +191,33 @@ function NotationViewImpl(props: NotationViewProps) {
     return Math.max(0, Math.min(focusX * scale - anchor, maxOff + 200));
   }, [result, layout, scale, box.w, focusX]);
 
+  // Note names don't move with the playhead: build them only when they change, so a
+  // tempo-mode frame (playhead and scroll only) stays cheap.
+  const nameLabels = useMemo(() => {
+    if (!result || noteNames === 'none') return null;
+    return [...result.notes.values()].map(pos => {
+      const el = elById.get(pos.id);
+      if (!el || el.rest || el.tiePrev) return null;
+      if (noteNames === 'focus' && pos.id !== focusId) return null;
+      const geom = result.staves[pos.staff];
+      const lowest = Math.max(...el.pitches.map(p => yForPitch(geom, p)));
+      const fretted = isFretted(score.instrument);
+      const fingerBelow = fingering && ((isKeyboard(score.instrument) && score.staves[pos.staff].hand === 'L') || fretted);
+      const extra = fingerBelow ? 16 * (fretted && strings ? 1.4 : el.pitches.length) : 0;
+      const y = Math.max(geom.bottom + 26, lowest + 24) + extra;
+      const text = el.pitches.map(p => pitchLabel(p, naming)).reverse().join(' ');
+      const st = states?.[pos.id];
+      return (
+        <g key={pos.id} className={`note-name ${st ? `nn-${st}` : ''}`} transform={`translate(${pos.x}, ${y})`}>
+          <rect x={-(text.length * 4.2 + 8)} y={-11} width={text.length * 8.4 + 16} height={18} rx={9} />
+          <text textAnchor="middle" y={2.5}>
+            {text}
+          </text>
+        </g>
+      );
+    });
+  }, [result, noteNames, elById, focusId, score, fingering, strings, naming, states]);
+
   const tempoMode = playheadTick !== undefined && playheadTick !== null;
   const centerPad = layout === 'center' && result ? Math.max(0, (box.w - result.width * scale) / 2) : 0;
   const verticalPad = result ? Math.max(0, (box.h - result.height * scale) / 2) : 0;
@@ -221,39 +248,7 @@ function NotationViewImpl(props: NotationViewProps) {
             height={result.height * scale}
             viewBox={`0 0 ${result.width} ${result.height}`}
           >
-            {showPlayhead && layout === 'scroll' && (focusId || tempoMode) && (
-              <rect
-                className="playhead"
-                x={focusX - 14}
-                y={staffSpan.top}
-                width={28}
-                height={staffSpan.bottom - staffSpan.top}
-                rx={14}
-                style={{ transition: tempoMode ? 'none' : undefined }}
-              />
-            )}
-            {noteNames !== 'none' &&
-              [...result.notes.values()].map(pos => {
-                const el = elById.get(pos.id);
-                if (!el || el.rest || el.tiePrev) return null;
-                if (noteNames === 'focus' && pos.id !== focusId) return null;
-                const geom = result.staves[pos.staff];
-                const lowest = Math.max(...el.pitches.map(p => yForPitch(geom, p)));
-                const fretted = isFretted(score.instrument);
-                const fingerBelow = fingering && ((isKeyboard(score.instrument) && score.staves[pos.staff].hand === 'L') || fretted);
-                const extra = fingerBelow ? 16 * (fretted && strings ? 1.4 : el.pitches.length) : 0;
-                const y = Math.max(geom.bottom + 26, lowest + 24) + extra;
-                const text = el.pitches.map(p => pitchLabel(p, naming)).reverse().join(' ');
-                const st = states?.[pos.id];
-                return (
-                  <g key={pos.id} className={`note-name ${st ? `nn-${st}` : ''}`} transform={`translate(${pos.x}, ${y})`}>
-                    <rect x={-(text.length * 4.2 + 8)} y={-11} width={text.length * 8.4 + 16} height={18} rx={9} />
-                    <text textAnchor="middle" y={2.5}>
-                      {text}
-                    </text>
-                  </g>
-                );
-              })}
+            {nameLabels}
             {ghosts?.map(g => {
               const geom = result.staves[g.staff] ?? result.staves[0];
               const near = g.nearId ? result.notes.get(g.nearId)?.x : focusX;
@@ -279,6 +274,19 @@ function NotationViewImpl(props: NotationViewProps) {
           </svg>
         )}
       </div>
+      {result && showPlayhead && layout === 'scroll' && (focusId || tempoMode) && (
+        // Its own layer, moved only by transform: in tempo mode it holds still on
+        // screen while the music scrolls under it, so nothing is repainted per frame.
+        <div
+          className={`playhead ${tempoMode ? 'no-ease' : ''}`}
+          style={{
+            transform: `translate3d(${centerPad - offset + (focusX - 14) * scale}px, ${verticalPad + staffSpan.top * scale}px, 0)`,
+            width: 28 * scale,
+            height: (staffSpan.bottom - staffSpan.top) * scale,
+            borderRadius: 14 * scale,
+          }}
+        />
+      )}
       {layout === 'scroll' && (
         <div className="notation-header" style={{ top: verticalPad }}>
           <div

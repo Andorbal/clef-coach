@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, Dumbbell, Gauge, Grid2x2, Grid3x3, Piano, Timer,
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { InputChip, applyInputMode } from '../components/InputControl';
+import { usePracticeFocus } from '../components/usePracticeFocus';
 import { MobileSettingsButton, PageHeader } from '../components/Shell';
 import { Segmented } from '../components/ui';
 import { flashScore } from '../curriculum/generate';
@@ -56,6 +57,7 @@ export default function Studio() {
 
 export function ToolShell({ title, children, instrument, right }: { title: string; children: React.ReactNode; instrument?: InstrumentId; right?: React.ReactNode }) {
   const navigate = useNavigate();
+  usePracticeFocus();
   return (
     <div className="lesson-shell tool-shell">
       <header className="lesson-top">
