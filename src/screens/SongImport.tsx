@@ -5,11 +5,9 @@
  * Everything lands in a preview where you can check the music, fix the details
  * and save it to "My songs".
  */
-import { AlertTriangle, Camera, ClipboardCopy, ClipboardPaste, Ear, FileMusic, KeyRound, Loader2, Save, Sparkles } from 'lucide-react';
+import { AlertTriangle, Camera, ClipboardCopy, ClipboardPaste, Ear, FileMusic, KeyRound, Loader2, Save, Sparkles, Square } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { unlockAudio } from '../audio/context';
-import { synth } from '../audio/synth';
 import { InstrumentSwitch, useMyInstruments } from '../components/InstrumentIcon';
 import { PageHeader } from '../components/Shell';
 import { Segmented, Toggle } from '../components/ui';
@@ -25,6 +23,7 @@ import { IMPORT_ACCEPT, type ImportOutcome, importBytes } from '../songs/importe
 import { manualPrompt } from '../songs/llmPrompt';
 import type { ScanFile } from '../songs/transcribe';
 import { useApp, useProfile } from '../state/store';
+import { useListen } from '../components/useListen';
 import './songimport.css';
 import { isIOS } from '../platform';
 
@@ -85,6 +84,7 @@ export default function SongImport() {
   const [scanTitle, setScanTitle] = useState('');
   const [copied, setCopied] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const listening = useListen();
   const scanRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -191,12 +191,15 @@ export default function SongImport() {
     }
   };
 
-  const listen = async () => {
+  const toggleListen = () => {
+    if (listening.playing) {
+      listening.stop();
+      return;
+    }
     if (!preview || !result) return;
-    await unlockAudio();
     const secPerTick = 60 / result.song.tempo / PPQ;
     const events = buildSteps(preview.first).map(st => ({ midi: st.notes.map(n => n.midi), at: 0.15 + st.tick * secPerTick, duration: Math.max(0.12, st.notes[0].ticks * secPerTick * 0.95) }));
-    synth.playSequence(events, voiceFor(result.song.instrument, prefs));
+    void listening.play(events, voiceFor(result.song.instrument, prefs));
   };
 
   const save = () => {
@@ -465,8 +468,8 @@ export default function SongImport() {
               >
                 {editing ? 'Hide source' : 'Edit source'}
               </button>
-              <button className="btn" onClick={listen} disabled={!preview}>
-                <Ear size={16} /> Listen
+              <button className="btn" onClick={toggleListen} disabled={!preview}>
+                {listening.playing ? <Square size={15} /> : <Ear size={16} />} {listening.playing ? 'Stop' : 'Listen'}
               </button>
               <button className="btn btn-primary btn-lg" onClick={save} disabled={!preview || !result.song.title.trim()}>
                 <Save size={18} /> Save to my songs

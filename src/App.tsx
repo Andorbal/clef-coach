@@ -1,7 +1,8 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useRef } from 'react';
 import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import type { ComponentType } from 'react';
-import { setMasterVolume, unlockAudio } from './audio/context';
+import { hasAudioContext, setMasterVolume, unlockAudio } from './audio/context';
+import { synth } from './audio/synth';
 import { inputManager } from './audio/input/manager';
 import { micInput } from './audio/input/mic';
 import { setSfxEnabled, setSfxVolume, sfx } from './audio/sfx';
@@ -46,6 +47,24 @@ function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => {
     window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
+
+/**
+ * Leaving a screen (back, a tab, a link) silences whatever it was playing — a song
+ * preview, a chord, the other hand. Screens stop their own playback too; this is the
+ * safety net for anything still ringing.
+ */
+function StopSoundOnNavigate() {
+  const { pathname } = useLocation();
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    if (hasAudioContext()) synth.stopAll();
   }, [pathname]);
   return null;
 }
@@ -95,6 +114,7 @@ export default function App() {
         <div className="orb" style={{ width: 740, height: 740, right: 'calc(-6% - 160px)', top: 'calc(20% - 160px)', ['--orb' as string]: 'rgba(244,201,122,0.35)', animationDelay: '-9s' }} />
       </div>
       <ScrollToTop />
+      <StopSoundOnNavigate />
       <AudioSettingsSync />
       <div className="app-root">
         <Suspense fallback={<Fallback />}>
