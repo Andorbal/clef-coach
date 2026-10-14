@@ -12,11 +12,11 @@
  *   - spell MIDI numbers in a key, guess an instrument from part names / programs.
  */
 import type { InstrumentId } from '../music/instruments';
-import { type KeySig, keyAlterations } from '../music/keys';
+import { type KeySig, keyAlterations, tonicOf } from '../music/keys';
 import { type SongDef, formatVoice } from '../music/parse';
 import { type Pitch, type Step, STEPS, STEP_SEMIS, midiOf } from '../music/pitch';
 import { type BaseDuration, type TimeSig, beatTicks, durationTicks, measureTicks } from '../music/rhythm';
-import type { MeterChange, NoteSpec } from '../music/score';
+import type { ClefChange, MeterChange, NoteSpec } from '../music/score';
 
 /** One part (MusicXML) or track (MIDI) found in the file, so the UI can offer a choice. */
 export interface ImportPart {
@@ -122,6 +122,86 @@ export function beatAt(L: Layout, tick: number): BeatPos {
 /** Is this measure shorter than its time signature (a pickup)? */
 export const isPickupLayout = (L: Layout) => L.lens.length > 0 && L.lens[0] < measureTicks(L.times[0]);
 
+/** Krumhansl–Kessler key profiles (C major, C minor). */
+const MAJOR_PROFILE = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
+const MINOR_PROFILE = [6.33, 2.68, 3.52, 5.38, 2.6, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
+
+function correlation(a: number[], b: number[]): number {
+  const ma = a.reduce((s, x) => s + x, 0) / a.length;
+  const mb = b.reduce((s, x) => s + x, 0) / b.length;
+  let num = 0;
+  let da = 0;
+  let db = 0;
+  a.forEach((x, i) => {
+    num += (x - ma) * (b[i] - mb);
+    da += (x - ma) ** 2;
+    db += (b[i] - mb) ** 2;
+  });
+  return da && db ? num / Math.sqrt(da * db) : 0;
+}
+
+/**
+ * Decide major or minor where a file gives only the key signature (fifths). Each run of
+ * bars in one key signature is weighed between its major key and its relative minor by
+ * how its notes fit each key's profile (the minor's raised leading tone, the weight of
+ * tonic and dominant), and by the bass at its first and last downbeats – the last one
+ * counting most at the end of the piece. Changes `L.keys` in place.
+ */
+export function inferModes(L: Layout, notes: TimedNote[]): void {
+  const sounding = notes.filter(n => n.pitches.length);
+  const pcOf = (m: number) => ((m % 12) + 12) % 12;
+  const tonicPc = (fifths: number, mode: 'major' | 'minor') => {
+    const t = tonicOf({ fifths, mode });
+    return pcOf(STEP_SEMIS[t.step] + t.alter);
+  };
+  /** Lowest note sounding at a bar's downbeat (or starting in the bar, if none sounds then). */
+  const bassOfBar = (k: number): number | null => {
+    const a = L.starts[k];
+    const b = a + L.lens[k];
+    const at = sounding.filter(n => n.start <= a + 1e-6 && n.end > a + 1e-6);
+    const pool = at.length ? at : sounding.filter(n => n.start >= a - 1e-6 && n.start < b - 1e-6);
+    return pool.length ? Math.min(...pool.flatMap(n => n.pitches.map(midiOf))) : null;
+  };
+  const regions: { a: number; b: number; fifths: number; mode: 'major' | 'minor' }[] = [];
+  for (let a = 0; a < L.keys.length; ) {
+    let b = a;
+    while (b + 1 < L.keys.length && L.keys[b + 1].fifths === L.keys[a].fifths) b++;
+    const from = L.starts[a];
+    const to = L.starts[b] + L.lens[b];
+    const hist = new Array<number>(12).fill(0);
+    for (const n of sounding) {
+      const len = Math.min(n.end, to) - Math.max(n.start, from);
+      if (len > 0) for (const p of n.pitches) hist[pcOf(midiOf(p))] += len;
+    }
+    if (hist.some(x => x > 0)) {
+      const fifths = L.keys[a].fifths;
+      const major = tonicPc(fifths, 'major');
+      const minor = tonicPc(fifths, 'minor');
+      const rotate = (prof: number[], t: number) => hist.map((_, pc) => prof[pcOf(pc - t)]);
+      let score = correlation(hist, rotate(MINOR_PROFILE, minor)) - correlation(hist, rotate(MAJOR_PROFILE, major));
+      const vote = (m: number | null, weight: number) => {
+        if (m === null) return;
+        if (pcOf(m) === minor) score += weight;
+        else if (pcOf(m) === major) score -= weight;
+      };
+      let first = a;
+      while (first < b && bassOfBar(first) === null) first++;
+      let last = b;
+      while (last > a && bassOfBar(last) === null) last--;
+      vote(bassOfBar(first), 0.2);
+      vote(bassOfBar(last), b === L.keys.length - 1 ? 0.4 : 0.15);
+      regions.push({ a, b, fifths, mode: score > 0 ? 'minor' : 'major' });
+    }
+    a = b + 1;
+  }
+  // the home key comes back at the end: its final cadence settles it wherever it appears
+  const home = regions[regions.length - 1];
+  for (const r of regions) {
+    const mode = r.fifths === home.fifths ? home.mode : r.mode;
+    for (let k = r.a; k <= r.b; k++) L.keys[k] = { fifths: r.fifths, mode };
+  }
+}
+
 /** Key and time signature changes between consecutive measures. */
 export function layoutChanges(L: Layout): MeterChange[] {
   const out: MeterChange[] = [];
@@ -137,8 +217,8 @@ export function layoutChanges(L: Layout): MeterChange[] {
 }
 
 /** Write note specs built against a layout as one voice of text notation. */
-export function writeVoice(specs: NoteSpec[], L: Layout, mallets?: 2 | 4): string {
-  return formatVoice(specs, L.times[0], { pickup: isPickupLayout(L) ? L.lens[0] : undefined, changes: layoutChanges(L), mallets });
+export function writeVoice(specs: NoteSpec[], L: Layout, mallets?: 2 | 4, clefs?: ClefChange[]): string {
+  return formatVoice(specs, L.times[0], { pickup: isPickupLayout(L) ? L.lens[0] : undefined, changes: layoutChanges(L), mallets, clefs });
 }
 
 // ---------------------------------------------------------------------------
@@ -152,10 +232,10 @@ export interface Dur {
   ticks: number;
 }
 
-const BASES: BaseDuration[] = ['w', 'h', 'q', 'e', 's', 't'];
+const BASES: BaseDuration[] = ['w', 'h', 'q', 'e', 's', 't', 'x'];
 const mk = (base: BaseDuration, dots: number, triplet: boolean): Dur => ({ base, dots, triplet, ticks: durationTicks(base, dots, triplet) });
 /** Plain and dotted values, longest first (the pieces long notes are tied from). */
-const PLAIN: Dur[] = BASES.flatMap(b => [mk(b, 1, false), mk(b, 0, false)]);
+const PLAIN: Dur[] = BASES.flatMap(b => [mk(b, 1, false), mk(b, 0, false)]).filter(d => Number.isInteger(d.ticks));
 const TRIPLETS: Dur[] = BASES.map(b => mk(b, 0, true));
 const ALL_PIECES: Dur[] = [...PLAIN, ...TRIPLETS].sort((a, b) => b.ticks - a.ticks);
 /** Every value a single token can have (double dots only as a whole note value). */
@@ -211,7 +291,8 @@ function tripletBeats(L: Layout, boundaries: number[]): BeatKinds {
   const out: BeatKinds = new Set();
   for (const t of boundaries) {
     const b = beatAt(L, t);
-    if (Math.abs(b.offset % 6) > 1e-6 && Math.abs((b.offset % 6) - 6) > 1e-6) out.add(b.key);
+    // plain values (down to a 64th, 3 ticks) start on multiples of 3; triplets don't
+    if (Math.abs(b.offset % 3) > 1e-6 && Math.abs((b.offset % 3) - 3) > 1e-6) out.add(b.key);
   }
   return out;
 }
@@ -257,7 +338,7 @@ function fits(d: Dur, a: number, b: number, L: Layout, kinds: BeatKinds): boolea
   const bb = beatAt(L, b - 1e-6);
   const offB = b - bb.start;
   const on = (off: number, g: number) => Math.abs(off - Math.round(off / g) * g) < 1e-6;
-  if (!d.triplet) return on(ba.offset, 6) && (on(offB, 6) || Math.abs(offB - bb.len) < 1e-6);
+  if (!d.triplet) return on(ba.offset, 3) && (on(offB, 3) || Math.abs(offB - bb.len) < 1e-6);
   return on(ba.offset, 4) && on(offB, 4) && (kinds.has(ba.key) || kinds.has(bb.key));
 }
 
@@ -272,7 +353,7 @@ function within(len: number, triplet: boolean): Dur[] {
 // ---------------------------------------------------------------------------
 
 export interface GridSpec {
-  /** Finest plain subdivision in ticks (6 = 32nd, 12 = 16th, 24 = eighth). */
+  /** Finest plain subdivision in ticks (3 = 64th, 6 = 32nd, 12 = 16th, 24 = eighth). */
   binary: number;
   /** Finest triplet subdivision in ticks (16 = triplet eighth, 8 = triplet 16th), 0 = none. */
   triplet: number;
@@ -305,8 +386,8 @@ export function makeQuantizer(L: Layout, points: { t: number; w: number }[], spe
   const gridFor = new Map<string, number>();
   // the requested plain grid, or the largest smaller one that divides the beat
   const binOf = (len: number) => {
-    for (let g = Math.min(spec.binary, len); g >= 6; g--) if (len % g === 0 && g % 6 === 0) return g;
-    return 6;
+    for (let g = Math.min(spec.binary, len); g >= 3; g--) if (len % g === 0 && (g % 6 === 0 || g === 3)) return g;
+    return Math.min(6, spec.binary);
   };
   const triOf = (len: number) => {
     if (!spec.triplet) return 0;
@@ -346,6 +427,69 @@ export function makeQuantizer(L: Layout, points: { t: number; w: number }[], spe
   };
 }
 
+/**
+ * Snap one voice's notes to the grid without losing any. Notes shorter than `unit` (a
+ * fast run, an odd tuplet, a cadenza), or that the grid would put on top of the note
+ * before, are spread evenly in steps of `unit` up to the next note – or, with too little
+ * room for that, packed just before it, taking time from the note before the run.
+ * Returns the number of notes placed that way.
+ */
+export function snapVoice(notes: TimedNote[], snap: (t: number) => number, unit: number, end = Infinity): number {
+  // onsets: notes starting together (a chord) move together
+  const sorted = [...notes].sort((a, b) => a.start - b.start);
+  const onsets: { o: number; s: number; notes: TimedNote[] }[] = [];
+  for (const n of sorted) {
+    const last = onsets[onsets.length - 1];
+    if (last && Math.abs(last.o - n.start) < 1e-6) last.notes.push(n);
+    else onsets.push({ o: n.start, s: snap(n.start), notes: [n] });
+  }
+  // too short to write, or snapped onto a note before it that stays put
+  const short = onsets.map(x => x.notes.some(n => n.end - n.start < unit - 1e-6));
+  const squeezed = onsets.map((x, i) => short[i] || (i > 0 && !short[i - 1] && x.s <= onsets[i - 1].s + 1e-6));
+  let placed = 0;
+  for (let p = 0; p < onsets.length; p++) {
+    if (!squeezed[p]) continue;
+    let q = p;
+    while (q + 1 < onsets.length && squeezed[q + 1]) q++;
+    // a note colliding with the one before takes that one into its run
+    if (p > 0 && onsets[p].s <= onsets[p - 1].s + 1e-6 && !squeezed[p - 1]) p--;
+    const count = q - p + 1;
+    const until = q + 1 < onsets.length ? onsets[q + 1].s : Math.min(end, Math.max(...onsets[q].notes.map(n => snap(n.end))));
+    const already = onsets.slice(p, q + 1).every((x, k) => k === 0 || x.s >= onsets[p + k - 1].s + unit - 1e-6) && onsets[q].s + unit <= until + 1e-6;
+    if (!already) {
+      const room = Math.floor((until - onsets[p].s + 1e-6) / unit);
+      let from: number | null = null;
+      let slots = 0;
+      if (room >= count) {
+        from = onsets[p].s;
+        slots = room;
+      } else {
+        const packed = until - count * unit;
+        if (packed >= (p > 0 ? onsets[p - 1].s + unit : 0) - 1e-6) {
+          from = packed;
+          slots = count;
+        }
+      }
+      if (from !== null) {
+        for (let k = 0; k < count; k++) onsets[p + k].s = from + Math.floor((k * slots) / count) * unit;
+        placed += onsets.slice(p, q + 1).reduce((t, x) => t + x.notes.length, 0);
+      }
+    }
+    p = q;
+  }
+  onsets.forEach((x, k) => {
+    const next = onsets[k + 1];
+    for (const n of x.notes) {
+      // a note that ended before the next one began still does
+      const tight = next !== undefined && n.end <= next.o + 1e-6;
+      n.start = x.s;
+      n.end = Math.max(snap(n.end), x.s + unit);
+      if (tight && n.end > next.s) n.end = Math.max(next.s, x.s + unit);
+    }
+  });
+  return placed;
+}
+
 // ---------------------------------------------------------------------------
 // Voices
 // ---------------------------------------------------------------------------
@@ -371,12 +515,14 @@ export interface BuiltVoice<T> {
   shortened: number;
   /** Notes dropped (no room left, or after the end). */
   dropped: number;
-  /** Ties that couldn't be kept (the tied chord changes, or nothing to tie to). */
+  /** Tied notes that couldn't be kept (nothing of that pitch follows in the voice). */
   brokenTies: number;
 }
 
 interface WorkNote<T> extends TimedNote<T> {
   tied: Set<number>;
+  /** Per pitch: tied into the next note (only some notes of a chord). */
+  ties?: boolean[];
 }
 
 /**
@@ -432,12 +578,22 @@ export function buildVoice<T>(input: TimedNote<T>[], L: Layout): BuiltVoice<T> {
   }
   // explicit rests carry nothing: gaps are filled below
   const sounding = notes.filter(n => n.pitches.length > 0);
-  // ties: only into the very next note, and only if it holds nothing new
+  // ties: the whole chord into the next one, or note by note into the next note of the
+  // voice holding that pitch (a chord's held notes, an arpeggio held into a chord)
+  const lands = (i: number, midi: number) => {
+    for (let j = i + 1; j < sounding.length; j++) {
+      if (Math.abs(sounding[j].start - sounding[j - 1].end) > 1e-6) return false;
+      if (sounding[j].pitches.some(q => midiOf(q) === midi)) return true;
+    }
+    return false;
+  };
   sounding.forEach((n, i) => {
     const next = sounding[i + 1];
-    const ok = !!next && Math.abs(next.start - n.end) < 1e-6 && next.pitches.every(p => n.tied.has(midiOf(p)));
-    if (n.tied.size && !ok && next && Math.abs(next.start - n.end) < 1e-6 && next.pitches.some(p => n.tied.has(midiOf(p)))) brokenTies++;
-    n.tieNext = ok;
+    const adjacent = !!next && Math.abs(next.start - n.end) < 1e-6;
+    const into = n.pitches.map(p => n.tied.has(midiOf(p)) && lands(i, midiOf(p)));
+    brokenTies += n.pitches.filter((p, k) => n.tied.has(midiOf(p)) && !into[k]).length;
+    n.tieNext = into.length > 0 && into.every(Boolean) && adjacent && n.pitches.every(p => next.pitches.some(q => midiOf(q) === midiOf(p))) && next.pitches.every(p => n.tied.has(midiOf(p)));
+    n.ties = !n.tieNext && into.some(Boolean) ? into : undefined;
   });
   // sort chord members low → high (fingers/strings follow)
   for (const n of sounding) {
@@ -445,6 +601,7 @@ export function buildVoice<T>(input: TimedNote<T>[], L: Layout): BuiltVoice<T> {
     n.pitches = order.map(k => n.pitches[k]);
     if (n.fingers) n.fingers = order.map(k => n.fingers![k]);
     if (n.strings) n.strings = order.map(k => n.strings![k]);
+    if (n.ties) n.ties = order.map(k => n.ties![k]);
     if (n.fingers?.every(f => f === undefined)) n.fingers = undefined;
     if (n.strings?.every(s => s === undefined)) n.strings = undefined;
   }
@@ -467,6 +624,7 @@ export function buildVoice<T>(input: TimedNote<T>[], L: Layout): BuiltVoice<T> {
       if (n && k === 0 && n.fingers) spec.fingers = n.fingers;
       if (n && k === 0 && n.strings) spec.strings = n.strings;
       if (n && (k < pieces.length - 1 || n.tieNext)) spec.tieNext = true;
+      else if (n?.ties) spec.ties = n.ties;
       specs.push(spec);
     });
   };

@@ -5,12 +5,13 @@
  *   token    := head [ "/" dur ] [ "@" fingers ] [ "%" strings ] [ "~" ]
  *   head     := pitch | "r" | "[" pitch { " " pitch } "]"
  *   pitch    := letter [accidental] octave     e.g. C4  F#4  Bb3  Ebb5  Fx4  Cn5
- *   dur      := ("w"|"h"|"q"|"e"|"s"|"t") { "." } [ "3" ]   ("3" = triplet)
+ *   dur      := ("w"|"h"|"q"|"e"|"s"|"t"|"x") { "." } [ "3" ]   ("3" = triplet, "x" = 64th)
  *   fingers  := item { "," item }  item := digit | "L" | "R" | "-"
  *               piano fingers 1-5, fretting fingers 0-4 (0 = open),
  *               mallets 1-4 or L / R ("-" skips a chord member)
  *   strings  := digit { "," digit }   (string numbers, 1 = highest course)
- *   "~"      := tie into the next note
+ *   "~"      := tie into the next note; inside a chord, after one pitch, ties just that
+ *               note ("[C4~ E4 G4]/q [C4 F4 A4]": C4 is held, F4 and A4 are played)
  *
  * Bar lines and structure
  *   "|"      bar line (measure lengths are validated)
@@ -21,6 +22,8 @@
  *            loaded, so the player practises exactly what is performed.
  *   "[K:G]"  key change from this measure on   (any key name: Bb, F#m, …)
  *   "[T:3/4]" time signature change from this measure on
+ *   "[C:bass]" clef change from this point on (treble, bass, treble8vb, bass8vb);
+ *            it may come anywhere in a bar and applies to the whole staff
  *
  * Duration carries over from the previous note when omitted.
  * Pitches are SOUNDING pitches for piano and fretted instruments (guitar and bass
@@ -33,12 +36,13 @@ import type { InstrumentId } from './instruments';
 import { type KeySig, keyName, parseKey } from './keys';
 import { parsePitch, type Pitch, pitchToString } from './pitch';
 import { type BaseDuration, type TimeSig, durationTicks, measureTicks, splitTicks } from './rhythm';
-import { type Clef, type Hand, type Instrument, type MeterChange, type NoteSpec, type Score, buildVoice } from './score';
+import { type Clef, type ClefChange, type Hand, type Instrument, type MeterChange, type NoteSpec, type Score, type StaffPart, buildVoice } from './score';
 
 const TOKEN_RE = /\[[^\]]*\][^\s|]*|:?\|\|?:?[12]?|[^\s|]+/g;
-const NOTE_RE = /^(\[[^\]]*\]|r|[A-Ga-g](?:##|bb|x|#|b|n)?-?\d)(?:\/([whqest])(\.{0,2})(3)?)?(?:@([\dLRlr,\-]+))?(?:%([\d,\-]+))?(~)?$/;
+const NOTE_RE = /^(\[[^\]]*\]|r|[A-Ga-g](?:##|bb|x|#|b|n)?-?\d)(?:\/([whqestx])(\.{0,2})(3)?)?(?:@([\dLRlr,\-]+))?(?:%([\d,\-]+))?(~)?$/;
 const BAR_RE = /^(:?)\|(\|?)(:?)([12]?)$/;
-const META_RE = /^\[(K|T):\s*([^\]]+)\]$/;
+const META_RE = /^\[(K|T|C):\s*([^\]]+)\]$/;
+const CLEF_NAMES: Clef[] = ['treble', 'bass', 'treble8vb', 'bass8vb'];
 
 export interface ParseResult {
   specs: NoteSpec[];
@@ -46,6 +50,8 @@ export interface ParseResult {
   measures: number;
   /** Key / time changes found in this voice (0-based measures, after unrolling). */
   changes: MeterChange[];
+  /** Clef changes found in this voice (absolute ticks, after unrolling). */
+  clefs: ClefChange[];
 }
 
 export class NotationError extends Error {}
@@ -65,7 +71,7 @@ function parseTime(s: string): TimeSig {
   const m = /^(\d+)\s*\/\s*(\d+)$/.exec(s.trim());
   if (!m) throw new NotationError(`Invalid time signature "${s}" (use e.g. 3/4)`);
   const t: TimeSig = [parseInt(m[1], 10), parseInt(m[2], 10)];
-  if (t[0] < 1 || t[0] > 32 || ![1, 2, 4, 8, 16, 32].includes(t[1])) throw new NotationError(`Unsupported time signature "${s}"`);
+  if (t[0] < 1 || t[0] > 64 || ![1, 2, 4, 8, 16, 32].includes(t[1])) throw new NotationError(`Unsupported time signature "${s}"`);
   return t;
 }
 
@@ -141,6 +147,8 @@ export function parseVoice(text: string, time: TimeSig, pickupTicks = 0, label =
   const tokens = unrollRepeats(text);
   const specs: NoteSpec[] = [];
   const changes: MeterChange[] = [];
+  const clefs: ClefChange[] = [];
+  let tick = 0;
   let curTime = time;
   let mt = measureTicks(time);
   let base: BaseDuration = 'q';
@@ -175,6 +183,12 @@ export function parseVoice(text: string, time: TimeSig, pickupTicks = 0, label =
       return;
     }
     const meta = META_RE.exec(tok);
+    if (meta?.[1] === 'C') {
+      const clef = meta[2].trim() as Clef;
+      if (!CLEF_NAMES.includes(clef)) throw new NotationError(`${label}: unknown clef "${meta[2]}" in measure ${measureIndex + 1} (use ${CLEF_NAMES.join(', ')})`);
+      clefs.push({ tick, clef });
+      return;
+    }
     if (meta) {
       if (inMeasure !== 0) throw new NotationError(`${label}: "${tok}" must come at the start of a measure (measure ${measureIndex + 1})`);
       let ch = changes.find(c => c.measure === measureIndex);
@@ -204,10 +218,13 @@ export function parseVoice(text: string, time: TimeSig, pickupTicks = 0, label =
       triplet = !!trip;
     }
     let pitches: Pitch[] = [];
+    let ties: boolean[] | undefined;
     try {
       if (head === 'r') pitches = [];
       else if (head.startsWith('[')) {
-        pitches = head.slice(1, -1).trim().split(/\s+/).map(parsePitch);
+        const parts = head.slice(1, -1).trim().split(/\s+/);
+        pitches = parts.map(x => parsePitch(x.replace(/~$/, '')));
+        if (parts.some(x => x.endsWith('~'))) ties = parts.map(x => x.endsWith('~'));
       } else pitches = [parsePitch(head)];
     } catch {
       throw new NotationError(`${label}: invalid pitch in "${tok}" (measure ${measureIndex + 1})`);
@@ -220,19 +237,20 @@ export function parseVoice(text: string, time: TimeSig, pickupTicks = 0, label =
     if (strings && strings.length !== pitches.length) {
       throw new NotationError(`${label}: string count mismatch in "${tok}"`);
     }
-    specs.push({ pitches, base, dots, triplet, fingers, strings, tieNext: !!tie });
+    specs.push({ pitches, base, dots, triplet, fingers, strings, tieNext: !!tie, ties: tie ? undefined : ties });
     inMeasure += durationTicks(base, dots, triplet);
+    tick += durationTicks(base, dots, triplet);
   });
   if (inMeasure > 0) closeMeasure(true);
   // drop a change in the very first measure into the header (the caller's time/key)
-  return { specs, measures, changes: changes.filter(c => c.measure > 0 || c.time || c.key) };
+  return { specs, measures, changes: changes.filter(c => c.measure > 0 || c.time || c.key), clefs };
 }
 
 // ---------------------------------------------------------------------------
 // Writing the notation (inverse of parseVoice) – used by the importers
 // ---------------------------------------------------------------------------
 
-const DUR_ORDER: BaseDuration[] = ['w', 'h', 'q', 'e', 's', 't'];
+const DUR_ORDER: BaseDuration[] = ['w', 'h', 'q', 'e', 's', 't', 'x'];
 
 /** Exact duration token for a tick length, or null if it needs ties (e.g. 5 eighths). */
 export function durationToken(ticks: number): string | null {
@@ -252,14 +270,20 @@ function listToken(xs: (number | undefined)[] | undefined, mallets: boolean): st
 
 /** One note/rest/chord token. `dur` is omitted when it equals `prevDur`. */
 export function formatToken(spec: NoteSpec, prevDur: string | null, opts: { mallets?: 2 | 4 } = {}): { token: string; dur: string } {
-  const head = spec.pitches.length === 0 ? 'r' : spec.pitches.length === 1 ? pitchToString(spec.pitches[0]) : `[${spec.pitches.map(pitchToString).join(' ')}]`;
+  const partial = !spec.tieNext && spec.pitches.length > 1 && spec.ties?.some(Boolean);
+  const head =
+    spec.pitches.length === 0
+      ? 'r'
+      : spec.pitches.length === 1
+        ? pitchToString(spec.pitches[0])
+        : `[${spec.pitches.map((p, i) => pitchToString(p) + (partial && spec.ties![i] ? '~' : '')).join(' ')}]`;
   const dur = spec.base + '.'.repeat(spec.dots ?? 0) + (spec.triplet ? '3' : '');
   let tok = head + (dur === prevDur ? '' : `/${dur}`);
   const f = listToken(spec.fingers, opts.mallets === 2);
   if (f) tok += `@${f}`;
   const s = listToken(spec.strings, false);
   if (s) tok += `%${s}`;
-  if (spec.tieNext && spec.pitches.length) tok += '~';
+  if (spec.pitches.length && (spec.tieNext || (spec.pitches.length === 1 && spec.ties?.[0]))) tok += '~';
   return { token: tok, dur };
 }
 
@@ -274,7 +298,7 @@ export function formatToken(spec: NoteSpec, prevDur: string | null, opts: { mall
 function splitWithTriplets(ticks: number): { base: BaseDuration; dots: number; triplet?: boolean }[] {
   const plain = splitTicks(ticks);
   if (plain.reduce((a, p) => a + durationTicks(p.base, p.dots), 0) === ticks) return plain;
-  for (const b of ['w', 'h', 'q', 'e', 's', 't'] as BaseDuration[]) {
+  for (const b of DUR_ORDER) {
     const v = durationTicks(b, 0, true);
     for (let k = 1; k <= 4 && k * v <= ticks; k++) {
       const rest = ticks - k * v;
@@ -285,8 +309,12 @@ function splitWithTriplets(ticks: number): { base: BaseDuration; dots: number; t
   return plain;
 }
 
-export function formatVoice(specs: NoteSpec[], time: TimeSig, opts: { pickup?: number; changes?: MeterChange[]; mallets?: 2 | 4 } = {}): string {
+export function formatVoice(specs: NoteSpec[], time: TimeSig, opts: { pickup?: number; changes?: MeterChange[]; mallets?: 2 | 4; clefs?: ClefChange[] } = {}): string {
   const out: string[] = [];
+  // clef changes go in front of the first note that starts at or after them
+  const clefs = [...(opts.clefs ?? [])].sort((a, b) => a.tick - b.tick);
+  let clefIdx = 0;
+  let at = 0;
   let measure = 0;
   let t = time;
   const lenOf = (m: number) => (m === 0 && opts.pickup ? opts.pickup : measureTicks(t));
@@ -313,6 +341,11 @@ export function formatVoice(specs: NoteSpec[], time: TimeSig, opts: { pickup?: n
         room = lenOf(measure);
         barStart = false;
       }
+      if (first) {
+        let clef: Clef | null = null;
+        while (clefIdx < clefs.length && clefs[clefIdx].tick <= at + 1e-6) clef = clefs[clefIdx++].clef;
+        if (clef) out.push(`[C:${clef}]`);
+      }
       const take = Math.min(remaining, room);
       const whole = take === remaining && first;
       const parts: { base: BaseDuration; dots: number; triplet?: boolean }[] = whole
@@ -328,6 +361,7 @@ export function formatVoice(specs: NoteSpec[], time: TimeSig, opts: { pickup?: n
           fingers: first && i === 0 ? spec.fingers : undefined,
           strings: first && i === 0 ? spec.strings : undefined,
           tieNext: spec.pitches.length ? (last ? spec.tieNext : true) : false,
+          ties: last ? spec.ties : undefined,
         };
         const { token, dur } = formatToken(piece, prevDur, { mallets: opts.mallets });
         out.push(token);
@@ -335,6 +369,7 @@ export function formatVoice(specs: NoteSpec[], time: TimeSig, opts: { pickup?: n
       });
       remaining -= take;
       room -= take;
+      at += take;
       first = false;
       if (room <= 0) {
         out.push('|');
@@ -402,7 +437,7 @@ export interface SongDef {
 
 function pickupToTicks(p?: string): number {
   if (!p) return 0;
-  const m = /^([whqest])(\.{0,2})$/.exec(p);
+  const m = /^([whqestx])(\.{0,2})$/.exec(p);
   if (!m) throw new NotationError(`Invalid pickup "${p}"`);
   return durationTicks(m[1] as BaseDuration, m[2].length);
 }
@@ -434,14 +469,25 @@ export function songToScore(song: SongDef): Score {
   if (opening?.key) key = opening.key;
   if (opening?.time) time = opening.time;
   const changes = allChanges.filter(c => c.measure > 0);
-  const staves = song.staves.map((st, si) => ({
-    clef: st.clef,
-    hand: st.hand,
-    voices: parsed[si].map((r, vi) => {
-      measures = Math.max(measures, r.measures);
-      return buildVoice(r.specs, time, `${song.id}-s${si}v${vi}`, pickup, changes);
-    }),
-  }));
+  const staves = song.staves.map((st, si): StaffPart => {
+    const staff: StaffPart = {
+      clef: st.clef,
+      hand: st.hand,
+      voices: parsed[si].map((r, vi) => {
+        measures = Math.max(measures, r.measures);
+        return buildVoice(r.specs, time, `${song.id}-s${si}v${vi}`, pickup, changes);
+      }),
+    };
+    // clef marks from any voice apply to the staff; one at the very start sets the opening clef
+    const marks = parsed[si].flatMap(r => r.clefs).sort((a, b) => a.tick - b.tick);
+    const clefChanges: ClefChange[] = [];
+    for (const c of marks) {
+      if (c.tick === 0) staff.clef = c.clef;
+      else if (c.clef !== (clefChanges[clefChanges.length - 1]?.clef ?? staff.clef)) clefChanges.push(c);
+    }
+    if (clefChanges.length) staff.clefChanges = clefChanges;
+    return staff;
+  });
   return {
     id: song.id,
     title: song.title,

@@ -173,7 +173,7 @@ describe('MusicXML import: piano grand staff', () => {
     expect(r.warnings).toEqual([]);
   });
 
-  it('merges a third voice into chords where it lines up and reports what it dropped', () => {
+  it('merges a third voice into chords that start with it and reports it', () => {
     const three = score({
       parts: [{
         id: 'P1',
@@ -191,9 +191,32 @@ describe('MusicXML import: piano grand staff', () => {
     const r = importMusicXml(three);
     const song = check(r);
     expect(song.title).toBe('Untitled');
-    // C4 lines up with voice 1's E5 and joins it; B3 (a quarter under a half) can't
-    expect(song.staves[0].voices).toEqual(['[C4 E5]/h D5 |', 'G4/q A4 F4/h |']);
-    expect(r.warnings.join(' ')).toMatch(/more than two voices.*1 note merged into chords and 1 note dropped/);
+    // C4 lines up with voice 1's E5 and joins it; B3 starts with F4 (nearer than D5) and joins
+    // that chord, taking its length
+    expect(song.staves[0].voices).toEqual(['[C4 E5]/h D5 |', 'G4/q A4 [B3 F4]/h |']);
+    expect(r.warnings.join(' ')).toMatch(/more than two voices.*2 notes merged into chords\)/);
+  });
+
+  it('moves a third voice into a kept voice that is silent meanwhile, and drops only what fits nowhere', () => {
+    const three = score({
+      parts: [{
+        id: 'P1',
+        name: 'Piano',
+        measures: [
+          attributes({ divisions: 2, fifths: 0, time: [4, 4], clefs: [clef('G', 2)] }) +
+            notes({ p: 'E5', d: 4, type: 'half' }, { p: 'D5', d: 4, type: 'half' }) +
+            '<backup><duration>8</duration></backup>' +
+            notes({ p: 'r', d: 4, voice: 2 }, { p: 'F4', d: 2, type: 'quarter', voice: 2 }, { p: 'G4', d: 2, type: 'quarter', voice: 2 }) +
+            '<backup><duration>8</duration></backup>' +
+            notes({ p: 'C4', d: 2, type: 'quarter', voice: 3 }, { p: 'r', d: 3, voice: 3 }, { p: 'A3', d: 1, type: 'eighth', voice: 3 }, { p: 'r', d: 2, voice: 3 }),
+        ],
+      }],
+    });
+    const r = importMusicXml(three);
+    const song = check(r);
+    // C4 goes into voice 2's opening rest; A3 starts with nothing and overlaps both voices
+    expect(song.staves[0].voices).toEqual(['E5/h D5 |', 'C4/q r F4 G4 |']);
+    expect(r.warnings.join(' ')).toMatch(/more than two voices.*\(1 note dropped\)/);
   });
 
   it('writes a second voice that only doubles the first as chords', () => {
@@ -345,7 +368,7 @@ describe('MusicXML import: structure', () => {
     expect(song.staves[0].voices).toEqual(['C4/q D4 | E4/h |']);
   });
 
-  it('pads short measures, trims long ones and says so', () => {
+  it('pads short measures, gives long ones a time signature of their own and says so', () => {
     const xml = simple([
       whole('C4'),
       notes({ p: 'D4', d: 3, type: 'half', dots: 1 }),
@@ -355,9 +378,9 @@ describe('MusicXML import: structure', () => {
     const r = importMusicXml(xml);
     const song = check(r);
     expect(song.pickup).toBeUndefined();
-    expect(song.staves[0].voices).toEqual(['C4/w | D4/h. r/q | E4/w | G4 |']);
+    expect(song.staves[0].voices).toEqual(['C4/w | D4/h. r/q | [T:5/4] E4/w F4/q | [T:4/4] G4/w |']);
     expect(r.warnings).toEqual([
-      'Measure 3 had more beats than the time signature allows; the extra notes were cut.',
+      'Measure 3 is longer than the time signature (a cadenza?); it was given a time signature of its own.',
       'Measure 2 was incomplete and filled with rests.',
       '1 grace note was left out.',
     ]);
@@ -523,6 +546,189 @@ function zip(entries: { name: string; data: Uint8Array; raw: Uint8Array; method:
   out.push(...central, ...u32(0x06054b50), ...u16(0), ...u16(0), ...u16(entries.length), ...u16(entries.length), ...u32(central.length), ...u32(cdOffset), ...u16(0));
   return new Uint8Array(out);
 }
+
+describe('MusicXML import: real-score details', () => {
+  const grand = (measures: string[], fifths = 0, extra: { mode?: string } = {}) =>
+    score({
+      title: 'G',
+      parts: [{ id: 'P1', name: 'Piano', measures: measures.map((m, i) => (i === 0 ? attributes({ divisions: 2, fifths, mode: extra.mode, time: [4, 4], staves: 2, clefs: [clef('G', 2, 1), clef('F', 4, 2)] }) + m : m)) }],
+    });
+  const back = (d = 8) => `<backup><duration>${d}</duration></backup>`;
+
+  it('puts cross-staff notes back on their own hand\'s staff', () => {
+    // the right hand's last two notes are drawn on the bass staff
+    const xml = grand([
+      notes({ p: 'E4', d: 2, type: 'quarter', staff: 1 }, { p: 'C4', d: 2, type: 'quarter', staff: 1 }, { p: 'A3', d: 2, type: 'quarter', staff: 2 }, { p: 'F3', d: 2, type: 'quarter', staff: 2 }) +
+        back() +
+        notes({ p: 'C2', d: 8, type: 'whole', voice: 5, staff: 2 }),
+    ]);
+    const r = importMusicXml(xml);
+    const song = check(r);
+    expect(song.staves.map(s => s.voices)).toEqual([['E4/q C4 A3 F3 |'], ['C2/w |']]);
+    expect(r.warnings.join(' ')).toMatch(/2 cross-staff notes are written on their own hand's staff/);
+  });
+
+  it('leaves a voice number shared by both staves alone (some programs number each staff from 1)', () => {
+    const xml = grand([notes({ p: 'E5', d: 8, type: 'whole', staff: 1 }) + back() + notes({ p: 'C3', d: 8, type: 'whole', staff: 2 })]);
+    const r = importMusicXml(xml);
+    expect(check(r).staves.map(s => s.voices)).toEqual([['E5/w |'], ['C3/w |']]);
+    expect(r.warnings.join(' ')).not.toMatch(/cross-staff/);
+  });
+
+  it('puts the upper voice first, by its stems', () => {
+    // voice 5 (written first) is the low bass, voice 6 an arpeggio above it with stems up
+    const stem = (dir: string) => (n: string) => n.replace('</voice>', `</voice><stem>${dir}</stem>`);
+    const xml = grand([
+      notes({ p: 'C5', d: 8, type: 'whole', staff: 1 }) +
+        back() +
+        notes({ p: 'C2', d: 4, type: 'half', voice: 5, staff: 2 }, { p: 'G2', d: 4, type: 'half', voice: 5, staff: 2 }).split('</note>').map(stem('down')).join('</note>') +
+        back() +
+        notes({ p: 'G2', d: 2, type: 'quarter', voice: 6, staff: 2 }, { p: 'C3', d: 2, type: 'quarter', voice: 6, staff: 2 }, { p: 'E3', d: 2, type: 'quarter', voice: 6, staff: 2 }, { p: 'G3', d: 2, type: 'quarter', voice: 6, staff: 2 })
+          .split('</note>')
+          .map(stem('up'))
+          .join('</note>'),
+    ]);
+    expect(check(importMusicXml(xml)).staves[1].voices).toEqual(['G2/q C3 E3 G3 |', 'C2/h G2 |']);
+  });
+
+  it('writes clef changes where they happen, repeats included', () => {
+    const toTreble = `<attributes><clef number="2"><sign>G</sign><line>2</line></clef></attributes>`;
+    const toBass = `<attributes><clef number="2"><sign>F</sign><line>4</line></clef></attributes>`;
+    const xml = grand([
+      notes({ p: 'C5', d: 8, type: 'whole', staff: 1 }) + back() + notes({ p: 'C3', d: 4, type: 'half', voice: 5, staff: 2 }) + toTreble + notes({ p: 'C4', d: 4, type: 'half', voice: 5, staff: 2 }),
+      notes({ p: 'D5', d: 8, type: 'whole', staff: 1 }) + back() + notes({ p: 'E4', d: 8, type: 'whole', voice: 5, staff: 2 }) + toBass,
+      notes({ p: 'E5', d: 8, type: 'whole', staff: 1 }) + back() + notes({ p: 'G2', d: 8, type: 'whole', voice: 5, staff: 2 }),
+    ]);
+    const r = importMusicXml(xml);
+    const song = check(r);
+    expect(song.staves[1].clef).toBe('bass');
+    expect(song.staves[1].voices).toEqual(['C3/h [C:treble] C4 | E4/w | [C:bass] G2 |']);
+    expect(r.warnings.join(' ')).not.toMatch(/clef/);
+    const { score: sc } = parseSongDoc(songToDoc(song));
+    expect(sc.staves[1].clefChanges).toEqual([{ tick: 96, clef: 'treble' }, { tick: 384, clef: 'bass' }]);
+  });
+
+  it('keeps 64th notes', () => {
+    // 16 divisions: a 16th is 4, a 32nd 2, a 64th 1
+    const xml = simple(
+      [notes({ p: 'C5', d: 48, type: 'half', dots: 1 }, { p: 'D5', d: 4, type: '16th' }, { p: 'E5', d: 1, type: '64th' }, { p: 'F5', d: 1, type: '64th' }, { p: 'G5', d: 2, type: '32nd' }, { p: 'A5', d: 8, type: 'eighth' })],
+      attributes({ divisions: 16, fifths: 0, time: [4, 4], clefs: [clef('G', 2)] }),
+    );
+    const r = importMusicXml(xml);
+    expect(check(r).staves[0].voices).toEqual(['C5/h. D5/s E5/x F5 G5/t A5/e |']);
+    expect(r.warnings).toEqual([]);
+  });
+
+  it('spreads a run too fast for any written value instead of dropping notes', () => {
+    // twelve notes in the time of one 16th (48 divisions: a quarter is 48)
+    const run = Array.from({ length: 12 }, (_, i) => ({ p: ['C5', 'D5', 'E5', 'F5'][i % 4], d: 1, type: '256th' }));
+    const xml = simple([notes({ p: 'C4', d: 144, type: 'half', dots: 1 }, ...run, { p: 'E6', d: 36, type: 'eighth', dots: 1 })], attributes({ divisions: 48, fifths: 0, time: [4, 4], clefs: [clef('G', 2)] }));
+    const r = importMusicXml(xml);
+    const song = check(r);
+    const { score: sc } = parseSongDoc(songToDoc(song));
+    const played = sc.staves[0].voices[0].notes.filter(n => !n.rest && !n.tiePrev);
+    expect(played.length).toBe(14);
+    // the run is packed in 64ths before E6, which keeps its place
+    expect(played.slice(1, 13).every(n => n.base === 'x')).toBe(true);
+    expect(played[13].tick).toBe(156);
+    expect(r.warnings.join(' ')).toMatch(/spaced out evenly so that every note is kept/);
+  });
+
+  it('keeps a held note of a chord tied while the others move', () => {
+    const xml = simple([
+      notes({ p: 'C4', d: 2, type: 'half', tie: 'start' }, { p: 'E4', d: 2, type: 'half', chord: true }, { p: 'C4', d: 2, type: 'half', tie: 'stop' }, { p: 'F4', d: 2, type: 'half', chord: true }),
+    ]);
+    const r = importMusicXml(xml);
+    const song = check(r);
+    expect(song.staves[0].voices).toEqual(['[C4~ E4]/h [C4 F4] |']);
+    expect(r.warnings).toEqual([]);
+  });
+
+  it('keeps an arpeggio held into a chord', () => {
+    const xml = simple([
+      notes(
+        { p: 'C4', d: 1, type: 'eighth', tie: 'start' },
+        { p: 'E4', d: 1, type: 'eighth', tie: 'start' },
+        { p: 'G4', d: 2, type: 'quarter' },
+        { p: 'C4', d: 4, type: 'half', tie: 'stop' },
+        { p: 'E4', d: 4, type: 'half', chord: true, tie: 'stop' },
+        { p: 'G4', d: 4, type: 'half', chord: true },
+      ),
+    ], attributes({ divisions: 2, fifths: 0, time: [4, 4], clefs: [clef('G', 2)] }));
+    const r = importMusicXml(xml);
+    const song = check(r);
+    expect(song.staves[0].voices).toEqual(['C4/e~ E4~ G4/q [C4 E4 G4]/h |']);
+    expect(r.warnings).toEqual([]);
+  });
+
+  it('gives a bar of music with no time signature its own length', () => {
+    const xml = score({
+      title: 'Free',
+      parts: [{ id: 'P1', name: 'Piano', measures: [`<attributes><divisions>1</divisions><key><fifths>0</fifths></key><clefs/></attributes>` + notes({ p: 'C4', d: 4, type: 'whole' }, { p: 'D4', d: 2, type: 'half' }), notes({ p: 'E4', d: 3, type: 'half', dots: 1 })] }],
+    });
+    const r = importMusicXml(xml);
+    const song = check(r);
+    expect(song.time).toEqual([6, 4]);
+    expect(song.staves[0].voices).toEqual(['C4/w D4/h | [T:3/4] E4/h. |']);
+    expect(r.warnings.join(' ')).toMatch(/no time signature/);
+  });
+
+  it('lets a tiny overflow from rounded tuplets pass quietly', () => {
+    // 5 in the time of 4 sixteenths, each rounded up by the file to 10 of 48 divisions
+    const five = Array.from({ length: 5 }, () => ({ p: 'C5', d: 10, type: '16th', tuplet: [5, 4] as [number, number] }));
+    const xml = simple([notes({ p: 'C4', d: 144, type: 'half', dots: 1 }, ...five)], attributes({ divisions: 48, fifths: 0, time: [4, 4], clefs: [clef('G', 2)] }));
+    const r = importMusicXml(xml);
+    check(r);
+    expect(r.warnings.join(' ')).not.toMatch(/more beats|time signature of its own/);
+  });
+
+  it('calls a key minor when the music says so', () => {
+    // A minor: the leading tone G#, ending on A in the bass
+    const am = grand([
+      notes({ p: 'A4', d: 2, type: 'quarter' }, { p: 'B4', d: 2, type: 'quarter' }, { p: 'G#4', d: 2, type: 'quarter' }, { p: 'A4', d: 2, type: 'quarter' }) + back() + notes({ p: 'A2', d: 4, type: 'half', voice: 5, staff: 2 }, { p: 'E2', d: 4, type: 'half', voice: 5, staff: 2 }),
+      notes({ p: 'C5', d: 4, type: 'half' }, { p: 'A4', d: 4, type: 'half' }) + back() + notes({ p: 'A2', d: 8, type: 'whole', voice: 5, staff: 2 }),
+    ]);
+    expect(check(importMusicXml(am)).key).toBe('Am');
+    const c = grand([
+      notes({ p: 'C5', d: 2, type: 'quarter' }, { p: 'E5', d: 2, type: 'quarter' }, { p: 'G5', d: 2, type: 'quarter' }, { p: 'E5', d: 2, type: 'quarter' }) + back() + notes({ p: 'C3', d: 4, type: 'half', voice: 5, staff: 2 }, { p: 'G2', d: 4, type: 'half', voice: 5, staff: 2 }),
+      notes({ p: 'C5', d: 8, type: 'whole' }) + back() + notes({ p: 'C3', d: 8, type: 'whole', voice: 5, staff: 2 }),
+    ]);
+    expect(check(importMusicXml(c)).key).toBe('C');
+    // an explicit minor is trusted; an explicit major is not (some programs write it for every key)
+    expect(check(importMusicXml(grand([notes({ p: 'C5', d: 8, type: 'whole' }) + back() + notes({ p: 'C3', d: 8, type: 'whole', voice: 5, staff: 2 })], 0, { mode: 'minor' }))).key).toBe('Am');
+    expect(check(importMusicXml(grand([am.split('<measure number="1">')[1].split('</measure>')[0].replace(/<attributes>.*?<\/attributes>/, '')], 0, { mode: 'major' }))).key).toBe('Am');
+  });
+
+  it('picks the part with the most music, and an unnamed braced pair as a piano', () => {
+    const xml = score({
+      title: 'Parts',
+      parts: [
+        { id: 'P1', name: 'Ornaments', measures: [attributes({ divisions: 1, fifths: 0, time: [4, 4], clefs: [clef('G', 2)] }) + whole('C6'), whole('r')] },
+        { id: 'P2', name: 'Piano', measures: [attributes({ divisions: 1, fifths: 0, time: [4, 4], clefs: [clef('G', 2)] }) + notes({ p: 'C5', d: 2, type: 'half' }, { p: 'D5', d: 2, type: 'half' }), notes({ p: 'E5', d: 2, type: 'half' }, { p: 'F5', d: 2, type: 'half' })] },
+      ],
+    });
+    const r = importMusicXml(xml);
+    expect(check(r).staves[0].voices).toEqual(['C5/h D5 | E5 F5 |']);
+    expect(r.warnings.join(' ')).toMatch(/Imported "Piano"/);
+    const pair = score({
+      title: 'Pair',
+      parts: [
+        { id: 'P1', name: '', measures: [attributes({ divisions: 1, fifths: 0, time: [4, 4], clefs: [clef('G', 2)] }) + whole('E5')] },
+        { id: 'P2', name: '', measures: [attributes({ divisions: 1, fifths: 0, time: [4, 4], clefs: [clef('F', 4)] }) + whole('C3')] },
+      ],
+    }).replace('<part-list>', '<part-list><part-group type="start" number="1"><group-symbol>brace</group-symbol></part-group>').replace('</part-list>', '<part-group type="stop" number="1"/></part-list>');
+    expect(check(importMusicXml(pair)).staves.map(s => s.hand)).toEqual(['R', 'L']);
+  });
+
+  it('gives a cadenza bar longer than its time signature a time signature of its own', () => {
+    const run = Array.from({ length: 12 }, (_, i) => ({ p: ['C5', 'D5', 'E5', 'F5'][i % 4], d: 1, type: 'eighth' }));
+    const xml = simple([whole('C4'), notes(...run.map(n => ({ ...n, d: 0.5 }))), whole('G4')].map((m, i) => (i === 1 ? notes(...run.map(n => ({ ...n, d: 2 }))) : m)), attributes({ divisions: 4, fifths: 0, time: [4, 4], clefs: [clef('G', 2)] }));
+    const r = importMusicXml(xml.replace(/<duration>4<\/duration>/g, '<duration>16</duration>'));
+    const song = check(r);
+    expect(song.staves[0].voices[0]).toMatch(/^C4\/w \| \[T:6\/4\] .* \| \[T:4\/4\] G4\/w \|$/);
+    expect(r.warnings.join(' ')).toMatch(/Measure 2 is longer than the time signature/);
+  });
+});
 
 describe('MusicXML import: compressed .mxl', () => {
   const xml = simple([notes({ p: 'C4', d: 2, type: 'half' }, { p: 'E4', d: 2, type: 'half' })]);

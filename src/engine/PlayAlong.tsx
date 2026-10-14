@@ -18,7 +18,7 @@ import { type FretMark, type KeyMark, type MarkColor } from '../instruments';
 import { isFretted, isMallet, voiceFor } from '../music/instruments';
 import { type Pitch, pitchToString, spellMidi } from '../music/pitch';
 import { PPQ, beatTicks, beatsPerBar } from '../music/rhythm';
-import { type PlayStep, type Score, type StepNote, buildSteps, scoreRange, scoreTotalTicks } from '../music/score';
+import { type PlayStep, type Score, type StepNote, buildSteps, clefAt, scoreRange, scoreTotalTicks } from '../music/score';
 import { malletHand, malletLabel } from '../music/sticking';
 import { type GhostNote, NotationView, type NoteState } from '../notation/NotationView';
 import type { ItemResult } from '../state/srs';
@@ -71,7 +71,7 @@ interface StepRuntime {
   auto: PlayStep['notes'];
 }
 
-const staffClef = (score: Score, staff: number) => score.staves[staff]?.clef ?? 'treble';
+const staffClef = (score: Score, staff: number, tick: number) => (score.staves[staff] ? clefAt(score.staves[staff], tick) : 'treble');
 
 type ContextMarks = { frets?: FretMark[]; keys?: KeyMark[] };
 
@@ -280,7 +280,7 @@ export function PlayAlong(props: PlayAlongProps) {
   const recordStepItems = useCallback(
     (i: number, correct: boolean, ms?: number) => {
       for (const n of runtime[i].required) {
-        itemsRef.current.push({ key: `note:${staffClef(rawScore, n.staff)}:${pitchToString(n.pitch)}`, correct, ms });
+        itemsRef.current.push({ key: `note:${staffClef(rawScore, n.staff, steps[i].tick)}:${pitchToString(n.pitch)}`, correct, ms });
       }
     },
     [runtime, rawScore],
@@ -404,7 +404,7 @@ export function PlayAlong(props: PlayAlongProps) {
         updates[i] = 'missed';
         const hits = tempoHitsRef.current[i] ?? new Set();
         for (const n of runtime[i].required) {
-          itemsRef.current.push({ key: `note:${staffClef(rawScore, n.staff)}:${pitchToString(n.pitch)}`, correct: hits.has(n.midi) });
+          itemsRef.current.push({ key: `note:${staffClef(rawScore, n.staff, steps[i].tick)}:${pitchToString(n.pitch)}`, correct: hits.has(n.midi) });
         }
       }
     }
