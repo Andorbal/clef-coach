@@ -1,7 +1,8 @@
 /**
- * Shared machinery for the song importers (src/songs/musicxml.ts, src/songs/midi.ts).
+ * Shared machinery for the song importers (src/songs/musicxml.ts, midi.ts, guitarpro.ts
+ * and tabtext.ts).
  *
- * Both importers reduce a foreign file to timed notes – start and end in ticks
+ * Each importer reduces a foreign file to timed notes – start and end in ticks
  * (PPQ = 48) on one performance timeline – plus a bar layout. This module turns that
  * into text notation that always validates:
  *
@@ -9,9 +10,10 @@
  *   - fill gaps with rests, split notes at bar lines and beats with ties, and write
  *     every piece as a single duration token (so formatVoice never has to split),
  *   - write the chord-symbol line with the same bar lines,
- *   - spell MIDI numbers in a key, guess an instrument from part names / programs.
+ *   - spell MIDI numbers in a key, guess an instrument from part names / programs,
+ *     estimate a key, and say how a fretted part's tuning differs from the app's.
  */
-import type { InstrumentId } from '../music/instruments';
+import { type InstrumentId, TUNINGS } from '../music/instruments';
 import { type KeySig, keyAlterations, tonicOf } from '../music/keys';
 import { type SongDef, formatVoice } from '../music/parse';
 import { type Pitch, type Step, STEPS, STEP_SEMIS, midiOf } from '../music/pitch';
@@ -138,6 +140,45 @@ function correlation(a: number[], b: number[]): number {
     db += (b[i] - mb) ** 2;
   });
   return da && db ? num / Math.sqrt(da * db) : 0;
+}
+
+/** Key signature of each major tonic pitch class (the spelling with fewer accidentals). */
+const MAJOR_FIFTHS = [0, -5, 2, -3, 4, -1, 6, 1, -4, 3, -2, 5];
+
+/** Krumhansl–Schmuckler: correlate the pitch-class durations with each key's profile. */
+export function estimateKey(notes: { midi: number; start: number; end: number }[]): KeySig {
+  const hist = new Array(12).fill(0);
+  for (const n of notes) hist[((n.midi % 12) + 12) % 12] += Math.max(1, n.end - n.start);
+  const corr = (profile: number[], tonic: number) => {
+    const xs = hist.map((_, i) => profile[(i - tonic + 12) % 12]);
+    const mx = xs.reduce((a, b) => a + b) / 12;
+    const my = hist.reduce((a, b) => a + b) / 12;
+    let num = 0;
+    let dx = 0;
+    let dy = 0;
+    for (let i = 0; i < 12; i++) {
+      num += (xs[i] - mx) * (hist[i] - my);
+      dx += (xs[i] - mx) ** 2;
+      dy += (hist[i] - my) ** 2;
+    }
+    return dx && dy ? num / Math.sqrt(dx * dy) : 0;
+  };
+  let best: KeySig = { fifths: 0, mode: 'major' };
+  let bestR = -Infinity;
+  for (let t = 0; t < 12; t++) {
+    const rMaj = corr(MAJOR_PROFILE, t);
+    if (rMaj > bestR + 1e-9) {
+      bestR = rMaj;
+      best = { fifths: MAJOR_FIFTHS[t], mode: 'major' };
+    }
+    const rMin = corr(MINOR_PROFILE, t);
+    if (rMin > bestR + 1e-9) {
+      bestR = rMin;
+      // a minor key shares its signature with the major key a minor third up
+      best = { fifths: MAJOR_FIFTHS[(t + 3) % 12], mode: 'minor' };
+    }
+  }
+  return best;
 }
 
 /**
@@ -674,6 +715,36 @@ export function writeChordLine(changes: { tick: number; symbol: string | null }[
     bars.push(toks.join(' '));
   }
   return `${bars.join(' | ')} |`;
+}
+
+// ---------------------------------------------------------------------------
+// Fretted tunings
+// ---------------------------------------------------------------------------
+
+/**
+ * The tuning the app will play a fretted part in: its standard one, or the variant
+ * (5-string bass, low-G or baritone ukulele) closest to the file's own tuning.
+ */
+export function appTuningFor(instrument: InstrumentId, source?: number[]): number[] {
+  const options =
+    instrument === 'bass' ? [TUNINGS.bass4.open, TUNINGS.bass5.open] : instrument === 'ukulele' ? [TUNINGS.ukuleleHighG.open, TUNINGS.ukuleleLowG.open, TUNINGS.ukuleleBaritone.open] : [TUNINGS.guitar.open];
+  if (!source?.length) return options[0];
+  const score = (t: number[]) => t.filter((o, i) => source[i] === o).length - Math.abs(t.length - source.length);
+  return options.reduce((best, t) => (score(t) > score(best) ? t : best));
+}
+
+const NOTE_NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+/** Open strings low → high, as players name a tuning ("D A D G B E"). */
+export function tuningText(open: number[]): string {
+  return [...open].reverse().map(m => NOTE_NAMES[((m % 12) + 12) % 12]).join(' ');
+}
+
+/** The warning for a fretted part in another tuning than the app's: `moved` notes lost their string. */
+export function retunedWarning(subject: string, tuning: number[], app: number[], moved: number): string {
+  return (
+    `${subject} is tuned ${tuningText(tuning)}; Clef Coach uses standard tuning (${tuningText(app)}), so the notes keep the pitch they sound` +
+    (moved ? `, and ${plural(moved, 'note')} that standard tuning can't reach on ${moved > 1 ? 'their' : 'its'} written string ${moved > 1 ? 'are' : 'is'} played on another.` : '.')
+  );
 }
 
 // ---------------------------------------------------------------------------

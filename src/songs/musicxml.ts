@@ -31,6 +31,7 @@ import {
   type TimedNote,
   ImportError,
   Warnings,
+  appTuningFor,
   buildVoice,
   cleanTempo,
   guessInstrument,
@@ -41,6 +42,7 @@ import {
   median,
   pickupToken,
   plural,
+  retunedWarning,
   snapVoice,
   writeChordLine,
   writeVoice,
@@ -58,27 +60,34 @@ export interface MusicXmlOptions {
   partIds?: string[];
   /** Title to use when the file has none (e.g. the file name). */
   title?: string;
+  /**
+   * Write each part for its own instrument when it is known (Guitar Pro tracks):
+   * `instrument` then only says which part to open by default.
+   */
+  keepPartInstrument?: boolean;
+  /** Leave out the bars before the chosen parts start playing. */
+  trimLeadingRests?: boolean;
 }
 
 // ---------------------------------------------------------------------------
 // What we read from the file
 // ---------------------------------------------------------------------------
 
-interface ClefInfo {
+export interface ClefInfo {
   sign: string;
   line: number;
   /** clef-octave-change: -1 for the guitar's treble-8vb clef. */
   octave: number;
 }
 
-interface Transpose {
+export interface Transpose {
   chromatic: number;
   diatonic: number;
   octave: number;
 }
 
 /** One written note head. */
-interface XNote {
+export interface XNote {
   written: Pitch;
   tieStart: boolean;
   finger?: number;
@@ -87,7 +96,7 @@ interface XNote {
 }
 
 /** A note, chord or rest in one voice of one staff. */
-interface XGroup {
+export interface XGroup {
   staff: number;
   voice: string;
   /** Ticks from the start of the measure. */
@@ -101,8 +110,10 @@ interface XGroup {
   stem?: 1 | -1;
 }
 
-interface XHarmony {
+export interface XHarmony {
   tick: number;
+  /** A chord symbol given as text (Guitar Pro), used instead of root / kind when it reads. */
+  symbol?: string;
   root: { step: Step; alter: number } | null;
   kind: string;
   kindText: string;
@@ -110,7 +121,7 @@ interface XHarmony {
   degrees: { value: number; alter: number; type: string }[];
 }
 
-interface XMeasure {
+export interface XMeasure {
   number: string;
   implicit: boolean;
   /** Length of the music in it, in ticks. */
@@ -140,7 +151,7 @@ interface XMeasure {
   fine: boolean;
 }
 
-interface XPart {
+export interface XPart {
   id: string;
   name: string;
   names: string[];
@@ -175,7 +186,7 @@ const flatText = (s: string) => s.replace(/\s+/g, ' ').trim();
 // Header and part list
 // ---------------------------------------------------------------------------
 
-interface Header {
+export interface Header {
   title: string;
   composer: string;
   arranger?: string;
@@ -417,7 +428,7 @@ function readTechnical(note: XmlElement, x: XNote): void {
   if (fr !== undefined && fr >= 0) x.fret = Math.round(fr);
 }
 
-function emptyMeasure(number: string, implicit: boolean, time: TimeSig, key: KeySig, transpose: Transpose | null): XMeasure {
+export function emptyMeasure(number: string, implicit: boolean, time: TimeSig, key: KeySig, transpose: Transpose | null): XMeasure {
   return {
     number, implicit, len: 0, time, key, transpose, groups: [], harmonies: [], clefStart: new Map(), clefs: [],
     fwdRepeat: false, bwdRepeat: 0, endingStop: false,
@@ -783,7 +794,8 @@ function pitchPlan(part: XPart, instrument: InstrumentId, w: Warnings): PitchPla
     }
     const best = [...diffs].sort((a, b) => b[1] - a[1])[0];
     const total = [...diffs.values()].reduce((s, x) => s + x, 0);
-    if (best && best[0] % 12 === 0 && best[1] >= Math.max(2, total * 0.6)) {
+    // most notes agree (a single note counts when it is all there is)
+    if (best && best[0] % 12 === 0 && best[1] >= total * 0.6 && (best[1] >= 2 || best[1] === total)) {
       const shift = -best[0];
       return { convert: n => octaveShift(n.written, shift), keyTranspose: () => null };
     }
@@ -822,6 +834,17 @@ const KIND_NEAREST: Record<string, string> = { 'major-11th': 'maj9', 'major-13th
 const accText = (a: number) => (a === 1 ? '#' : a === -1 ? 'b' : a === 2 ? '##' : a === -2 ? 'bb' : '');
 
 function harmonySymbol(h: XHarmony, t: Transpose | null, w: Warnings): string | null {
+  if (h.symbol !== undefined) {
+    try {
+      return chordSymbolText(parseChordSymbol(h.symbol.trim()));
+    } catch {
+      // not a symbol the app reads: its root and minor-ness, if it starts like a chord
+      const m = /^([A-G](?:#|b)?)(m(?!aj))?/.exec(h.symbol.trim());
+      if (!m) return null;
+      w.add('Some chord symbols were simplified to the nearest chord Clef Coach knows.');
+      return `${m[1]}${m[2] ?? ''}`;
+    }
+  }
   if (h.kind === 'none' || !h.root) return null;
   const move = (r: { step: Step; alter: number }) => {
     if (!t) return r;
@@ -916,6 +939,26 @@ export function importMusicXml(xml: string, opts: MusicXmlOptions = {}): ImportR
   const header = readHeader(root);
   const infos = readPartList(root);
   const parts = kids(root, 'part').map(p => readPart(p, infos.get(p.attrs.id ?? ''), w));
+  return buildSong({ header, parts, source: `Imported from MusicXML${header.software ? ` (${header.software})` : ''}` }, opts, w);
+}
+
+/** The instrument a part is for, from its names, its MIDI program or its strings. */
+export function partInstrument(p: XPart): InstrumentId | null {
+  const g = guessInstrument(p.names.length ? p.names : [p.name], p.program);
+  if (g || !p.tuning?.length) return g;
+  // tablature tells: four or five low strings are a bass, G C E A a ukulele
+  if (Math.min(...p.tuning) < 36) return 'bass';
+  if (p.tuning.length === 4 && Math.min(...p.tuning) >= 55) return 'ukulele';
+  return 'guitar';
+}
+
+/**
+ * Turn parts read from a score file into a song: choose the parts, write out repeats,
+ * lay out the bars, place notes in voices and write the text notation. Shared by
+ * MusicXML and Guitar Pro (converted to the same parts on reading).
+ */
+export function buildSong(read: { header: Header; parts: XPart[]; source: string }, opts: MusicXmlOptions, w: Warnings): ImportResult {
+  const { header, parts } = read;
   if (!parts.length || !parts.some(p => p.measures.length)) throw new ImportError('The score has no music in it.');
   const partList: ImportPart[] = parts.map(p => ({ id: p.id, name: p.name, staves: p.staves - (p.tabStaves.size && p.tabStaves.size < p.staves ? p.tabStaves.size : 0) }));
 
@@ -930,7 +973,9 @@ export function importMusicXml(xml: string, opts: MusicXmlOptions = {}): ImportR
     // the part with the most notes (or a right-hand / left-hand pair of piano parts), so a
     // small extra part (ornaments, a cue line) doesn't win just by coming first
     const playable = parts.filter(hasNotes);
-    const list = playable.length ? playable : parts;
+    // a guitarist wants the guitar part of a band score, a bassist the bass part
+    const forInstrument = opts.instrument && familyOf(opts.instrument) === 'fretted' ? playable.filter(p => partInstrument(p) === opts.instrument) : [];
+    const list = forInstrument.length ? forInstrument : playable.length ? playable : parts;
     const candidates: XPart[][] = list.map(p => [p]);
     for (let i = 0; i + 1 < list.length; i++) if (looksLikePianoPair(list[i], list[i + 1])) candidates.push([list[i], list[i + 1]]);
     const size = (ps: XPart[]) => ps.reduce((s, p) => s + noteCount(p), 0);
@@ -941,7 +986,8 @@ export function importMusicXml(xml: string, opts: MusicXmlOptions = {}): ImportR
   }
   const pianoPair = chosen.length === 2 && looksLikePianoPair(chosen[0], chosen[1]);
   const master = chosen[0];
-  const instrument: InstrumentId = opts.instrument ?? guessInstrument(master.names.length ? master.names : [master.name], master.program) ?? 'piano';
+  const own = partInstrument(master);
+  const instrument: InstrumentId = (opts.keepPartInstrument && own) || opts.instrument || own || 'piano';
 
   // ---- output staves and their voices
   interface OutStaff {
@@ -1021,7 +1067,7 @@ export function importMusicXml(xml: string, opts: MusicXmlOptions = {}): ImportR
       out.push({ time, key: sm.key, len, full, places: [{ src, pass, offset: 0, len }], partial: true });
     }
   }
-  const hasPickup = out.length > 0 && out[0].len < out[0].full;
+  let hasPickup = out.length > 0 && out[0].len < out[0].full;
   const padded: string[] = [];
   const shortBars: string[] = [];
   // every staff of a bar ends together, and more than one line says so: the bar is meant
@@ -1063,6 +1109,16 @@ export function importMusicXml(xml: string, opts: MusicXmlOptions = {}): ImportR
   if (shortBars.length) w.add(`${shortBars.length > 1 ? 'Measures' : 'Measure'} ${listNums(shortBars)} ${shortBars.length > 1 ? 'are' : 'is'} shorter than the time signature; ${shortBars.length > 1 ? 'each was' : 'it was'} given a time signature of its own.`);
   if (cut.length) w.add(`${cut.length > 1 ? 'Measures' : 'Measure'} ${listNums(cut)} had more beats than the time signature allows; the extra notes were cut.`);
   if (padded.length) w.add(`${padded.length > 1 ? 'Measures' : 'Measure'} ${listNums(padded)} ${padded.length > 1 ? 'were' : 'was'} incomplete and filled with rests.`);
+  if (opts.trimLeadingRests) {
+    // a band's lead part waits out the intro: start where it starts playing
+    let silent = 0;
+    while (silent < out.length - 1 && out[silent].places.every(pl => silentFrom(pl, 0))) silent++;
+    if (silent) {
+      out.splice(0, silent);
+      hasPickup = out[0].len < out[0].full;
+      w.add(`${plural(silent, 'empty bar')} at the start ${silent > 1 ? 'were' : 'was'} left out.`);
+    }
+  }
 
   // ---- keys (as the app's pitches sound) and the layout
   const plans = new Map(chosen.map(p => [p, pitchPlan(p, instrument, w)]));
@@ -1075,6 +1131,10 @@ export function importMusicXml(xml: string, opts: MusicXmlOptions = {}): ImportR
   // ---- timed notes per staff / voice
   const fretted = familyOf(instrument) === 'fretted';
   const tuning = fretted ? (master.tuning?.length ? master.tuning : defaultTuning(instrument)) : [];
+  // the app plays in standard tuning: keep a string mark only where the note can be played on that string there
+  const appTuning = fretted ? appTuningFor(instrument, master.tuning) : [];
+  const retuned = fretted && !!master.tuning?.length && master.tuning.some((o, i) => appTuning[i] !== o);
+  let movedStrings = 0;
   const [fLo, fHi] = fingerRange[instrument];
   const voicesNotes: TimedNote<LyricTag>[][][] = staves.map(st => st.slots.map(() => []));
   staves.forEach((st, si) => {
@@ -1097,6 +1157,13 @@ export function importMusicXml(xml: string, opts: MusicXmlOptions = {}): ImportR
               if (s >= 0) string = s + 1;
             }
             if (string !== undefined && (string < 1 || string > Math.max(tuning.length, 1))) string = undefined;
+            if (string !== undefined && retuned) {
+              const fret = midiOf(pitch) - (appTuning[string - 1] ?? -99);
+              if (fret < 0 || fret > 24) {
+                string = undefined;
+                movedStrings++;
+              }
+            }
             const finger = n.finger !== undefined && n.finger >= fLo && n.finger <= fHi ? n.finger : undefined;
             voicesNotes[si][vi].push({
               start,
@@ -1112,6 +1179,10 @@ export function importMusicXml(xml: string, opts: MusicXmlOptions = {}): ImportR
       }
     });
   });
+
+  if (retuned) {
+    w.add(retunedWarning(`The ${instrumentDef(instrument).name.toLowerCase()} part`, master.tuning!, appTuning, movedStrings));
+  }
 
   // major or minor, where the file doesn't say
   if (!master.modeGiven) inferModes(layout, voicesNotes.flat(2));
@@ -1197,7 +1268,7 @@ export function importMusicXml(xml: string, opts: MusicXmlOptions = {}): ImportR
     composer: header.composer,
     arranger: header.arranger,
     license: header.rights,
-    source: `Imported from MusicXML${header.software ? ` (${header.software})` : ''}`,
+    source: read.source,
     blurb: header.lyricist ? `Words by ${header.lyricist}.` : undefined,
     instrument,
     level: 3,

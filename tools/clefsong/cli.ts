@@ -2,8 +2,8 @@
  * clefsong — validate, convert and scan songs for Clef Coach.
  *
  *   clefsong validate song.json [more.json…]
- *   clefsong convert  score.musicxml|score.mxl|tune.mid [-o song.json] [--instrument piano] [--parts P1,P2]
- *   clefsong scan     page1.jpg page2.jpg|music.pdf [-o song.json] [--instrument piano] [--title "…"] [--hints "…"] [--model claude-opus-5-5]
+ *   clefsong convert  score.musicxml|score.mxl|tune.mid|song.gp5|tab.txt [-o song.json] [--instrument piano] [--parts P1,P2]
+ *   clefsong scan     page1.jpg page2.jpg|music.pdf|tab.txt [-o song.json] [--instrument piano] [--title "…"] [--hints "…"] [--model claude-opus-5-5]
  *   clefsong prompt   [--instrument ukulele]      print the transcription prompt for any AI assistant
  *
  * `scan` uses your own Anthropic API key (ANTHROPIC_API_KEY, or an `ant auth login` profile).
@@ -20,10 +20,12 @@ import { type ScanFile, TranscribeError, mediaTypeFor, transcribeSheetMusic } fr
 const HELP = `clefsong — Clef Coach song tools
 
   validate <song.json…>            check song files and list any problems
-  convert <file> [-o out.json]     MusicXML (.musicxml/.xml/.mxl) or MIDI (.mid) → Clef Coach song
+  convert <file> [-o out.json]     MusicXML (.musicxml/.xml/.mxl), MIDI (.mid), Guitar Pro (.gp3–.gp5, .gpx, .gp)
+                                   or text tab (.txt/.tab) → Clef Coach song
           [--instrument <id>]      piano | guitar | ukulele | bass | mallets
-          [--parts <ids>]          MusicXML part ids / MIDI track numbers to keep (comma-separated)
-  scan <images/pdf…> [-o out.json] transcribe photos or a PDF of sheet music / tab with Claude
+          [--parts <ids>]          MusicXML part ids / MIDI and Guitar Pro track numbers to keep (comma-separated)
+  scan <images/pdf/txt…>           transcribe photos or a PDF of sheet music / tab, or text tab, with Claude
+          [-o out.json]
           [--instrument <id>] [--title <t>] [--hints <text>] [--model <id>]
           needs ANTHROPIC_API_KEY (or an \`ant auth login\` profile)
   prompt [--instrument <id>]       print the prompt to use with any AI assistant
@@ -85,7 +87,7 @@ async function validate(a: Args): Promise<number> {
 
 async function convert(a: Args): Promise<number> {
   const f = a.files[0];
-  if (!f) throw new Error('convert: give a MusicXML or MIDI file');
+  if (!f) throw new Error('convert: give a MusicXML, MIDI, Guitar Pro or text tab file');
   const res = await importBytes(f, new Uint8Array(readFileSync(f)), { instrument: a.instrument, parts: a.parts });
   if (res.parts && res.parts.length > 1) console.log(`  parts in the file: ${res.parts.map(p => `${p.id}${p.name ? ` (${p.name})` : ''}`).join(', ')}  — choose with --parts`);
   const out = a.out ?? outName(f);
@@ -96,11 +98,11 @@ async function convert(a: Args): Promise<number> {
 }
 
 async function scan(a: Args): Promise<number> {
-  if (!a.files.length) throw new Error('scan: give one or more images (jpg/png/webp) or a PDF');
+  if (!a.files.length) throw new Error('scan: give one or more images (jpg/png/webp), a PDF or a text tab (.txt)');
   const files: ScanFile[] = a.files.map(f => {
     const mediaType = mediaTypeFor(f);
-    if (!mediaType) throw new Error(`${f}: use JPEG, PNG, WebP, GIF or PDF`);
-    return { mediaType, data: readFileSync(f).toString('base64'), name: basename(f) };
+    if (!mediaType) throw new Error(`${f}: use JPEG, PNG, WebP, GIF, PDF or a text tab (.txt, .tab)`);
+    return { mediaType, data: mediaType === 'text/plain' ? readFileSync(f, 'utf8') : readFileSync(f).toString('base64'), name: basename(f) };
   });
   const client = new Anthropic();
   try {

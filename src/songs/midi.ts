@@ -33,6 +33,7 @@ import {
   Warnings,
   buildVoice,
   cleanTempo,
+  estimateKey,
   guessInstrument,
   makeLayout,
   makeQuantizer,
@@ -220,51 +221,6 @@ function readTrack(d: Uint8Array, file: MidiFileData, decoder: TextDecoder): Mid
   for (const k of [...open.keys()]) close(Math.floor(k / 128), k % 128, tick);
   track.notes.sort((a, b) => a.start - b.start || a.midi - b.midi);
   return track;
-}
-
-// ---------------------------------------------------------------------------
-// Key estimation
-// ---------------------------------------------------------------------------
-
-const MAJOR_PROFILE = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
-const MINOR_PROFILE = [6.33, 2.68, 3.52, 5.38, 2.6, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
-/** Key signature of each major tonic pitch class (the spelling with fewer accidentals). */
-const MAJOR_FIFTHS = [0, -5, 2, -3, 4, -1, 6, 1, -4, 3, -2, 5];
-
-/** Krumhansl–Schmuckler: correlate the pitch-class durations with each key's profile. */
-export function estimateKey(notes: { midi: number; start: number; end: number }[]): KeySig {
-  const hist = new Array(12).fill(0);
-  for (const n of notes) hist[((n.midi % 12) + 12) % 12] += Math.max(1, n.end - n.start);
-  const corr = (profile: number[], tonic: number) => {
-    const xs = hist.map((_, i) => profile[(i - tonic + 12) % 12]);
-    const mx = xs.reduce((a, b) => a + b) / 12;
-    const my = hist.reduce((a, b) => a + b) / 12;
-    let num = 0;
-    let dx = 0;
-    let dy = 0;
-    for (let i = 0; i < 12; i++) {
-      num += (xs[i] - mx) * (hist[i] - my);
-      dx += (xs[i] - mx) ** 2;
-      dy += (hist[i] - my) ** 2;
-    }
-    return dx && dy ? num / Math.sqrt(dx * dy) : 0;
-  };
-  let best: KeySig = { fifths: 0, mode: 'major' };
-  let bestR = -Infinity;
-  for (let t = 0; t < 12; t++) {
-    const rMaj = corr(MAJOR_PROFILE, t);
-    if (rMaj > bestR + 1e-9) {
-      bestR = rMaj;
-      best = { fifths: MAJOR_FIFTHS[t], mode: 'major' };
-    }
-    const rMin = corr(MINOR_PROFILE, t);
-    if (rMin > bestR + 1e-9) {
-      bestR = rMin;
-      // a minor key shares its signature with the major key a minor third up
-      best = { fifths: MAJOR_FIFTHS[(t + 3) % 12], mode: 'minor' };
-    }
-  }
-  return best;
 }
 
 // ---------------------------------------------------------------------------

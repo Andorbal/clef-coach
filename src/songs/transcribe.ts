@@ -1,6 +1,6 @@
 /**
- * Transcribe photos / PDFs of sheet music or tablature into a Clef Coach song with
- * Claude, using the player's own API key. Shared by the in-app importer (browser)
+ * Transcribe photos / PDFs of sheet music or tablature, or tab written as text, into a
+ * Clef Coach song with Claude, using the player's own API key. Shared by the in-app importer (browser)
  * and the `clefsong scan` command-line tool (Node) – the caller creates the client.
  *
  * Each answer is checked with the song-format validator; if it doesn't load, the
@@ -14,11 +14,11 @@ import { TRANSCRIBE_RULES, repairTask, transcribeTask } from './llmPrompt';
 
 export const DEFAULT_TRANSCRIBE_MODEL = 'claude-opus-5-5';
 
-export type ScanMediaType = 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' | 'application/pdf';
+export type ScanMediaType = 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' | 'application/pdf' | 'text/plain';
 
 export interface ScanFile {
   mediaType: ScanMediaType;
-  /** base64, no data: prefix */
+  /** base64, no data: prefix; for text/plain (tab written as text) the text itself */
   data: string;
   name?: string;
 }
@@ -58,7 +58,7 @@ export class TranscribeError extends Error {
 
 export function mediaTypeFor(name: string, fallback?: string): ScanMediaType | null {
   const ext = name.toLowerCase().split('.').pop() ?? '';
-  const byExt: Record<string, ScanMediaType> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', pdf: 'application/pdf' };
+  const byExt: Record<string, ScanMediaType> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', pdf: 'application/pdf', txt: 'text/plain', tab: 'text/plain' };
   if (byExt[ext]) return byExt[ext];
   if (fallback && (Object.values(byExt) as string[]).includes(fallback)) return fallback as ScanMediaType;
   return null;
@@ -67,6 +67,9 @@ export function mediaTypeFor(name: string, fallback?: string): ScanMediaType | n
 function fileBlock(f: ScanFile): Anthropic.Beta.BetaContentBlockParam {
   if (f.mediaType === 'application/pdf') {
     return { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: f.data }, title: f.name };
+  }
+  if (f.mediaType === 'text/plain') {
+    return { type: 'document', source: { type: 'text', media_type: 'text/plain', data: f.data }, title: f.name ?? 'Tab' };
   }
   return { type: 'image', source: { type: 'base64', media_type: f.mediaType, data: f.data } };
 }
@@ -89,12 +92,15 @@ export function extractJson(text: string): string {
 }
 
 export async function transcribeSheetMusic(client: Anthropic, files: ScanFile[], opts: TranscribeOptions = {}): Promise<TranscribeResult> {
-  if (!files.length) throw new TranscribeError('Add at least one photo or PDF of the music.');
+  if (!files.length) throw new TranscribeError('Add at least one photo or PDF of the music, or the tab as text.');
   const model = opts.model ?? DEFAULT_TRANSCRIBE_MODEL;
   const messages: Anthropic.Beta.BetaMessageParam[] = [
     {
       role: 'user',
-      content: [...files.map(fileBlock), { type: 'text', text: transcribeTask({ instrument: opts.instrument, title: opts.title, hints: opts.hints, pages: files.length }) }],
+      content: [
+        ...files.map(fileBlock),
+        { type: 'text', text: transcribeTask({ instrument: opts.instrument, title: opts.title, hints: opts.hints, pages: files.length, textTab: files.some(f => f.mediaType === 'text/plain') }) },
+      ],
     },
   ];
   const usage = { input: 0, output: 0 };

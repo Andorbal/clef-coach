@@ -20,14 +20,31 @@ export function isJunk(path: string): boolean {
   return path.split(/[\\/]/).some(part => part.startsWith('.') || part === '__MACOSX' || part === 'Thumbs.db' || part === 'desktop.ini');
 }
 
-/** A ZIP archive of songs – not a compressed MusicXML score (.mxl), which is a ZIP too. */
+/** A ZIP archive of songs – not a compressed MusicXML score (.mxl) or a Guitar Pro 7 file (.gp), which are ZIPs too. */
 export function isSongArchive(path: string, bytes: Uint8Array): boolean {
-  if (!isZip(bytes) || /\.mxl$/i.test(path)) return false;
+  if (!isZip(bytes) || /\.(mxl|gp)$/i.test(path)) return false;
   try {
-    return !listZip(bytes).some(e => e.name === 'META-INF/container.xml');
+    return !listZip(bytes).some(e => e.name === 'META-INF/container.xml' || e.name === 'Content/score.gpif');
   } catch {
     return false;
   }
+}
+
+/**
+ * Is this file worth importing? Text files often come along with songs (a readme, the
+ * lyrics): a .txt counts only when it holds a song file or a few lines of tab.
+ */
+function isSongFile(path: string, bytes: Uint8Array): boolean {
+  const kind = fileKind(path);
+  if (kind !== 'tab') return !!kind;
+  const text = new TextDecoder().decode(bytes.subarray(0, 200_000));
+  if (/^\s*\{/.test(text)) return true;
+  let run = 0;
+  for (const line of text.split(/\r\n?|\n/)) {
+    run = /-{3,}/.test(line) && /[|\d]/.test(line) ? run + 1 : 0;
+    if (run >= 3) return true;
+  }
+  return false;
 }
 
 /**
@@ -47,14 +64,16 @@ export async function expandArchives(files: BulkFile[]): Promise<{ files: BulkFi
             skipped.push(`${baseName(f.path)}: ${e.name}`);
             continue;
           }
-          out.push({ path: `${f.path.replace(/\.zip$/i, '')}/${e.name}`, bytes: await readZipEntry(f.bytes, e) });
+          const bytes = await readZipEntry(f.bytes, e);
+          if (isSongFile(e.name, bytes)) out.push({ path: `${f.path.replace(/\.zip$/i, '')}/${e.name}`, bytes });
+          else skipped.push(`${baseName(f.path)}: ${e.name}`);
         }
       } catch {
         skipped.push(f.path);
       }
       continue;
     }
-    if (fileKind(f.path)) out.push(f);
+    if (isSongFile(f.path, f.bytes)) out.push(f);
     else skipped.push(f.path);
   }
   return { files: out, skipped };

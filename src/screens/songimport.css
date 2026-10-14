@@ -78,6 +78,7 @@
   line-height: 1;
 }
 
+.scan-tab summary,
 .manual-prompt summary {
   cursor: pointer;
   color: var(--text-dim);
@@ -132,6 +133,29 @@
 
 .import-warnings li::marker {
   color: var(--gold);
+}
+
+.scan-tab[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* tab lines are only readable when they don't wrap */
+.scan-tab .import-text,
+.import-text.tab-text {
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.import-claude {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-top: 10px;
+  font-size: 14px;
 }
 
 .import-preview-head {

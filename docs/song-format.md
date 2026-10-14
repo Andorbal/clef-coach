@@ -10,7 +10,9 @@ an AI model write them for you.
 |---|---|---|
 | A score in MuseScore, Finale, Sibelius, Dorico, Flat, Noteflight… | **MusicXML** (`.musicxml`, `.mxl`) | Export → MusicXML. Keeps spelling, fingering, string numbers, chord symbols, lyrics, repeats. |
 | A paper or PDF score | **MusicXML from a scanner**, or **Scan with Claude** | Optical music recognition apps (Audiveris (free), MuseScore's PDF import, PlayScore, SmartScore, Soundslice) export MusicXML. Or let Claude read photos and write a Clef Coach song (in the app, or `npm run clefsong scan`). |
-| Guitar / ukulele / bass **tab** | **Scan with Claude**, or MusicXML from a tab editor | Tab editors (TuxGuitar, MuseScore, Guitar Pro) can export MusicXML. |
+| Guitar / ukulele / bass **tab** from a tab editor | **Guitar Pro** (`.gp`, `.gpx`, `.gp5`, `.gp4`, `.gp3`) | Guitar Pro, TuxGuitar, MuseScore and Songsterr-style editors save it. Keeps the rhythm, strings, tuning, capo, repeats, chord names and lyrics. |
+| Tab from a website (lines of dashes and fret numbers) | **Text tab** (`.txt`, or paste it), or **Scan with Claude** | Read straight away, but text tab seldom shows the rhythm: it is guessed from the spacing. Claude can work it out instead (paste the tab under *Scan sheet music*). See [Tab](#tab). |
+| A photo or PDF of tab | **Scan with Claude** | |
 | A MIDI file | **MIDI** (`.mid`) | Imported, but see the limits below. |
 | Nothing — you want to type it | **Clef Coach song** (`.json`) | The format below. |
 
@@ -26,6 +28,40 @@ MIDI records a *performance* — which key went down when — not the *notation*
 
 So Clef Coach imports MIDI (and does a careful job: quantizing to the beat, spelling with the key,
 splitting hands, finding pickups), but it can't be the main format.
+
+### Tab
+
+**Guitar Pro** files hold everything tab needs, so they import like MusicXML: each track becomes a
+part you can choose (drum tracks are left out), and the track for your instrument opens first.
+
+**Text tab** — the kind posted on websites — is read like this:
+
+```
+Tuning: Drop D        ← a "Tuning:" line, a capo ("Capo 2"), tempo ("Tempo: 96") and time ("Time: 3/4")
+Capo 2                  are all read; the first line can be the title ("Song by Artist")
+
+   Am          C      ← chord names over the tab become the song's chord symbols
+e|-----0-----|-----0-----|
+B|---1---1---|---1---1---|
+G|-2-------2-|-0-------0-|
+D|-----------|-2---------|
+A|-0---------|-3---------|
+D|-----------|-----------|  x2   ← "x2" plays the system twice; |: :| repeats work too
+```
+
+- **Strings and tuning.** The number of lines and their names say the instrument: six or more
+  strings are a guitar, `G D A E` a bass (or, when your instrument is guitar, its four low
+  strings), `A E C G` a ukulele. Names like `D` on the low string, or a `Tuning:` line (`Drop D`,
+  `half step down`, `DADGAD`, `Open G`, or the notes `D A D G B E`), set the tuning; a capo raises
+  every note. Notes keep the pitch they sound. Clef Coach plays in standard tuning, so a note the
+  standard-tuned string can't reach is played on another string.
+- **Techniques.** `h`, `p`, slides and taps are separate notes; a bend (`7b9`) is the fret it starts
+  on; muted notes (`x`) are left out; harmonics (`<12>`) are written at their fret.
+- **Rhythm.** A rhythm line over or under the tab (`q  e e  h`, with `.` for dotted notes) gives the
+  exact rhythm. Without one, the rhythm is **guessed** from how the notes are spaced in each bar
+  (and the time signature from how the bars fill up), so check it — the preview lets you read it
+  again in another time signature, or hand the tab to Claude, which works the rhythm out (and knows
+  how well-known songs go).
 
 ### Why MusicXML — and why a format of our own as well?
 
@@ -173,8 +209,9 @@ with `-`; `_` holds the previous syllable over an extra note:
 ## Tools
 
 ### In the app
-**Songs → Import a song** reads MusicXML, MIDI and Clef Coach files, accepts pasted text, and can
-scan photos or a PDF with Claude using your own Anthropic API key. You get a preview with every
+**Songs → Import a song** reads MusicXML, MIDI, Guitar Pro, text tab and Clef Coach files, accepts
+pasted tab or song files, and can scan photos, a PDF or text tab with Claude using your own
+Anthropic API key. You get a preview with every
 problem explained, can edit the source, listen, and save to *My songs*. Imported songs are
 included in backups (Settings → Export).
 
@@ -187,10 +224,13 @@ suggested) before saving.
 
 ```bash
 npm run clefsong -- validate my-song.json            # check one or more files
-npm run clefsong -- convert score.mxl -o song.json   # MusicXML or MIDI → Clef Coach song
+npm run clefsong -- convert score.mxl -o song.json   # MusicXML, MIDI, Guitar Pro or text tab → Clef Coach song
 npm run clefsong -- convert tune.mid --instrument guitar
+npm run clefsong -- convert band.gp5 --parts 2       # the third track of a Guitar Pro file
+npm run clefsong -- convert riff.txt                 # text tab (rhythm guessed from the spacing)
 npm run clefsong -- scan page1.jpg page2.jpg --instrument piano --title "Silent Night"
 npm run clefsong -- scan lesson.pdf -o lesson.clefsong.json
+npm run clefsong -- scan riff.txt --instrument bass  # text tab: Claude works out the rhythm
 npm run clefsong -- prompt --instrument ukulele      # the prompt for any AI assistant
 ```
 

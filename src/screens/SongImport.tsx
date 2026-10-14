@@ -1,7 +1,8 @@
 /**
  * Import a song: from a file (MusicXML from any notation app or sheet-music
- * scanner, MIDI, or a Clef Coach song file), from pasted text, or by scanning
- * photos / PDFs of sheet music or tablature with Claude using your own API key.
+ * scanner, MIDI, Guitar Pro, text tab or a Clef Coach song file), from pasted text
+ * (tab or a song file), or by having Claude read photos / PDFs of sheet music or
+ * tablature, or tab written as text, using your own API key.
  * Everything lands in a preview where you can check the music, fix the details
  * and save it to "My songs".
  */
@@ -21,7 +22,7 @@ import { buildSteps, sliceScore } from '../music/score';
 import { NotationView } from '../notation/NotationView';
 import { type BulkFile, expandArchives, isSongArchive } from '../songs/bulk';
 import { SongFormatError, newSongId, parseSongDoc, songToJson } from '../songs/format';
-import { IMPORT_ACCEPT, type ImportOutcome, importBytes } from '../songs/importers';
+import { IMPORT_ACCEPT, type ImportOutcome, KIND_LABELS, importBytes, importTabText } from '../songs/importers';
 import { manualPrompt } from '../songs/llmPrompt';
 import type { ScanFile } from '../songs/transcribe';
 import { useApp, useProfile } from '../state/store';
@@ -33,6 +34,22 @@ import { BulkImport } from './BulkImport';
 const KEY_STORAGE = 'clefcoach.anthropicKey';
 
 type Source = 'file' | 'scan' | 'paste';
+
+/** Where the song in the preview came from, to read it again with other choices. */
+type Origin = { kind: 'file'; name: string; bytes: Uint8Array } | { kind: 'paste'; text: string };
+
+/** What the player chose while checking an import: which parts, which time signature (text tab). */
+interface Reread {
+  parts?: string[];
+  time?: [number, number];
+}
+
+const TAB_TIMES = ['4/4', '3/4', '2/4', '6/8', '12/8'];
+
+const isTextFile = (f: File) => f.type === 'text/plain' || /\.(txt|tab)$/i.test(f.name);
+
+/** A song file pasted as text (JSON, perhaps in a code block), rather than tab. */
+const isSongText = (text: string) => /^\s*(```[a-z]*\s*)?\{/i.test(text);
 
 function readKey(): string {
   try {
@@ -96,7 +113,8 @@ export default function SongImport() {
   const [source, setSource] = useState<Source>('file');
   const [instrument, setInstrument] = useState<InstrumentId>(mine[0]);
   const [result, setResult] = useState<ImportOutcome | null>(null);
-  const [lastFile, setLastFile] = useState<{ name: string; bytes: Uint8Array } | null>(null);
+  const [origin, setOrigin] = useState<Origin | null>(null);
+  const [reread, setReread] = useState<Reread>({});
   const [error, setError] = useState<string[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [pasteText, setPasteText] = useState('');
@@ -106,6 +124,7 @@ export default function SongImport() {
   const [apiKey, setApiKey] = useState(readKey);
   const [remember, setRemember] = useState(() => !!readKey());
   const [scanFiles, setScanFiles] = useState<File[]>([]);
+  const [scanText, setScanText] = useState('');
   const [hints, setHints] = useState('');
   const [scanTitle, setScanTitle] = useState('');
   const [copied, setCopied] = useState(false);
@@ -143,22 +162,25 @@ export default function SongImport() {
     setError(e instanceof SongFormatError ? e.issues : [(e as Error).message || String(e)]);
   };
 
-  const importFile = async (name: string, bytes: Uint8Array, parts?: string[]) => {
-    setBusy('Reading the file…');
+  /** Read a file or pasted tab, with the choices made so far. */
+  const load = async (from: Origin, choices: Reread = {}) => {
+    setOrigin(from);
+    setReread(choices);
+    setBusy(from.kind === 'file' ? 'Reading the file…' : 'Reading the tab…');
     try {
-      show(await importBytes(name, bytes, { instrument: name.toLowerCase().endsWith('.json') ? undefined : instrument, parts }));
+      if (from.kind === 'file') show(await importBytes(from.name, from.bytes, { instrument: from.name.toLowerCase().endsWith('.json') ? undefined : instrument, ...choices }));
+      else show(await importTabText(from.text, { instrument, ...choices }));
     } catch (e) {
       fail(e);
     } finally {
       setBusy(null);
     }
   };
+  const importFile = (name: string, bytes: Uint8Array) => load({ kind: 'file', name, bytes });
 
   const onFile = async (f: File | undefined) => {
     if (!f) return;
-    const bytes = new Uint8Array(await f.arrayBuffer());
-    setLastFile({ name: f.name, bytes });
-    await importFile(f.name, bytes);
+    await importFile(f.name, new Uint8Array(await f.arrayBuffer()));
   };
 
   /** Several files, a folder or a .zip of songs: import them all; a single song file goes to the preview. */
@@ -172,13 +194,12 @@ export default function SongImport() {
       for (const p of picked) read.push({ path: p.path, bytes: new Uint8Array(await p.file.arrayBuffer()) });
       if (read.length === 1 && !isSongArchive(read[0].path, read[0].bytes)) {
         setBusy(null);
-        setLastFile({ name: read[0].path, bytes: read[0].bytes });
         await importFile(read[0].path, read[0].bytes);
         return;
       }
       const { files, skipped } = await expandArchives(read);
       if (!files.length) {
-        setError([`No song files there (MusicXML, MIDI or Clef Coach songs)${skipped.length ? `: ${skipped.length} other ${skipped.length > 1 ? 'files were' : 'file was'} left out` : ''}.`]);
+        setError([`No song files there (MusicXML, MIDI, Guitar Pro, tab or Clef Coach songs)${skipped.length ? `: ${skipped.length} other ${skipped.length > 1 ? 'files were' : 'file was'} left out` : ''}.`]);
         return;
       }
       setBulk({ files, skipped });
@@ -191,16 +212,31 @@ export default function SongImport() {
   const pathOf = (f: File) => (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name;
 
   const onPaste = () => {
+    if (!isSongText(pasteText)) {
+      void load({ kind: 'paste', text: pasteText });
+      return;
+    }
     try {
       const { song, warnings } = parseSongDoc(pasteText);
+      setOrigin(null);
       show({ song, warnings, kind: 'clefsong' });
     } catch (e) {
       fail(e);
     }
   };
 
+  /** Hand the tab in the preview to Claude, for its rhythm. */
+  const readWithClaude = () => {
+    if (!origin || !result) return;
+    setInstrument(result.song.instrument);
+    setScanText(origin.kind === 'paste' ? origin.text : new TextDecoder().decode(origin.bytes));
+    setScanFiles([]);
+    setResult(null);
+    setSource('scan');
+  };
+
   const runScan = async () => {
-    if (!apiKey.trim() || !scanFiles.length) return;
+    if (!apiKey.trim() || !(scanFiles.length || scanText.trim())) return;
     try {
       if (remember) localStorage.setItem(KEY_STORAGE, apiKey.trim());
       else localStorage.removeItem(KEY_STORAGE);
@@ -216,12 +252,15 @@ export default function SongImport() {
       const files: ScanFile[] = [];
       for (const f of scanFiles) {
         if (f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')) files.push({ mediaType: 'application/pdf', data: await fileToBase64(f), name: f.name });
+        else if (isTextFile(f)) files.push({ mediaType: 'text/plain', data: await f.text(), name: f.name });
         else files.push(await imageToScanFile(f));
       }
+      if (scanText.trim()) files.push({ mediaType: 'text/plain', data: scanText, name: 'Tab' });
       const [{ default: Anthropic }, { transcribeSheetMusic }] = await Promise.all([import('@anthropic-ai/sdk'), import('../songs/transcribe')]);
       // the key goes straight from this device to Anthropic – there is no Clef Coach server
       const client = new Anthropic({ apiKey: apiKey.trim(), dangerouslyAllowBrowser: true });
       const r = await transcribeSheetMusic(client, files, { instrument, title: scanTitle.trim() || undefined, hints: hints.trim() || undefined, onProgress: setBusy, signal: ctrl.signal });
+      setOrigin(null);
       show({ song: { ...r.song, source: r.song.source ?? 'Transcribed from a scan with Claude' }, warnings: r.warnings, kind: 'clefsong' });
     } catch (e) {
       const err = e as Error & { status?: number; raw?: string; issues?: string[] };
@@ -270,7 +309,7 @@ export default function SongImport() {
 
   return (
     <div className="page song-import">
-      <PageHeader eyebrow="Songs" title="Import a song" sub="Bring in your own music — a file from a notation app, a MIDI file, or a photo of the sheet music your teacher gave you." />
+      <PageHeader eyebrow="Songs" title="Import a song" sub="Bring in your own music — a file from a notation app, a MIDI file, guitar or bass tab, or a photo of the sheet music your teacher gave you." />
 
       {bulk && <BulkImport files={bulk.files} skipped={bulk.skipped} instrument={instrument} onCancel={() => setBulk(null)} />}
 
@@ -279,9 +318,9 @@ export default function SongImport() {
           <div className="import-sources">
             {(
               [
-                ['file', FileMusic, 'From a file', 'MusicXML, MIDI or a Clef Coach song'],
-                ['scan', Camera, 'Scan sheet music', 'Photos or a PDF, read by Claude'],
-                ['paste', ClipboardPaste, 'Paste', 'A Clef Coach song file as text'],
+                ['file', FileMusic, 'From a file', 'MusicXML, MIDI, Guitar Pro, tab or a Clef Coach song'],
+                ['scan', Camera, 'Scan sheet music', 'Photos, a PDF or text tab, read by Claude'],
+                ['paste', ClipboardPaste, 'Paste', 'Tab from a website, or a Clef Coach song'],
               ] as const
             ).map(([id, Icon, title, sub]) => (
               <button key={id} className={`import-source card ${source === id ? 'on' : ''}`} onClick={() => setSource(id)}>
@@ -295,7 +334,7 @@ export default function SongImport() {
           <div className="set-row import-instr">
             <span>
               Instrument
-              <span className="faint toggle-sub">Used for MIDI files and scans (MusicXML and song files say which instrument they are for).</span>
+              <span className="faint toggle-sub">Used for MIDI files, tab and scans (MusicXML, Guitar Pro and song files say which instrument they are for).</span>
             </span>
             <InstrumentSwitch value={instrument} onChange={setInstrument} />
           </div>
@@ -320,6 +359,9 @@ export default function SongImport() {
               <h2 className="display">Choose files</h2>
               <p className="dim">
                 <strong>MusicXML</strong> (.musicxml, .xml, .mxl) is the open standard every notation app exports — MuseScore, Finale, Sibelius, Dorico, Flat, Noteflight — and so do sheet-music scanners like Audiveris, PlayScore and SmartScore. It keeps the fingering, chord symbols, lyrics and repeats. <strong>MIDI</strong> works too, but it only knows which keys were pressed, so spelling and rhythm are worked out for you.
+              </p>
+              <p className="dim">
+                For guitar, bass and ukulele, <strong>Guitar Pro</strong> files (.gp, .gpx, .gp5, .gp4, .gp3) bring the tab with its rhythm, strings and tuning. <strong>Text tab</strong> (.txt) works too, but it seldom shows the rhythm, so that is guessed from the spacing — or let Claude read it under <em>Scan sheet music</em>.
               </p>
               <p className="dim">
                 Pick several files at once — or a <strong>.zip</strong> of them — to import a whole collection{isIOS() ? '' : ', or choose a folder, or drop files and folders here'}.
@@ -370,7 +412,7 @@ export default function SongImport() {
                 <Sparkles size={18} /> Scan with Claude
               </h2>
               <p className="dim">
-                Take photos of each page (flat, well lit, the whole page in view) or pick a PDF. Claude reads the notation or tab and writes it out as a Clef Coach song; the app checks every bar and asks Claude to fix anything that doesn't add up. Uses your own Anthropic API key.
+                Take photos of each page (flat, well lit, the whole page in view), pick a PDF, or give it tab written as text. Claude reads the notation or tab and writes it out as a Clef Coach song — for text tab it works out the rhythm too — and the app checks every bar and asks Claude to fix anything that doesn't add up. Uses your own Anthropic API key.
               </p>
               <label className="set-row">
                 <span>
@@ -391,10 +433,13 @@ export default function SongImport() {
               <input
                 ref={scanRef}
                 type="file"
-                accept="image/*,application/pdf"
+                accept="image/*,application/pdf,.txt,.tab,text/plain"
                 multiple
                 hidden
-                onChange={e => setScanFiles([...scanFiles, ...Array.from(e.target.files ?? [])])}
+                onChange={e => {
+                  setScanFiles([...scanFiles, ...Array.from(e.target.files ?? [])]);
+                  e.target.value = '';
+                }}
               />
               <div className="scan-files">
                 {scanFiles.map((f, i) => (
@@ -406,23 +451,27 @@ export default function SongImport() {
                   </span>
                 ))}
                 <button className="btn btn-sm" onClick={() => scanRef.current?.click()}>
-                  <Camera size={14} /> Add {scanFiles.length ? 'more pages' : 'photos or PDF'}
+                  <Camera size={14} /> Add {scanFiles.length ? 'more pages' : 'photos, PDF or text tab'}
                 </button>
               </div>
+              <details className="scan-tab" open={!!scanText}>
+                <summary>Tab written as text? Paste it here</summary>
+                <textarea className="import-text" wrap="off" value={scanText} onChange={e => setScanText(e.target.value)} placeholder={'e|-----0-----|\nB|---1---1---|\nG|-2-------2-|\n…'} spellCheck={false} aria-label="Tab as text" />
+              </details>
               <div className="row" style={{ justifyContent: 'flex-end', gap: 8 }}>
                 {busy && abortRef.current && (
                   <button className="btn" onClick={() => abortRef.current?.abort()}>
                     Stop
                   </button>
                 )}
-                <button className="btn btn-primary btn-lg" onClick={runScan} disabled={!apiKey.trim() || !scanFiles.length || !!busy}>
+                <button className="btn btn-primary btn-lg" onClick={runScan} disabled={!apiKey.trim() || !(scanFiles.length || scanText.trim()) || !!busy}>
                   <Sparkles size={18} /> Transcribe
                 </button>
               </div>
               <details className="manual-prompt">
                 <summary>No API key? Use any AI assistant instead</summary>
                 <p className="dim">
-                  Copy this prompt into ChatGPT, Claude.ai, Gemini or similar, attach the photos, then paste the answer into <em>Paste</em>.
+                  Copy this prompt into ChatGPT, Claude.ai, Gemini or similar, attach the photos (or paste the tab after it), then paste the answer into <em>Paste</em>.
                 </p>
                 <button
                   className="btn btn-sm"
@@ -444,9 +493,18 @@ export default function SongImport() {
 
           {source === 'paste' && (
             <section className="card import-card">
-              <h2 className="display">Paste a song</h2>
-              <p className="dim">Paste a Clef Coach song file (JSON) — for example the answer from an AI assistant. A ```json code block is fine.</p>
-              <textarea className="import-text" value={pasteText} onChange={e => setPasteText(e.target.value)} placeholder='{ "format": "clef-coach-song", "title": "…", … }' spellCheck={false} />
+              <h2 className="display">Paste tab or a song</h2>
+              <p className="dim">
+                Paste <strong>tab</strong> copied from a website — the lines of dashes and fret numbers, string names and all, with the title, tuning and capo if it gives them — or a <strong>Clef Coach song file</strong> (JSON), for example the answer from an AI assistant (a ```json code block is fine).
+              </p>
+              <textarea
+                className="import-text tab-text"
+                wrap="off"
+                value={pasteText}
+                onChange={e => setPasteText(e.target.value)}
+                placeholder={'e|-------0-------|-------0-------|\nB|-----1---1-----|-----3---3-----|\nG|---2-------2---|---2-------2---|\nD|-2-------------|---------------|\nA|---------------|-0-------------|\nE|---------------|---------------|\n\n…or { "format": "clef-coach-song", … }'}
+                spellCheck={false}
+              />
               <div className="row" style={{ justifyContent: 'flex-end' }}>
                 <button className="btn btn-primary" onClick={onPaste} disabled={!pasteText.trim()}>
                   Check & preview
@@ -481,7 +539,7 @@ export default function SongImport() {
           <div className="card import-card">
             <div className="import-preview-head">
               <h2 className="display">Check it over</h2>
-              <span className="pill">{result.kind === 'musicxml' ? 'MusicXML' : result.kind === 'midi' ? 'MIDI' : 'Clef Coach song'}</span>
+              <span className="pill">{KIND_LABELS[result.kind]}</span>
             </div>
             <div className="import-fields">
               <label className="set-row">
@@ -509,7 +567,21 @@ export default function SongImport() {
                 </span>
                 <TagEditor tags={result.song.tags ?? []} onChange={t => updateSong({ tags: t.length ? t : undefined })} suggestions={tagSuggestions} maxSuggestions={6} />
               </div>
-              {result.parts && result.parts.length > 1 && lastFile && (
+              {result.kind === 'tab' && origin && (
+                <div className="set-row">
+                  <span>
+                    Time signature
+                    <span className="faint toggle-sub">Tab seldom says; the rhythm is read again in the one you choose.</span>
+                  </span>
+                  <Segmented
+                    size="sm"
+                    value={result.song.time.join('/')}
+                    onChange={v => void load(origin, { ...reread, time: v.split('/').map(Number) as [number, number] })}
+                    options={[...new Set([...TAB_TIMES, result.song.time.join('/')])].map(t => ({ value: t, label: t }))}
+                  />
+                </div>
+              )}
+              {result.parts && result.parts.length > 1 && origin && (
                 <div className="set-row">
                   <span>
                     Parts in the file
@@ -517,7 +589,7 @@ export default function SongImport() {
                   </span>
                   <div className="chip-row">
                     {result.parts.map(p => (
-                      <button key={p.id} className="chip-btn" onClick={() => importFile(lastFile.name, lastFile.bytes, [p.id])}>
+                      <button key={p.id} className="chip-btn" onClick={() => void load(origin, { ...reread, parts: [p.id] })}>
                         {p.name || p.id}
                         {p.staves > 1 ? ` (${p.staves} staves)` : ''}
                       </button>
@@ -532,6 +604,14 @@ export default function SongImport() {
                   <li key={i}>{w}</li>
                 ))}
               </ul>
+            )}
+            {result.kind === 'tab' && origin && (
+              <div className="import-claude">
+                <span className="faint">Rhythm not right? Claude can read the tab and work out the rhythm (with your Anthropic API key).</span>
+                <button className="btn btn-sm" onClick={readWithClaude}>
+                  <Sparkles size={14} /> Read it with Claude
+                </button>
+              </div>
             )}
             {preview && (
               <>

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { SongDef } from '../music/parse';
 import { parseSongDoc, songToDoc } from './format';
-import { estimateKey, importMidi, parseMidi } from './midi';
+import { estimateKey } from './importkit';
+import { importMidi, parseMidi } from './midi';
 import type { ImportResult } from './importkit';
 
 // ---------------------------------------------------------------------------

@@ -12,7 +12,7 @@ import { keyDisplayName, parseKey } from '../music/keys';
 import type { SongDef } from '../music/parse';
 import { type BulkFile, baseName, findDuplicate, folderTag } from '../songs/bulk';
 import { SongFormatError, newSongId, parseSongDoc } from '../songs/format';
-import { type ImportOutcome, importBytes } from '../songs/importers';
+import { type ImportOutcome, KIND_LABELS, importBytes } from '../songs/importers';
 import { useApp } from '../state/store';
 import { cleanTags } from '../state/tags';
 
@@ -27,7 +27,6 @@ interface Item {
   include: boolean;
 }
 
-const KIND_LABEL = { musicxml: 'MusicXML', midi: 'MIDI', clefsong: 'Clef Coach song' } as const;
 
 export function BulkImport({ files, skipped, instrument, onCancel }: { files: BulkFile[]; skipped: string[]; instrument: InstrumentId; onCancel: () => void }) {
   const navigate = useNavigate();
@@ -101,7 +100,7 @@ export function BulkImport({ files, skipped, instrument, onCancel }: { files: Bu
 
   const sizeLabel = useMemo(() => {
     const kinds = new Map<string, number>();
-    for (const x of ready) kinds.set(KIND_LABEL[x.outcome!.kind], (kinds.get(KIND_LABEL[x.outcome!.kind]) ?? 0) + 1);
+    for (const x of ready) kinds.set(KIND_LABELS[x.outcome!.kind], (kinds.get(KIND_LABELS[x.outcome!.kind]) ?? 0) + 1);
     return [...kinds].map(([k, n]) => `${n} ${k}`).join(' · ');
   }, [ready]);
 
@@ -187,7 +186,7 @@ export function BulkImport({ files, skipped, instrument, onCancel }: { files: Bu
               <span className="bulk-main">
                 <strong>{s?.title ?? baseName(x.path)}</strong>
                 <span className="faint">
-                  {s ? `${s.composer ? `${s.composer} · ` : ''}${key} · ${s.time[0]}/${s.time[1]} · ${x.bars} bars · ${KIND_LABEL[x.outcome!.kind]}` : x.status === 'error' ? x.error : baseName(x.path)}
+                  {s ? `${s.composer ? `${s.composer} · ` : ''}${key} · ${s.time[0]}/${s.time[1]} · ${x.bars} bars · ${KIND_LABELS[x.outcome!.kind]}` : x.status === 'error' ? x.error : baseName(x.path)}
                 </span>
                 {x.duplicate && (
                   <span className="bulk-dupe">
