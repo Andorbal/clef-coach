@@ -74,7 +74,8 @@ A song is one JSON object. File extension: `.json` (we suggest `name.clefsong.js
 |---|---|---|
 | `format`, `version` | recommended | `"clef-coach-song"`, `1` |
 | `title` | yes | |
-| `composer`, `arranger`, `year`, `source`, `license`, `blurb`, `tags` | no | Shown in the library. |
+| `composer`, `arranger`, `year`, `source`, `license`, `blurb` | no | Shown in the library. |
+| `tags` | no | Labels to find the song by (`["christmas", "recital"]`); you can add and remove them in the app, and filter the library by them. |
 | `instrument` | yes | `piano`, `guitar`, `ukulele`, `bass` (bass guitar) or `mallets` (marimba, xylophone, glockenspiel, vibraphone) |
 | `level` | no | 1 (first weeks) … 10 (advanced). Default 3. |
 | `key` | yes | Key signature as a key name: `C`, `G`, `F`, `Bb`, `Eb`, `F#`, `Am`, `F#m`, `Dm` … |
@@ -105,7 +106,7 @@ Each voice is a string of tokens separated by spaces, with `|` after every bar:
 token    := head [ "/" duration ] [ "@" fingers ] [ "%" strings ] [ "~" ]
 head     := pitch | "r" | "[" pitch pitch … "]"          rest, note or chord
 pitch    := letter accidental? octave                      C4  F#4  Bb3  Ebb5  Fx4  Cn5
-duration := w | h | q | e | s | t   then "." per dot, "3" for a triplet
+duration := w | h | q | e | s | t | x   then "." per dot, "3" for a triplet   (x = 64th)
 ```
 
 - **Octaves**: middle C is `C4`; B3 is the note below it.
@@ -114,7 +115,10 @@ duration := w | h | q | e | s | t   then "." per dot, "3" for a triplet
 - **Durations** carry over: `C4/q D4 E4 F4 |` is four quarter notes. `q.` dotted quarter,
   `h..` double-dotted half, `e3 e3 e3` an eighth-note triplet.
 - **Chords**: `[C4 E4 G4]/h`.
-- **Ties**: `G4/h~ | G4/q` (the `~` goes on the first note).
+- **Ties**: `G4/h~ | G4/q` (the `~` goes on the first note). Inside a chord, a `~` after one
+  pitch ties just that note, while the others are played again: `[C4~ E4 G4]/h [C4 F4 A4]` holds C4.
+  A note tied this way lands on the next note of the voice with the same pitch, so an arpeggio
+  can be held into a chord: `C4/e~ E4~ G4/q [C4 E4 G4]/h`.
 - **Rests**: `r/q`, a whole-bar rest in 3/4 is `r/h.`.
 - **Fingering** (`@`): piano fingers `1`–`5`; fretting fingers `0`–`4` for guitar/ukulele/bass
   (`0` = open string); mallet sticking `L`/`R` or `1`–`4` (four mallets, numbered left to right).
@@ -134,7 +138,8 @@ Structure marks inside a voice:
 | `\|:` and `:\|` | repeat (`:\|:` for both) |
 | `\|1` … `:\|2` | first and second endings |
 | `[K:G]` | key change from this bar on |
-| `[T:3/4]` | time-signature change from this bar on |
+| `[T:3/4]` | time-signature change from this bar on (up to 64 beats, for long cadenza bars) |
+| `[C:bass]` | clef change on this staff from this point on (`treble`, `bass`, `treble8vb`, `bass8vb`); it can come anywhere in a bar, right before the note it applies to, and is usually written in the staff's first voice |
 
 Repeats are written out when the song loads, so practice follows the performance. All voices — and
 the `chords` line — must use the same repeat marks. Each repeat is taken once; a `:|` with no `|:`
@@ -172,6 +177,11 @@ with `-`; `_` holds the previous syllable over an extra note:
 scan photos or a PDF with Claude using your own Anthropic API key. You get a preview with every
 problem explained, can edit the source, listen, and save to *My songs*. Imported songs are
 included in backups (Settings → Export).
+
+Pick several files at once — or a `.zip` of them, or (on a computer) a folder, or drop files and
+folders on the page — to import a whole collection: each file is read and checked, songs you
+already have are left unticked, and you can give them all the same tags (the folder's name is
+suggested) before saving.
 
 ### Command line (`npm run clefsong -- …`)
 

@@ -191,3 +191,30 @@
   flex-wrap: wrap;
   gap: 6px;
 }
+
+.songs-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: -6px 0 20px;
+}
+
+.songs-tags-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.chip-btn.chip-sm {
+  min-height: 32px;
+  padding: 0 11px;
+  font-size: 13px;
+}
+
+.chip-btn.chip-more {
+  border-style: dashed;
+}

@@ -388,3 +388,16 @@
 .studio-lyrics p {
   margin: 0;
 }
+
+.studio-tags-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 20px;
+  margin: 0 0 4px;
+}
+
+.studio-tags-sub {
+  font-size: 13px;
+  margin: 0 0 12px;
+}

@@ -13,6 +13,8 @@ import {
 } from './logic';
 import { type SongRun, recordSongRun as recordSongRunLogic, newSongProgress } from './songs';
 import type { SongDef } from '../music/parse';
+import { getSong } from '../content/songs';
+import { cleanTags } from './tags';
 import {
   DEFAULT_DEVICE,
   type DeviceSettings,
@@ -37,16 +39,19 @@ function load<T>(key: string, fallback: T): T {
 }
 
 let persistRequested = false;
-function save(key: string, value: unknown) {
+/** Store a value; false when it couldn't be saved (storage full or blocked). */
+function save(key: string, value: unknown): boolean {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch (e) {
     console.warn('Could not save progress', e);
+    return false;
   }
   if (!persistRequested && typeof navigator !== 'undefined' && navigator.storage?.persist) {
     persistRequested = true;
     navigator.storage.persist().catch(() => undefined);
   }
+  return true;
 }
 
 interface AppState {
@@ -69,9 +74,13 @@ interface AppState {
   exportJson: (profileIds?: string[]) => string;
   importData: (d: PersistedData, mode: 'merge' | 'replace') => void;
   resetAll: () => void;
-  /** Add or replace a song in the device's library. */
-  saveSong: (song: SongDef) => void;
+  /** Add or replace a song in the device's library. False (and nothing saved) when storage is full. */
+  saveSong: (song: SongDef) => boolean;
+  /** Add or replace several songs at once (all or nothing). False when storage is full. */
+  saveSongs: (songs: SongDef[]) => boolean;
   deleteSong: (id: string) => void;
+  /** Set a song's tags (an imported song keeps them in itself, a library song on the side). */
+  setSongTags: (id: string, tags: string[]) => void;
   /** Start learning a song (adds it to "Learning now"). */
   startSong: (id: string) => void;
   archiveSong: (id: string, archived: boolean) => void;
@@ -89,6 +98,12 @@ export const useApp = create<AppState>((set, get) => {
   const commit = (data: PersistedData) => {
     save(DATA_KEY, data);
     set({ data });
+  };
+  /** Commit only if it can be stored (so a full storage doesn't lose what was there). */
+  const commitIfSaved = (data: PersistedData): boolean => {
+    if (!save(DATA_KEY, data)) return false;
+    set({ data });
+    return true;
   };
   const mutateProfile = (fn: (p: Profile) => Profile) => {
     const { data } = get();
@@ -154,7 +169,26 @@ export const useApp = create<AppState>((set, get) => {
     },
     saveSong: song => {
       const { data } = get();
-      commit({ ...data, songs: { ...data.songs, [song.id]: song } });
+      return commitIfSaved({ ...data, songs: { ...data.songs, [song.id]: song } });
+    },
+    saveSongs: list => {
+      const { data } = get();
+      return commitIfSaved({ ...data, songs: { ...data.songs, ...Object.fromEntries(list.map(s => [s.id, s])) } });
+    },
+    setSongTags: (id, tags) => {
+      const { data } = get();
+      const clean = cleanTags(tags);
+      const own = data.songs?.[id];
+      if (own) {
+        commit({ ...data, songs: { ...data.songs, [id]: { ...own, tags: clean.length ? clean : undefined } } });
+        return;
+      }
+      const songTags = { ...data.songTags };
+      // back to the library's own tags: nothing to keep
+      const lib = getSong(id)?.tags ?? [];
+      if (clean.length === lib.length && clean.every((t, i) => t === lib[i])) delete songTags[id];
+      else songTags[id] = clean;
+      commit({ ...data, songTags });
     },
     deleteSong: id => {
       const { data } = get();

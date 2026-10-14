@@ -5,11 +5,12 @@
  * Everything lands in a preview where you can check the music, fix the details
  * and save it to "My songs".
  */
-import { AlertTriangle, Camera, ClipboardCopy, ClipboardPaste, Ear, FileMusic, KeyRound, Loader2, Save, Sparkles, Square } from 'lucide-react';
+import { AlertTriangle, Camera, ClipboardCopy, ClipboardPaste, Ear, FileMusic, FolderOpen, KeyRound, Loader2, Save, Sparkles, Square } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { InstrumentSwitch, useMyInstruments } from '../components/InstrumentIcon';
 import { PageHeader } from '../components/Shell';
+import { TagEditor, useTagSuggestions } from '../components/TagEditor';
 import { Segmented, Toggle } from '../components/ui';
 import { prefsOf } from '../engine/context';
 import { autoFinger } from '../music/autofinger';
@@ -18,6 +19,7 @@ import type { SongDef } from '../music/parse';
 import { PPQ } from '../music/rhythm';
 import { buildSteps, sliceScore } from '../music/score';
 import { NotationView } from '../notation/NotationView';
+import { type BulkFile, expandArchives, isSongArchive } from '../songs/bulk';
 import { SongFormatError, newSongId, parseSongDoc, songToJson } from '../songs/format';
 import { IMPORT_ACCEPT, type ImportOutcome, importBytes } from '../songs/importers';
 import { manualPrompt } from '../songs/llmPrompt';
@@ -26,6 +28,7 @@ import { useApp, useProfile } from '../state/store';
 import { useListen } from '../components/useListen';
 import './songimport.css';
 import { isIOS } from '../platform';
+import { BulkImport } from './BulkImport';
 
 const KEY_STORAGE = 'clefcoach.anthropicKey';
 
@@ -53,6 +56,29 @@ async function imageToScanFile(file: File): Promise<ScanFile> {
   ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   const url = canvas.toDataURL('image/jpeg', 0.88);
   return { mediaType: 'image/jpeg', data: url.slice(url.indexOf(',') + 1), name: file.name };
+}
+
+/** The files dropped on the page, walking into dropped folders (their paths kept). */
+async function filesFromDrop(dt: DataTransfer): Promise<{ path: string; file: File }[]> {
+  // entries must be taken before the first await: the drop's data goes away after the event
+  const entries = [...dt.items].filter(i => i.kind === 'file').map(i => i.webkitGetAsEntry?.() ?? null);
+  if (!entries.some(e => e?.isDirectory)) return [...dt.files].map(file => ({ path: file.name, file }));
+  const out: { path: string; file: File }[] = [];
+  const walk = async (entry: FileSystemEntry, prefix: string): Promise<void> => {
+    if (entry.isFile) {
+      const file = await new Promise<File>((res, rej) => (entry as FileSystemFileEntry).file(res, rej));
+      out.push({ path: prefix + entry.name, file });
+    } else if (entry.isDirectory) {
+      const reader = (entry as FileSystemDirectoryEntry).createReader();
+      for (;;) {
+        const batch = await new Promise<FileSystemEntry[]>((res, rej) => reader.readEntries(res, rej));
+        if (!batch.length) break;
+        for (const e of batch) await walk(e, `${prefix}${entry.name}/`);
+      }
+    }
+  };
+  for (const e of entries) if (e) await walk(e, '');
+  return out;
 }
 
 async function fileToBase64(file: File): Promise<string> {
@@ -84,11 +110,15 @@ export default function SongImport() {
   const [scanTitle, setScanTitle] = useState('');
   const [copied, setCopied] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const folderRef = useRef<HTMLInputElement>(null);
+  const [bulk, setBulk] = useState<{ files: BulkFile[]; skipped: string[] } | null>(null);
+  const [dropping, setDropping] = useState(false);
   const listening = useListen();
   const scanRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const prefs = profile ? prefsOf(profile.settings) : {};
+  const tagSuggestions = useTagSuggestions(result?.song.instrument);
 
   const preview = useMemo(() => {
     if (!result) return null;
@@ -130,6 +160,35 @@ export default function SongImport() {
     setLastFile({ name: f.name, bytes });
     await importFile(f.name, bytes);
   };
+
+  /** Several files, a folder or a .zip of songs: import them all; a single song file goes to the preview. */
+  const onFiles = async (picked: { path: string; file: File }[]) => {
+    if (!picked.length) return;
+    setError(null);
+    setResult(null);
+    setBusy('Opening the files…');
+    try {
+      const read: BulkFile[] = [];
+      for (const p of picked) read.push({ path: p.path, bytes: new Uint8Array(await p.file.arrayBuffer()) });
+      if (read.length === 1 && !isSongArchive(read[0].path, read[0].bytes)) {
+        setBusy(null);
+        setLastFile({ name: read[0].path, bytes: read[0].bytes });
+        await importFile(read[0].path, read[0].bytes);
+        return;
+      }
+      const { files, skipped } = await expandArchives(read);
+      if (!files.length) {
+        setError([`No song files there (MusicXML, MIDI or Clef Coach songs)${skipped.length ? `: ${skipped.length} other ${skipped.length > 1 ? 'files were' : 'file was'} left out` : ''}.`]);
+        return;
+      }
+      setBulk({ files, skipped });
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const pathOf = (f: File) => (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name;
 
   const onPaste = () => {
     try {
@@ -213,7 +272,9 @@ export default function SongImport() {
     <div className="page song-import">
       <PageHeader eyebrow="Songs" title="Import a song" sub="Bring in your own music — a file from a notation app, a MIDI file, or a photo of the sheet music your teacher gave you." />
 
-      {!result && (
+      {bulk && <BulkImport files={bulk.files} skipped={bulk.skipped} instrument={instrument} onCancel={() => setBulk(null)} />}
+
+      {!result && !bulk && (
         <>
           <div className="import-sources">
             {(
@@ -240,24 +301,66 @@ export default function SongImport() {
           </div>
 
           {source === 'file' && (
-            <section className="card import-card">
-              <h2 className="display">Choose a file</h2>
+            <section
+              className={`card import-card import-drop ${dropping ? 'dropping' : ''}`}
+              onDragOver={e => {
+                if (![...e.dataTransfer.types].includes('Files')) return;
+                e.preventDefault();
+                setDropping(true);
+              }}
+              onDragLeave={e => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropping(false);
+              }}
+              onDrop={e => {
+                e.preventDefault();
+                setDropping(false);
+                void filesFromDrop(e.dataTransfer).then(onFiles);
+              }}
+            >
+              <h2 className="display">Choose files</h2>
               <p className="dim">
                 <strong>MusicXML</strong> (.musicxml, .xml, .mxl) is the open standard every notation app exports — MuseScore, Finale, Sibelius, Dorico, Flat, Noteflight — and so do sheet-music scanners like Audiveris, PlayScore and SmartScore. It keeps the fingering, chord symbols, lyrics and repeats. <strong>MIDI</strong> works too, but it only knows which keys were pressed, so spelling and rhythm are worked out for you.
+              </p>
+              <p className="dim">
+                Pick several files at once — or a <strong>.zip</strong> of them — to import a whole collection{isIOS() ? '' : ', or choose a folder, or drop files and folders here'}.
               </p>
               <input
                 ref={fileRef}
                 type="file"
-                accept={isIOS() ? undefined : IMPORT_ACCEPT}
+                accept={isIOS() ? undefined : `${IMPORT_ACCEPT},.zip,application/zip`}
+                multiple
                 hidden
                 onChange={e => {
-                  onFile(e.target.files?.[0]);
+                  const list = Array.from(e.target.files ?? []);
                   e.target.value = ''; // the same file can be picked again (after fixing it, say)
+                  if (list.length === 1 && !/\.zip$/i.test(list[0].name)) void onFile(list[0]);
+                  else void onFiles(list.map(file => ({ path: pathOf(file), file })));
                 }}
               />
-              <button className="btn btn-primary btn-lg" onClick={() => fileRef.current?.click()} disabled={!!busy}>
-                <FileMusic size={18} /> Choose file
-              </button>
+              <input
+                ref={el => {
+                  folderRef.current = el;
+                  el?.setAttribute('webkitdirectory', '');
+                }}
+                type="file"
+                multiple
+                hidden
+                onChange={e => {
+                  const list = Array.from(e.target.files ?? []);
+                  e.target.value = '';
+                  void onFiles(list.map(file => ({ path: pathOf(file), file })));
+                }}
+              />
+              <div className="row import-file-buttons">
+                <button className="btn btn-primary btn-lg" onClick={() => fileRef.current?.click()} disabled={!!busy}>
+                  <FileMusic size={18} /> Choose files
+                </button>
+                {!isIOS() && (
+                  <button className="btn btn-lg" onClick={() => folderRef.current?.click()} disabled={!!busy}>
+                    <FolderOpen size={18} /> Choose a folder
+                  </button>
+                )}
+              </div>
             </section>
           )}
 
@@ -399,6 +502,13 @@ export default function SongImport() {
                 </span>
                 <input type="range" min={30} max={220} step={1} value={Math.round(result.song.tempo)} onChange={e => updateSong({ tempo: Number(e.target.value) })} />
               </label>
+              <div className="import-tags">
+                <span>
+                  Tags
+                  <span className="faint toggle-sub">Optional — to find it again on the Songs page.</span>
+                </span>
+                <TagEditor tags={result.song.tags ?? []} onChange={t => updateSong({ tags: t.length ? t : undefined })} suggestions={tagSuggestions} maxSuggestions={6} />
+              </div>
               {result.parts && result.parts.length > 1 && lastFile && (
                 <div className="set-row">
                   <span>

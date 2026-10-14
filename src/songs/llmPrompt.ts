@@ -48,10 +48,11 @@ A song is ONE JSON object:
   token := head [/duration] [@fingers] [%strings] [~]
   head  := pitch | r (rest) | [pitch pitch …] (chord, low to high)
   pitch := letter + accidental + octave: C4 (middle C), F#4, Bb3, Ebb5, Fx4 (double sharp), Cn5 (natural)
-  duration := w h q e s t (whole, half, quarter, eighth, 16th, 32nd), "." per dot, "3" = triplet
+  duration := w h q e s t x (whole, half, quarter, eighth, 16th, 32nd, 64th), "." per dot, "3" = triplet
               e.g. q.  e  h..  e3 (an eighth of a triplet)
   The duration carries over until it changes: "C4/q D4 E4 F4 |" is four quarters.
   ~        := tie to the next note (same pitch), e.g. "G4/h~ | G4/q …"
+              inside a chord, after one pitch, ties only that note: "[C4~ E4]/h [C4 F4]" holds C4
   @fingers := printed fingering: piano 1-5; guitar/ukulele/bass fretting finger 0-4 (0 = open);
               mallets sticking L or R (or 1-4 with four mallets). One per chord note, "-" to skip one.
   %strings := guitar/ukulele/bass string number per note (1 = highest string), e.g. "%3"
@@ -66,6 +67,7 @@ A song is ONE JSON object:
 ## Structure tokens (inside the voice strings)
   |:  start repeat     :|  end repeat     |1  first ending starts     :|2  second ending starts
   ||  double bar       [K:G]  key change at the start of a bar     [T:3/4]  time change at the start of a bar
+  [C:treble] / [C:bass]  clef change on that staff, right before the note it applies to
   Every voice must use the same repeat signs at the same places. D.C./D.S. must be written out.
 
 ## Chords (optional "chords" line)

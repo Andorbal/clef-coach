@@ -196,11 +196,19 @@ function readHeader(root: XmlElement): Header {
   const title = work && movement && work !== movement ? `${work}: ${movement}` : work || movement || credits.get('title') || '';
   const ident = child(root, 'identification');
   const creator = (type: string) => flatText(kids(ident, 'creator').filter(c => c.attrs.type === type).map(textOf).join(', '));
+  let lyricist = creator('lyricist') || creator('poet') || credits.get('lyricist') || undefined;
+  let arranger = creator('arranger') || credits.get('arranger') || undefined;
+  // notation programs' "lyricist" box often holds the arrangement credit ("Arr. by …")
+  const arr = lyricist && /^\s*arr(?:anged|\.|angement)?\s*(?:by|:)?\s*/i.exec(lyricist);
+  if (lyricist && arr) {
+    arranger ??= lyricist.slice(arr[0].length).trim() || undefined;
+    lyricist = undefined;
+  }
   return {
     title,
     composer: creator('composer') || credits.get('composer') || '',
-    arranger: creator('arranger') || credits.get('arranger') || undefined,
-    lyricist: creator('lyricist') || creator('poet') || credits.get('lyricist') || undefined,
+    arranger,
+    lyricist,
     rights: flatText(kids(ident, 'rights').map(textOf).join(' ')) || credits.get('rights') || undefined,
     software: flatText(kids(path(ident, 'encoding'), 'software').map(textOf).join(', ')) || undefined,
   };

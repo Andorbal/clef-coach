@@ -9,7 +9,7 @@
  * goal with a daily plan.
  */
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, CalendarDays, Ear, Flag, Pause, Play, Repeat, Square, Target, TrendingUp, Trash2, Wand2 } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Ear, Flag, Pause, Play, Repeat, Square, Tag, Target, TrendingUp, Trash2, Wand2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { unlockAudio } from '../audio/context';
@@ -20,6 +20,7 @@ import { useInstrumentAudio } from '../audio/instrument';
 import { synth } from '../audio/synth';
 import { InputChip } from '../components/InputControl';
 import { InstrumentIcon } from '../components/InstrumentIcon';
+import { TagEditor, useTagSuggestions } from '../components/TagEditor';
 import { Modal, Segmented, Toggle } from '../components/ui';
 import { getSong, songGroup, songGroupDef } from '../content/songs';
 import { TRACKS, getTrack } from '../curriculum';
@@ -53,6 +54,7 @@ import {
   troubleSpot,
 } from '../state/songs';
 import { useApp, useDevice, useProfile } from '../state/store';
+import { songTagsOf } from '../state/tags';
 import type { TrackId } from '../state/types';
 import { SongChords } from './SongChords';
 import './lesson.css';
@@ -117,6 +119,9 @@ export default function SongStudio() {
   const setGoal = useApp(s => s.setSongGoal);
   const deleteSong = useApp(s => s.deleteSong);
   const isImported = useApp(s => !!s.data.songs?.[songId]);
+  const setSongTags = useApp(s => s.setSongTags);
+  const tagOverrides = useApp(s => s.data.songTags);
+  const tagSuggestions = useTagSuggestions(song?.instrument);
   const prefs = profile ? prefsOf(profile.settings) : {};
   useInstrumentAudio(song?.instrument, prefs);
 
@@ -739,6 +744,13 @@ export default function SongStudio() {
               </p>
             </section>
           ) : null}
+          <section className="card studio-tags">
+            <h2 className="display studio-tags-title">
+              <Tag size={16} /> Tags
+            </h2>
+            <p className="faint studio-tags-sub">Label songs to find them again — “christmas”, “recital”, “warm-ups” — then pick tags on the Songs page.</p>
+            <TagEditor tags={songTagsOf(song, tagOverrides)} onChange={t => setSongTags(song.id, t)} suggestions={tagSuggestions} maxSuggestions={8} />
+          </section>
           {isImported && (
             <div className="studio-danger">
               <button className="btn btn-sm btn-ghost" onClick={() => setConfirmDelete(true)}>

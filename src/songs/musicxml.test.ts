@@ -720,6 +720,16 @@ describe('MusicXML import: real-score details', () => {
     expect(check(importMusicXml(pair)).staves.map(s => s.hand)).toEqual(['R', 'L']);
   });
 
+  it('reads an arrangement credit put in the lyricist box as the arranger', () => {
+    const xml = score({ title: 'Carol', parts: [{ id: 'P1', name: 'Piano', measures: [attributes({ divisions: 1, fifths: 0, time: [4, 4], clefs: [clef('G', 2)] }) + whole('C5')] }] }).replace(
+      '<identification>',
+      '<identification><creator type="lyricist">Arr. by Jo Smith</creator>',
+    );
+    const song = check(importMusicXml(xml));
+    expect(song.arranger).toBe('Jo Smith');
+    expect(song.blurb).toBeUndefined();
+  });
+
   it('gives a cadenza bar longer than its time signature a time signature of its own', () => {
     const run = Array.from({ length: 12 }, (_, i) => ({ p: ['C5', 'D5', 'E5', 'F5'][i % 4], d: 1, type: 'eighth' }));
     const xml = simple([whole('C4'), notes(...run.map(n => ({ ...n, d: 0.5 }))), whole('G4')].map((m, i) => (i === 1 ? notes(...run.map(n => ({ ...n, d: 2 }))) : m)), attributes({ divisions: 4, fifths: 0, time: [4, 4], clefs: [clef('G', 2)] }));

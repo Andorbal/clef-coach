@@ -37,6 +37,9 @@ There's no account and no server. Progress lives on your device, and you can exp
   - **trouble spots** found from your mistakes, **lyrics** under each phrase, the song's **chords** drawn for your instrument;
   - a **goal date** (“Silent Night by Christmas Eve”) that paces how much to practise each day.
 - **Import your own songs**: MusicXML (from MuseScore, Finale, Sibelius, Dorico, Flat, Noteflight or any sheet-music scanner), MIDI, or Clef Coach song files. **Scan sheet music or tab with Claude** using your own Anthropic API key, or use the prompt with any AI assistant. Every file is checked bar by bar with errors that say exactly what to fix. See [docs/song-format.md](docs/song-format.md).
+  - **Import a whole collection at once**: pick several files, a `.zip`, or (on a computer) a folder or files dropped on the page; untick the ones you don't want, tag them all in one go, and duplicates of songs you already have are spotted.
+  - Imports keep clef changes, cross-staff notes on the right hand's staff, two voices with their stems the right way up, held notes inside chords, 64th notes, cadenza bars and repeats; MIDI files spread over several tracks become one grand staff, and chord symbols are worked out from a chord track.
+- **Tags.** Label any song — “christmas”, “recital”, “warm-ups” — and filter the library by one or more tags.
 - **Chord chart.** Any chord on every instrument — chord boxes for guitar, ukulele and bass, marked keys for piano, marked bars for mallets — with fingers, intervals or note names, and each voicing written out in standard notation in the clef that instrument reads. On a tablet or laptop, compare several chords side by side on several instruments at once (guitar over piano, say), or see every voicing of one chord. Tap to hear.
 - **Studio**
   - Free Play: play anything and see it appear on the staff, with chord names.
