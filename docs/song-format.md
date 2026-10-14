@@ -10,7 +10,9 @@ an AI model write them for you.
 |---|---|---|
 | A score in MuseScore, Finale, Sibelius, Dorico, Flat, Noteflight… | **MusicXML** (`.musicxml`, `.mxl`) | Export → MusicXML. Keeps spelling, fingering, string numbers, chord symbols, lyrics, repeats. |
 | A paper or PDF score | **MusicXML from a scanner**, or **Scan with Claude** | Optical music recognition apps (Audiveris (free), MuseScore's PDF import, PlayScore, SmartScore, Soundslice) export MusicXML. Or let Claude read photos and write a Clef Coach song (in the app, or `npm run clefsong scan`). |
-| Guitar / ukulele / bass **tab** | **Scan with Claude**, or MusicXML from a tab editor | Tab editors (TuxGuitar, MuseScore, Guitar Pro) can export MusicXML. |
+| Guitar / ukulele / bass **tab** from a tab editor | **Guitar Pro** (`.gp`, `.gpx`, `.gp5`, `.gp4`, `.gp3`) | Guitar Pro, TuxGuitar, MuseScore and Songsterr-style editors save it. Keeps the rhythm, strings, tuning, capo, repeats, chord names and lyrics. |
+| Tab from a website (lines of dashes and fret numbers) | **Text tab** (`.txt`, or paste it), or **Scan with Claude** | Read straight away, but text tab seldom shows the rhythm: it is guessed from the spacing. Claude can work it out instead (paste the tab under *Scan sheet music*). See [Tab](#tab). |
+| A photo or PDF of tab | **Scan with Claude** | |
 | A MIDI file | **MIDI** (`.mid`) | Imported, but see the limits below. |
 | Nothing — you want to type it | **Clef Coach song** (`.json`) | The format below. |
 
@@ -26,6 +28,40 @@ MIDI records a *performance* — which key went down when — not the *notation*
 
 So Clef Coach imports MIDI (and does a careful job: quantizing to the beat, spelling with the key,
 splitting hands, finding pickups), but it can't be the main format.
+
+### Tab
+
+**Guitar Pro** files hold everything tab needs, so they import like MusicXML: each track becomes a
+part you can choose (drum tracks are left out), and the track for your instrument opens first.
+
+**Text tab** — the kind posted on websites — is read like this:
+
+```
+Tuning: Drop D        ← a "Tuning:" line, a capo ("Capo 2"), tempo ("Tempo: 96") and time ("Time: 3/4")
+Capo 2                  are all read; the first line can be the title ("Song by Artist")
+
+   Am          C      ← chord names over the tab become the song's chord symbols
+e|-----0-----|-----0-----|
+B|---1---1---|---1---1---|
+G|-2-------2-|-0-------0-|
+D|-----------|-2---------|
+A|-0---------|-3---------|
+D|-----------|-----------|  x2   ← "x2" plays the system twice; |: :| repeats work too
+```
+
+- **Strings and tuning.** The number of lines and their names say the instrument: six or more
+  strings are a guitar, `G D A E` a bass (or, when your instrument is guitar, its four low
+  strings), `A E C G` a ukulele. Names like `D` on the low string, or a `Tuning:` line (`Drop D`,
+  `half step down`, `DADGAD`, `Open G`, or the notes `D A D G B E`), set the tuning; a capo raises
+  every note. Notes keep the pitch they sound. Clef Coach plays in standard tuning, so a note the
+  standard-tuned string can't reach is played on another string.
+- **Techniques.** `h`, `p`, slides and taps are separate notes; a bend (`7b9`) is the fret it starts
+  on; muted notes (`x`) are left out; harmonics (`<12>`) are written at their fret.
+- **Rhythm.** A rhythm line over or under the tab (`q  e e  h`, with `.` for dotted notes) gives the
+  exact rhythm. Without one, the rhythm is **guessed** from how the notes are spaced in each bar
+  (and the time signature from how the bars fill up), so check it — the preview lets you read it
+  again in another time signature, or hand the tab to Claude, which works the rhythm out (and knows
+  how well-known songs go).
 
 ### Why MusicXML — and why a format of our own as well?
 
@@ -74,7 +110,8 @@ A song is one JSON object. File extension: `.json` (we suggest `name.clefsong.js
 |---|---|---|
 | `format`, `version` | recommended | `"clef-coach-song"`, `1` |
 | `title` | yes | |
-| `composer`, `arranger`, `year`, `source`, `license`, `blurb`, `tags` | no | Shown in the library. |
+| `composer`, `arranger`, `year`, `source`, `license`, `blurb` | no | Shown in the library. |
+| `tags` | no | Labels to find the song by (`["christmas", "recital"]`); you can add and remove them in the app, and filter the library by them. |
 | `instrument` | yes | `piano`, `guitar`, `ukulele`, `bass` (bass guitar) or `mallets` (marimba, xylophone, glockenspiel, vibraphone) |
 | `level` | no | 1 (first weeks) … 10 (advanced). Default 3. |
 | `key` | yes | Key signature as a key name: `C`, `G`, `F`, `Bb`, `Eb`, `F#`, `Am`, `F#m`, `Dm` … |
@@ -105,7 +142,7 @@ Each voice is a string of tokens separated by spaces, with `|` after every bar:
 token    := head [ "/" duration ] [ "@" fingers ] [ "%" strings ] [ "~" ]
 head     := pitch | "r" | "[" pitch pitch … "]"          rest, note or chord
 pitch    := letter accidental? octave                      C4  F#4  Bb3  Ebb5  Fx4  Cn5
-duration := w | h | q | e | s | t   then "." per dot, "3" for a triplet
+duration := w | h | q | e | s | t | x   then "." per dot, "3" for a triplet   (x = 64th)
 ```
 
 - **Octaves**: middle C is `C4`; B3 is the note below it.
@@ -114,7 +151,10 @@ duration := w | h | q | e | s | t   then "." per dot, "3" for a triplet
 - **Durations** carry over: `C4/q D4 E4 F4 |` is four quarter notes. `q.` dotted quarter,
   `h..` double-dotted half, `e3 e3 e3` an eighth-note triplet.
 - **Chords**: `[C4 E4 G4]/h`.
-- **Ties**: `G4/h~ | G4/q` (the `~` goes on the first note).
+- **Ties**: `G4/h~ | G4/q` (the `~` goes on the first note). Inside a chord, a `~` after one
+  pitch ties just that note, while the others are played again: `[C4~ E4 G4]/h [C4 F4 A4]` holds C4.
+  A note tied this way lands on the next note of the voice with the same pitch, so an arpeggio
+  can be held into a chord: `C4/e~ E4~ G4/q [C4 E4 G4]/h`.
 - **Rests**: `r/q`, a whole-bar rest in 3/4 is `r/h.`.
 - **Fingering** (`@`): piano fingers `1`–`5`; fretting fingers `0`–`4` for guitar/ukulele/bass
   (`0` = open string); mallet sticking `L`/`R` or `1`–`4` (four mallets, numbered left to right).
@@ -134,7 +174,8 @@ Structure marks inside a voice:
 | `\|:` and `:\|` | repeat (`:\|:` for both) |
 | `\|1` … `:\|2` | first and second endings |
 | `[K:G]` | key change from this bar on |
-| `[T:3/4]` | time-signature change from this bar on |
+| `[T:3/4]` | time-signature change from this bar on (up to 64 beats, for long cadenza bars) |
+| `[C:bass]` | clef change on this staff from this point on (`treble`, `bass`, `treble8vb`, `bass8vb`); it can come anywhere in a bar, right before the note it applies to, and is usually written in the staff's first voice |
 
 Repeats are written out when the song loads, so practice follows the performance. All voices — and
 the `chords` line — must use the same repeat marks. Each repeat is taken once; a `:|` with no `|:`
@@ -168,19 +209,28 @@ with `-`; `_` holds the previous syllable over an extra note:
 ## Tools
 
 ### In the app
-**Songs → Import a song** reads MusicXML, MIDI and Clef Coach files, accepts pasted text, and can
-scan photos or a PDF with Claude using your own Anthropic API key. You get a preview with every
+**Songs → Import a song** reads MusicXML, MIDI, Guitar Pro, text tab and Clef Coach files, accepts
+pasted tab or song files, and can scan photos, a PDF or text tab with Claude using your own
+Anthropic API key. You get a preview with every
 problem explained, can edit the source, listen, and save to *My songs*. Imported songs are
 included in backups (Settings → Export).
+
+Pick several files at once — or a `.zip` of them, or (on a computer) a folder, or drop files and
+folders on the page — to import a whole collection: each file is read and checked, songs you
+already have are left unticked, and you can give them all the same tags (the folder's name is
+suggested) before saving.
 
 ### Command line (`npm run clefsong -- …`)
 
 ```bash
 npm run clefsong -- validate my-song.json            # check one or more files
-npm run clefsong -- convert score.mxl -o song.json   # MusicXML or MIDI → Clef Coach song
+npm run clefsong -- convert score.mxl -o song.json   # MusicXML, MIDI, Guitar Pro or text tab → Clef Coach song
 npm run clefsong -- convert tune.mid --instrument guitar
+npm run clefsong -- convert band.gp5 --parts 2       # the third track of a Guitar Pro file
+npm run clefsong -- convert riff.txt                 # text tab (rhythm guessed from the spacing)
 npm run clefsong -- scan page1.jpg page2.jpg --instrument piano --title "Silent Night"
 npm run clefsong -- scan lesson.pdf -o lesson.clefsong.json
+npm run clefsong -- scan riff.txt --instrument bass  # text tab: Claude works out the rhythm
 npm run clefsong -- prompt --instrument ukulele      # the prompt for any AI assistant
 ```
 

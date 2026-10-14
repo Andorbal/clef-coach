@@ -1,8 +1,9 @@
 import { motion } from 'framer-motion';
-import { CalendarDays, FileUp, Search } from 'lucide-react';
+import { CalendarDays, FileUp, Search, Tag, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { InstrumentIcon, useMyInstruments } from '../components/InstrumentIcon';
+import { TagList } from '../components/TagEditor';
 import { MobileSettingsButton, PageHeader } from '../components/Shell';
 import { ALL_SONGS, SONG_GROUPS, getSong, songGroup, songGroupDef } from '../content/songs';
 import { getTrack } from '../curriculum';
@@ -11,6 +12,7 @@ import { keyDisplayName, parseKey } from '../music/keys';
 import { type SongDef, songToScore } from '../music/parse';
 import { goalPace, nextPlanStep, planProgress } from '../state/songs';
 import { useApp, useProfile } from '../state/store';
+import { hasAllTags, songTagsOf, tagCounts } from '../state/tags';
 import './songs.css';
 
 export function levelName(l: number) {
@@ -33,7 +35,7 @@ interface LearningItem {
   pace: ReturnType<typeof goalPace>;
 }
 
-function SongCard({ song, i, extra }: { song: SongDef; i: number; extra?: React.ReactNode }) {
+function SongCard({ song, i, extra, tags }: { song: SongDef; i: number; extra?: React.ReactNode; tags: string[] }) {
   let keyLabel = song.key;
   try {
     keyLabel = keyDisplayName(parseKey(song.key));
@@ -56,6 +58,7 @@ function SongCard({ song, i, extra }: { song: SongDef; i: number; extra?: React.
           {song.year && song.year !== song.composer ? ` · ${song.year}` : ''}
         </span>
         {song.blurb && <span className="dim song-blurb">{song.blurb}</span>}
+        <TagList tags={tags} />
         {extra}
         <span className="song-meta faint">
           {keyLabel} · {song.time[0]}/{song.time[1]}
@@ -72,8 +75,15 @@ export default function Songs() {
   const mine = useMyInstruments();
   const [filter, setFilter] = useState<InstrumentId | 'all'>(mine.length === 1 ? mine[0] : 'all');
   const [query, setQuery] = useState('');
+  // chosen tags live in the address, so they're still there when you come back from a song
+  const [params, setParams] = useSearchParams();
+  const tagFilter = params.getAll('tag');
+  const setTagFilter = (tags: string[]) => setParams(tags.length ? { tag: tags } : {}, { replace: true });
+  const [allTags, setAllTags] = useState(false);
+  const tagOverrides = useApp(s => s.data.songTags);
   const userSongs = useMemo(() => Object.values(imported ?? {}), [imported]);
   const allSongs = useMemo(() => [...userSongs, ...ALL_SONGS], [userSongs]);
+  const tagsOf = (s: SongDef) => songTagsOf(s, tagOverrides);
   const byId = useMemo(() => new Map(allSongs.map(s => [s.id, s])), [allSongs]);
 
   const learning = useMemo(() => {
@@ -94,7 +104,22 @@ export default function Songs() {
   }, [profile?.songs, byId]);
 
   const q = query.trim().toLowerCase();
-  const matches = (s: SongDef) => (filter === 'all' || s.instrument === filter) && (!q || s.title.toLowerCase().includes(q) || s.composer.toLowerCase().includes(q) || s.tags?.some(t => t.toLowerCase().includes(q)));
+  const matches = (s: SongDef) =>
+    (filter === 'all' || s.instrument === filter) &&
+    (!q || s.title.toLowerCase().includes(q) || s.composer.toLowerCase().includes(q) || tagsOf(s).some(t => t.toLowerCase().includes(q))) &&
+    hasAllTags(tagsOf(s), tagFilter);
+
+  // tags to filter by: the ones you gave first, then the most used
+  const tagChoices = useMemo(() => {
+    const pool = allSongs.filter(s => filter === 'all' || s.instrument === filter);
+    const yours = new Set([...userSongs.flatMap(s => s.tags ?? []), ...Object.values(tagOverrides ?? {}).flat()].map(t => t.toLowerCase()));
+    return tagCounts(pool, tagOverrides).sort((a, b) => Number(yours.has(b.tag.toLowerCase())) - Number(yours.has(a.tag.toLowerCase())));
+  }, [allSongs, userSongs, filter, tagOverrides]);
+  const chosenLower = tagFilter.map(t => t.toLowerCase());
+  const isChosen = (t: string) => chosenLower.includes(t.toLowerCase());
+  const TAGS_SHOWN = 12;
+  const shownTags = allTags ? tagChoices : tagChoices.filter((t, i) => i < TAGS_SHOWN || isChosen(t.tag));
+  const toggleTag = (t: string) => setTagFilter(isChosen(t) ? tagFilter.filter(x => x.toLowerCase() !== t.toLowerCase()) : [...tagFilter, t]);
   const instruments = INSTRUMENT_IDS.filter(i => allSongs.some(s => s.instrument === i));
   const groups = SONG_GROUPS.filter(g => filter === 'all' || g.instrument === filter);
 
@@ -120,6 +145,7 @@ export default function Songs() {
               <SongCard
                 key={song.id}
                 song={song}
+                tags={tagsOf(song)}
                 i={i}
                 extra={
                   <span className="learning-extra">
@@ -156,6 +182,28 @@ export default function Songs() {
           <input placeholder="Search songs" value={query} onChange={e => setQuery(e.target.value)} aria-label="Search songs" />
         </label>
       </div>
+      {tagChoices.length > 0 && (
+        <div className="songs-tags" role="group" aria-label="Filter by tag">
+          <span className="songs-tags-label faint">
+            <Tag size={14} /> Tags
+          </span>
+          {shownTags.map(({ tag, count }) => (
+            <button key={tag} className={`chip-btn chip-sm ${isChosen(tag) ? 'on' : ''}`} aria-pressed={isChosen(tag)} onClick={() => toggleTag(tag)}>
+              {tag} <span className="faint tabular">{count}</span>
+            </button>
+          ))}
+          {tagChoices.length > shownTags.length || allTags ? (
+            <button className="chip-btn chip-sm chip-more" onClick={() => setAllTags(!allTags)}>
+              {allTags ? 'Fewer tags' : `+${tagChoices.length - shownTags.length} more`}
+            </button>
+          ) : null}
+          {tagFilter.length > 0 && (
+            <button className="btn btn-sm btn-ghost" onClick={() => setTagFilter([])}>
+              <X size={14} /> Clear tags
+            </button>
+          )}
+        </div>
+      )}
 
       {userSongs.some(matches) && (
         <section className="song-group">
@@ -165,7 +213,7 @@ export default function Songs() {
               .filter(matches)
               .sort((a, b) => a.title.localeCompare(b.title))
               .map((s, i) => (
-                <SongCard key={s.id} song={s} i={i} />
+                <SongCard key={s.id} song={s} tags={tagsOf(s)} i={i} />
               ))}
           </div>
         </section>
@@ -182,13 +230,13 @@ export default function Songs() {
             </h2>
             <div className="song-grid">
               {songs.map((s, i) => (
-                <SongCard key={s.id} song={s} i={i} />
+                <SongCard key={s.id} song={s} tags={tagsOf(s)} i={i} />
               ))}
             </div>
           </section>
         );
       })}
-      {!allSongs.some(matches) && <p className="dim">No songs match. Try another instrument — or import your own.</p>}
+      {!allSongs.some(matches) && <p className="dim">{tagFilter.length ? 'No songs have all of those tags here.' : 'No songs match. Try another instrument — or import your own.'}</p>}
     </div>
   );
 }

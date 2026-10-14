@@ -36,7 +36,10 @@ There's no account and no server. Progress lives on your device, and you can exp
   - **split the music**: one hand on piano, chosen strings on guitar, ukulele or bass, one staff of a marimba part — the app plays the rest at the volume you choose;
   - **trouble spots** found from your mistakes, **lyrics** under each phrase, the song's **chords** drawn for your instrument;
   - a **goal date** (“Silent Night by Christmas Eve”) that paces how much to practise each day.
-- **Import your own songs**: MusicXML (from MuseScore, Finale, Sibelius, Dorico, Flat, Noteflight or any sheet-music scanner), MIDI, or Clef Coach song files. **Scan sheet music or tab with Claude** using your own Anthropic API key, or use the prompt with any AI assistant. Every file is checked bar by bar with errors that say exactly what to fix. See [docs/song-format.md](docs/song-format.md).
+- **Import your own songs**: MusicXML (from MuseScore, Finale, Sibelius, Dorico, Flat, Noteflight or any sheet-music scanner), MIDI, **Guitar Pro** files, **text tab** pasted from a website, or Clef Coach song files. **Scan sheet music or tab with Claude** using your own Anthropic API key — photos, a PDF, or text tab whose rhythm Claude works out — or use the prompt with any AI assistant. Every file is checked bar by bar with errors that say exactly what to fix. See [docs/song-format.md](docs/song-format.md).
+  - **Import a whole collection at once**: pick several files, a `.zip`, or (on a computer) a folder or files dropped on the page; untick the ones you don't want, tag them all in one go, and duplicates of songs you already have are spotted.
+  - Imports keep clef changes, cross-staff notes on the right hand's staff, two voices with their stems the right way up, held notes inside chords, 64th notes, cadenza bars and repeats; MIDI files spread over several tracks become one grand staff, and chord symbols are worked out from a chord track.
+- **Tags.** Label any song — “christmas”, “recital”, “warm-ups” — and filter the library by one or more tags.
 - **Chord chart.** Any chord on every instrument — chord boxes for guitar, ukulele and bass, marked keys for piano, marked bars for mallets — with fingers, intervals or note names, and each voicing written out in standard notation in the clef that instrument reads. On a tablet or laptop, compare several chords side by side on several instruments at once (guitar over piano, say), or see every voicing of one chord. Tap to hear.
 - **Studio**
   - Free Play: play anything and see it appear on the staff, with chord names.
@@ -103,7 +106,7 @@ npm test           # unit tests (music theory, generator, curriculum, songs, aud
 npm run typecheck
 npm run build      # production build in dist/ (static, PWA)
 npm run e2e        # Playwright smoke tests on iPad mini + phone viewports
-npm run clefsong -- help   # song file tools: validate, convert MusicXML/MIDI, scan with Claude, AI prompt
+npm run clefsong -- help   # song file tools: validate, convert MusicXML/MIDI/Guitar Pro/tab, scan with Claude, AI prompt
 
 # Slower, opt-in browser runs
 SWEEP=1 npx playwright test sweep --project=ipad   # render every step of every lesson, fail on any error
@@ -135,7 +138,7 @@ src/
                 microphone pitch detection, input manager
   curriculum/   lesson data model, builders, procedural generator, chord practice, the tracks
   content/      public-domain + original song library for every instrument
-  songs/        the Clef Coach song format, MusicXML / MIDI importers, scanning with Claude
+  songs/        the Clef Coach song format, MusicXML / MIDI / Guitar Pro / text tab importers, scanning with Claude
   engine/       lesson runtime: PlayAlong (wait/tempo judging), flashcards, rhythm,
                 fretboard activities, review & gym generators, unlock logic
   state/        zustand store, persistence, spaced repetition, achievements, export/import
@@ -149,4 +152,4 @@ All music is either public domain (traditional melodies, or composers who died l
 
 ## License
 
-MIT. VexFlow is MIT; the Bravura font is SIL OFL 1.1.
+MIT. VexFlow is MIT; the Bravura font is SIL OFL 1.1; alphaTab (which reads Guitar Pro files, loaded only when one is imported) is MPL-2.0.

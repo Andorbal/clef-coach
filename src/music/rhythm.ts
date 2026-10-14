@@ -1,7 +1,7 @@
 /** Ticks per quarter note. Divisible by 2, 3, 4, 8, 16 so triplets and 32nds are exact. */
 export const PPQ = 48;
 
-export type BaseDuration = 'w' | 'h' | 'q' | 'e' | 's' | 't';
+export type BaseDuration = 'w' | 'h' | 'q' | 'e' | 's' | 't' | 'x';
 
 export const BASE_TICKS: Record<BaseDuration, number> = {
   w: PPQ * 4,
@@ -10,14 +10,15 @@ export const BASE_TICKS: Record<BaseDuration, number> = {
   e: PPQ / 2,
   s: PPQ / 4,
   t: PPQ / 8,
+  x: PPQ / 16,
 };
 
 export const VEX_DURATION: Record<BaseDuration, string> = {
-  w: 'w', h: 'h', q: 'q', e: '8', s: '16', t: '32',
+  w: 'w', h: 'h', q: 'q', e: '8', s: '16', t: '32', x: '64',
 };
 
 export const DURATION_NAMES: Record<BaseDuration, string> = {
-  w: 'whole', h: 'half', q: 'quarter', e: 'eighth', s: 'sixteenth', t: 'thirty-second',
+  w: 'whole', h: 'half', q: 'quarter', e: 'eighth', s: 'sixteenth', t: 'thirty-second', x: 'sixty-fourth',
 };
 
 export function durationTicks(base: BaseDuration, dots = 0, triplet = false): number {
@@ -60,14 +61,14 @@ export function ticksToSeconds(ticks: number, bpm: number): number {
  */
 export function splitTicks(ticks: number): { base: BaseDuration; dots: number }[] {
   const out: { base: BaseDuration; dots: number }[] = [];
-  const order: BaseDuration[] = ['w', 'h', 'q', 'e', 's', 't'];
+  const order: BaseDuration[] = ['w', 'h', 'q', 'e', 's', 't', 'x'];
   let remain = ticks;
   while (remain > 0) {
     let placed = false;
     for (const b of order) {
       for (const dots of [1, 0]) {
         const t = durationTicks(b, dots);
-        if (t <= remain) {
+        if (t <= remain && Number.isInteger(t)) {
           out.push({ base: b, dots });
           remain -= t;
           placed = true;

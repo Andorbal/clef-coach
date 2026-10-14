@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { SongDef } from '../music/parse';
 import { parseSongDoc, songToDoc } from './format';
-import { estimateKey, importMidi, parseMidi } from './midi';
+import { estimateKey } from './importkit';
+import { importMidi, parseMidi } from './midi';
 import type { ImportResult } from './importkit';
 
 // ---------------------------------------------------------------------------
@@ -319,5 +320,79 @@ describe('MIDI import: tracks and instruments', () => {
     expect(song.instrument).toBe('ukulele');
     expect(song.staves[0].clef).toBe('treble');
     expect(() => importMidi(bytes, { tracks: [7] })).toThrow(/None of the requested tracks/);
+  });
+});
+
+describe('MIDI import: real files', () => {
+  const Q = 96;
+  const bar = 4 * Q;
+
+  it('takes every keyboard track, each to the hand its name says', () => {
+    const bytes = smf(1, Q, [
+      track([M.time(4, 4), M.key(0), M.tempo(90)]),
+      track([M.name('Right Voice 1'), ...[0, 1, 2, 3].map(i => M.note(i * Q, Q, [72, 74, 76, 77][i]))]),
+      track([M.name('Right Voice 2'), M.note(0, bar, 64)]),
+      track([M.name('Left Voice 1'), M.note(0, bar, 48)]),
+    ]);
+    const r = importMidi(bytes);
+    const song = check(r);
+    expect(song.staves.map(s => s.hand)).toEqual(['R', 'L']);
+    expect(song.staves[0].voices).toEqual(['C5/q D5 E5 F5 |', 'E4/w |']);
+    expect(song.staves[1].voices).toEqual(['C3/w |']);
+    expect(r.warnings.join(' ')).not.toMatch(/choose others/);
+  });
+
+  it('takes a lead-in that starts off the beat as a pickup', () => {
+    const E = Q / 2;
+    const bytes = smf(0, Q, [track([M.time(4, 4), M.key(1), ...[0, 1, 2].map(i => M.note(5 * E + i * E, E, [67, 69, 71][i])), M.note(bar, bar, 72)])]);
+    const song = check(importMidi(bytes));
+    expect(song.pickup).toBe('q.');
+    expect(song.staves[0].voices[0]).toBe('G4/e A4 B4 | C5/w |');
+  });
+
+  it('works out chord symbols from a chord track', () => {
+    const bytes = smf(1, Q, [
+      track([M.time(3, 4), M.key(1)]),
+      track([M.name('Melody'), ...[0, 1, 2, 3, 4, 5].map(i => M.note(i * Q, Q, [67, 71, 74, 72, 69, 66][i]))]),
+      track([M.name('Chords'), M.chord(0, 3 * Q, [43, 47, 50]), M.chord(3 * Q, 3 * Q, [38, 42, 45, 48])]),
+    ]);
+    const r = importMidi(bytes, { instrument: 'guitar' });
+    const song = check(r);
+    expect(song.chords).toBe('G/h. | D7/h. |');
+    expect(r.warnings.join(' ')).toMatch(/Chord symbols were worked out/);
+  });
+
+  it('names chords by their bass, with inversions as slash chords', async () => {
+    const { chordSymbolFor } = await import('./midi');
+    expect(chordSymbolFor([48, 52, 55], { fifths: 0, mode: 'major' })).toBe('C');
+    expect(chordSymbolFor([52, 55, 60], { fifths: 0, mode: 'major' })).toBe('C/E');
+    expect(chordSymbolFor([57, 60, 64, 67], { fifths: 0, mode: 'major' })).toBe('Am7');
+    expect(chordSymbolFor([50, 54, 60], { fifths: 1, mode: 'major' })).toBe('D7');
+    expect(chordSymbolFor([59, 62, 65], { fifths: 0, mode: 'major' })).toBe('Bdim');
+    expect(chordSymbolFor([60, 64], { fifths: 0, mode: 'major' })).toBeNull();
+  });
+
+  it('says when a file is a recording of someone playing rather than a sequenced score', () => {
+    // onsets drifting freely against the beat
+    const notes = Array.from({ length: 40 }, (_, i) => M.note(Math.round(i * Q * 0.537 + 7), Math.round(Q * 0.45), 60 + (i % 12)));
+    const r = importMidi(smf(0, Q, [track([M.time(4, 4), M.key(0), ...notes])]));
+    check(r);
+    expect(r.warnings.join(' ')).toMatch(/recording of someone playing/);
+    const steady = importMidi(smf(0, Q, [track([M.time(4, 4), M.key(0), ...Array.from({ length: 40 }, (_, i) => M.note(i * Q, Q, 60 + (i % 12)))])]));
+    expect(steady.warnings.join(' ')).not.toMatch(/recording of someone playing/);
+  });
+
+  it('keeps the tempo most of the music is played at', () => {
+    const bytes = smf(0, Q, [track([M.time(4, 4), M.key(0), M.tempo(60), M.tempo(100, Q), M.tempo(70, 15 * Q), ...Array.from({ length: 16 }, (_, i) => M.note(i * Q, Q, 60))])]);
+    const r = importMidi(bytes);
+    expect(check(r).tempo).toBe(100);
+    expect(r.warnings.join(' ')).toMatch(/keeps one tempo \(100\)/);
+  });
+
+  it('accepts long cadenza bars', () => {
+    const bytes = smf(0, Q, [track([M.time(4, 4), M.time(44, 32, bar), M.time(4, 4, bar + 44 * (Q / 8)), ...Array.from({ length: 14 }, (_, i) => M.note(i * Q, Q, 60 + i))])]);
+    const r = importMidi(bytes);
+    check(r);
+    expect(r.warnings.join(' ')).not.toMatch(/isn't supported/);
   });
 });

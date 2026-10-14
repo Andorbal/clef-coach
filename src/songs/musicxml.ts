@@ -31,14 +31,19 @@ import {
   type TimedNote,
   ImportError,
   Warnings,
+  appTuningFor,
   buildVoice,
   cleanTempo,
   guessInstrument,
   makeLayout,
+  inferModes,
+  layoutEnd,
   makeQuantizer,
   median,
   pickupToken,
   plural,
+  retunedWarning,
+  snapVoice,
   writeChordLine,
   writeVoice,
 } from './importkit';
@@ -55,27 +60,34 @@ export interface MusicXmlOptions {
   partIds?: string[];
   /** Title to use when the file has none (e.g. the file name). */
   title?: string;
+  /**
+   * Write each part for its own instrument when it is known (Guitar Pro tracks):
+   * `instrument` then only says which part to open by default.
+   */
+  keepPartInstrument?: boolean;
+  /** Leave out the bars before the chosen parts start playing. */
+  trimLeadingRests?: boolean;
 }
 
 // ---------------------------------------------------------------------------
 // What we read from the file
 // ---------------------------------------------------------------------------
 
-interface ClefInfo {
+export interface ClefInfo {
   sign: string;
   line: number;
   /** clef-octave-change: -1 for the guitar's treble-8vb clef. */
   octave: number;
 }
 
-interface Transpose {
+export interface Transpose {
   chromatic: number;
   diatonic: number;
   octave: number;
 }
 
 /** One written note head. */
-interface XNote {
+export interface XNote {
   written: Pitch;
   tieStart: boolean;
   finger?: number;
@@ -84,7 +96,7 @@ interface XNote {
 }
 
 /** A note, chord or rest in one voice of one staff. */
-interface XGroup {
+export interface XGroup {
   staff: number;
   voice: string;
   /** Ticks from the start of the measure. */
@@ -94,10 +106,14 @@ interface XGroup {
   lyrics: Map<number, string>;
   transpose: Transpose | null;
   clef: ClefInfo | undefined;
+  /** Stem direction written in the file: 1 up, -1 down. */
+  stem?: 1 | -1;
 }
 
-interface XHarmony {
+export interface XHarmony {
   tick: number;
+  /** A chord symbol given as text (Guitar Pro), used instead of root / kind when it reads. */
+  symbol?: string;
   root: { step: Step; alter: number } | null;
   kind: string;
   kindText: string;
@@ -105,7 +121,7 @@ interface XHarmony {
   degrees: { value: number; alter: number; type: string }[];
 }
 
-interface XMeasure {
+export interface XMeasure {
   number: string;
   implicit: boolean;
   /** Length of the music in it, in ticks. */
@@ -116,6 +132,9 @@ interface XMeasure {
   transpose: Transpose | null;
   groups: XGroup[];
   harmonies: XHarmony[];
+  /** Clef of each staff as the measure begins, and the changes inside it (ticks from its start). */
+  clefStart: Map<number, ClefInfo>;
+  clefs: { staff: number; tick: number; clef: ClefInfo }[];
   tempo?: number;
   fwdRepeat: boolean;
   /** Times played for a backward repeat (0 = none). */
@@ -132,7 +151,7 @@ interface XMeasure {
   fine: boolean;
 }
 
-interface XPart {
+export interface XPart {
   id: string;
   name: string;
   names: string[];
@@ -141,15 +160,20 @@ interface XPart {
   staves: number;
   measures: XMeasure[];
   firstClefs: Map<number, ClefInfo>;
-  clefChanges: Set<number>;
   tabStaves: Set<number>;
   /** Open strings from <staff-details> (MIDI, string 1 first). */
   tuning?: number[];
+  /** Has a time signature (music without one is written bar by bar in whatever fits). */
+  metered: boolean;
+  /** Says its keys are minor (many files give only the signature, or "major" for everything). */
+  modeGiven: boolean;
   counts: { grace: number; unpitched: number; microtones: number; oddTuplets: number };
 }
 
-const TYPE_DUR: Record<string, BaseDuration> = { whole: 'w', half: 'h', quarter: 'q', eighth: 'e', '16th': 's', '32nd': 't' };
+const TYPE_DUR: Record<string, BaseDuration> = { whole: 'w', half: 'h', quarter: 'q', eighth: 'e', '16th': 's', '32nd': 't', '64th': 'x' };
 const VALID_DEN = [1, 2, 4, 8, 16, 32];
+/** Most beats a bar can have (long cadenza bars need many). */
+const MAX_BEATS = 64;
 
 const num = (s: string | undefined, fallback = 0) => {
   const n = Number(s);
@@ -162,7 +186,7 @@ const flatText = (s: string) => s.replace(/\s+/g, ' ').trim();
 // Header and part list
 // ---------------------------------------------------------------------------
 
-interface Header {
+export interface Header {
   title: string;
   composer: string;
   arranger?: string;
@@ -183,11 +207,19 @@ function readHeader(root: XmlElement): Header {
   const title = work && movement && work !== movement ? `${work}: ${movement}` : work || movement || credits.get('title') || '';
   const ident = child(root, 'identification');
   const creator = (type: string) => flatText(kids(ident, 'creator').filter(c => c.attrs.type === type).map(textOf).join(', '));
+  let lyricist = creator('lyricist') || creator('poet') || credits.get('lyricist') || undefined;
+  let arranger = creator('arranger') || credits.get('arranger') || undefined;
+  // notation programs' "lyricist" box often holds the arrangement credit ("Arr. by …")
+  const arr = lyricist && /^\s*arr(?:anged|\.|angement)?\s*(?:by|:)?\s*/i.exec(lyricist);
+  if (lyricist && arr) {
+    arranger ??= lyricist.slice(arr[0].length).trim() || undefined;
+    lyricist = undefined;
+  }
   return {
     title,
     composer: creator('composer') || credits.get('composer') || '',
-    arranger: creator('arranger') || credits.get('arranger') || undefined,
-    lyricist: creator('lyricist') || creator('poet') || credits.get('lyricist') || undefined,
+    arranger,
+    lyricist,
     rights: flatText(kids(ident, 'rights').map(textOf).join(' ')) || credits.get('rights') || undefined,
     software: flatText(kids(path(ident, 'encoding'), 'software').map(textOf).join(', ')) || undefined,
   };
@@ -253,7 +285,7 @@ function readKey(el: XmlElement, w: Warnings): KeySig | null {
 
 function readTime(el: XmlElement, w: Warnings): TimeSig | null {
   if (child(el, 'senza-misura')) {
-    w.add('Unmetered music (senza misura) was written in 4/4.');
+    w.add('Unmetered music (senza misura) is written with a time signature that fits each bar.');
     return null;
   }
   const beats = kids(el, 'beats').map(b => textOf(b).split('+').reduce((s, x) => s + num(x), 0));
@@ -265,7 +297,7 @@ function readTime(el: XmlElement, w: Warnings): TimeSig | null {
   // composite signatures (3/8 + 2/4) are added up over the smallest unit
   const den = Math.max(...types);
   const n = beats.reduce((s, b, i) => s + (b * den) / (types[i] ?? den), 0);
-  if (!Number.isInteger(n) || n < 1 || n > 32 || !VALID_DEN.includes(den)) {
+  if (!Number.isInteger(n) || n < 1 || n > MAX_BEATS || !VALID_DEN.includes(den)) {
     w.add(`The time signature ${beats.join('+')}/${types.join('+')} isn't supported; 4/4 was used.`);
     return null;
   }
@@ -282,8 +314,6 @@ function readTranspose(el: XmlElement): Transpose {
   const d = childText(el, 'diatonic');
   return { chromatic, diatonic: d ? num(d) : Math.round((chromatic * 7) / 12), octave: num(childText(el, 'octave-change'), 0) };
 }
-
-const sameClef = (a: ClefInfo, b: ClefInfo) => a.sign === b.sign && a.octave === b.octave && (a.line === b.line || !a.line || !b.line);
 
 // ---------------------------------------------------------------------------
 // Parts and measures
@@ -398,9 +428,9 @@ function readTechnical(note: XmlElement, x: XNote): void {
   if (fr !== undefined && fr >= 0) x.fret = Math.round(fr);
 }
 
-function emptyMeasure(number: string, implicit: boolean, time: TimeSig, key: KeySig, transpose: Transpose | null): XMeasure {
+export function emptyMeasure(number: string, implicit: boolean, time: TimeSig, key: KeySig, transpose: Transpose | null): XMeasure {
   return {
-    number, implicit, len: 0, time, key, transpose, groups: [], harmonies: [],
+    number, implicit, len: 0, time, key, transpose, groups: [], harmonies: [], clefStart: new Map(), clefs: [],
     fwdRepeat: false, bwdRepeat: 0, endingStop: false,
     segno: false, codaSign: false, codaTarget: false, tocoda: false, dacapo: false, dalsegno: false, fine: false,
   };
@@ -416,8 +446,9 @@ function readPart(el: XmlElement, info: PartInfo | undefined, w: Warnings): XPar
     staves: 1,
     measures: [],
     firstClefs: new Map(),
-    clefChanges: new Set(),
     tabStaves: new Set(),
+    metered: false,
+    modeGiven: false,
     counts: { grace: 0, unpitched: 0, microtones: 0, oddTuplets: 0 },
   };
   let divisions = 1;
@@ -430,6 +461,7 @@ function readPart(el: XmlElement, info: PartInfo | undefined, w: Warnings): XPar
 
   for (const mEl of kids(el, 'measure')) {
     const m = emptyMeasure(mEl.attrs.number ?? String(part.measures.length + 1), mEl.attrs.implicit === 'yes', time, key, transposeFor(1));
+    m.clefStart = new Map(clefs);
     let pos = 0;
     let maxPos = 0;
     let lastStart = 0;
@@ -444,6 +476,8 @@ function readPart(el: XmlElement, info: PartInfo | undefined, w: Warnings): XPar
           if (d && d > 0) divisions = d;
           const k = child(c, 'key');
           const nk = k ? readKey(k, w) : null;
+          // only "minor" is trusted: some programs write "major" for every key they export
+          if (k && /^minor$/i.test(childText(k, 'mode'))) part.modeGiven = true;
           if (nk) {
             key = nk;
             if (!started) m.key = nk;
@@ -451,6 +485,7 @@ function readPart(el: XmlElement, info: PartInfo | undefined, w: Warnings): XPar
           const t = child(c, 'time');
           const nt = t ? readTime(t, w) : null;
           if (nt) {
+            part.metered = true;
             time = nt;
             if (!started) m.time = nt;
           }
@@ -458,9 +493,8 @@ function readPart(el: XmlElement, info: PartInfo | undefined, w: Warnings): XPar
           for (const cl of kids(c, 'clef')) {
             const n = num(cl.attrs.number, 1);
             const ci = readClef(cl);
-            const first = part.firstClefs.get(n);
-            if (!first) part.firstClefs.set(n, ci);
-            else if (!sameClef(first, ci)) part.clefChanges.add(n);
+            if (!part.firstClefs.has(n)) part.firstClefs.set(n, ci);
+            m.clefs.push({ staff: n, tick: pos, clef: ci });
             clefs.set(n, ci);
             if (ci.sign === 'TAB') part.tabStaves.add(n);
           }
@@ -536,6 +570,8 @@ function readPart(el: XmlElement, info: PartInfo | undefined, w: Warnings): XPar
             break;
           }
           const g: XGroup = { staff, voice, start, end: start + len, notes: note ? [note] : [], lyrics: new Map(), transpose: transposeFor(staff), clef: clefs.get(staff) };
+          const stem = childText(c, 'stem');
+          if (stem === 'up' || stem === 'down') g.stem = stem === 'up' ? 1 : -1;
           readLyrics(c, lyricLabels, g.lyrics);
           m.groups.push(g);
           last = g;
@@ -578,6 +614,7 @@ function readPart(el: XmlElement, info: PartInfo | undefined, w: Warnings): XPar
 }
 
 const hasNotes = (p: XPart) => p.measures.some(m => m.groups.some(g => g.notes.length));
+const noteCount = (p: XPart) => p.measures.reduce((s, m) => s + m.groups.reduce((t, g) => t + g.notes.length, 0), 0);
 
 // ---------------------------------------------------------------------------
 // Repeats and jumps → performance order
@@ -757,7 +794,8 @@ function pitchPlan(part: XPart, instrument: InstrumentId, w: Warnings): PitchPla
     }
     const best = [...diffs].sort((a, b) => b[1] - a[1])[0];
     const total = [...diffs.values()].reduce((s, x) => s + x, 0);
-    if (best && best[0] % 12 === 0 && best[1] >= Math.max(2, total * 0.6)) {
+    // most notes agree (a single note counts when it is all there is)
+    if (best && best[0] % 12 === 0 && best[1] >= total * 0.6 && (best[1] >= 2 || best[1] === total)) {
       const shift = -best[0];
       return { convert: n => octaveShift(n.written, shift), keyTranspose: () => null };
     }
@@ -796,6 +834,17 @@ const KIND_NEAREST: Record<string, string> = { 'major-11th': 'maj9', 'major-13th
 const accText = (a: number) => (a === 1 ? '#' : a === -1 ? 'b' : a === 2 ? '##' : a === -2 ? 'bb' : '');
 
 function harmonySymbol(h: XHarmony, t: Transpose | null, w: Warnings): string | null {
+  if (h.symbol !== undefined) {
+    try {
+      return chordSymbolText(parseChordSymbol(h.symbol.trim()));
+    } catch {
+      // not a symbol the app reads: its root and minor-ness, if it starts like a chord
+      const m = /^([A-G](?:#|b)?)(m(?!aj))?/.exec(h.symbol.trim());
+      if (!m) return null;
+      w.add('Some chord symbols were simplified to the nearest chord Clef Coach knows.');
+      return `${m[1]}${m[2] ?? ''}`;
+    }
+  }
   if (h.kind === 'none' || !h.root) return null;
   const move = (r: { step: Step; alter: number }) => {
     if (!t) return r;
@@ -851,7 +900,10 @@ function looksLikePianoPair(a: XPart, b: XPart): boolean {
   const clefB = b.firstClefs.get(1)?.sign ?? 'G';
   const piano = PIANOISH.test(a.names.join(' ')) && PIANOISH.test(b.names.join(' '));
   const braced = a.braces.some(x => b.braces.includes(x));
-  return clefA === 'G' && clefB === 'F' && (piano || (braced && (piano || a.name === b.name || PIANOISH.test(a.names.join(' ') + b.names.join(' ')))));
+  // unnamed parts (or ones played by a MIDI piano) joined by a brace are a grand staff too
+  const pianoSound = (p: XPart) => p.program !== undefined && p.program >= 1 && p.program <= 8;
+  const unnamed = !a.names.some(Boolean) && !b.names.some(Boolean);
+  return clefA === 'G' && clefB === 'F' && (piano || (braced && (a.name === b.name || unnamed || (pianoSound(a) && pianoSound(b)) || PIANOISH.test(a.names.join(' ') + b.names.join(' ')))));
 }
 
 interface OutMeasure {
@@ -887,6 +939,26 @@ export function importMusicXml(xml: string, opts: MusicXmlOptions = {}): ImportR
   const header = readHeader(root);
   const infos = readPartList(root);
   const parts = kids(root, 'part').map(p => readPart(p, infos.get(p.attrs.id ?? ''), w));
+  return buildSong({ header, parts, source: `Imported from MusicXML${header.software ? ` (${header.software})` : ''}` }, opts, w);
+}
+
+/** The instrument a part is for, from its names, its MIDI program or its strings. */
+export function partInstrument(p: XPart): InstrumentId | null {
+  const g = guessInstrument(p.names.length ? p.names : [p.name], p.program);
+  if (g || !p.tuning?.length) return g;
+  // tablature tells: four or five low strings are a bass, G C E A a ukulele
+  if (Math.min(...p.tuning) < 36) return 'bass';
+  if (p.tuning.length === 4 && Math.min(...p.tuning) >= 55) return 'ukulele';
+  return 'guitar';
+}
+
+/**
+ * Turn parts read from a score file into a song: choose the parts, write out repeats,
+ * lay out the bars, place notes in voices and write the text notation. Shared by
+ * MusicXML and Guitar Pro (converted to the same parts on reading).
+ */
+export function buildSong(read: { header: Header; parts: XPart[]; source: string }, opts: MusicXmlOptions, w: Warnings): ImportResult {
+  const { header, parts } = read;
   if (!parts.length || !parts.some(p => p.measures.length)) throw new ImportError('The score has no music in it.');
   const partList: ImportPart[] = parts.map(p => ({ id: p.id, name: p.name, staves: p.staves - (p.tabStaves.size && p.tabStaves.size < p.staves ? p.tabStaves.size : 0) }));
 
@@ -898,16 +970,24 @@ export function importMusicXml(xml: string, opts: MusicXmlOptions = {}): ImportR
     if (missing.length) w.add(`Part${missing.length > 1 ? 's' : ''} ${missing.join(', ')} not found in the file.`);
     if (!chosen.length) throw new ImportError(`None of the requested parts (${opts.partIds.join(', ')}) are in this file.`);
   } else {
+    // the part with the most notes (or a right-hand / left-hand pair of piano parts), so a
+    // small extra part (ornaments, a cue line) doesn't win just by coming first
     const playable = parts.filter(hasNotes);
-    const list = playable.length ? playable : parts;
-    chosen = list[1] && looksLikePianoPair(list[0], list[1]) ? [list[0], list[1]] : [list[0]];
+    // a guitarist wants the guitar part of a band score, a bassist the bass part
+    const forInstrument = opts.instrument && familyOf(opts.instrument) === 'fretted' ? playable.filter(p => partInstrument(p) === opts.instrument) : [];
+    const list = forInstrument.length ? forInstrument : playable.length ? playable : parts;
+    const candidates: XPart[][] = list.map(p => [p]);
+    for (let i = 0; i + 1 < list.length; i++) if (looksLikePianoPair(list[i], list[i + 1])) candidates.push([list[i], list[i + 1]]);
+    const size = (ps: XPart[]) => ps.reduce((s, p) => s + noteCount(p), 0);
+    chosen = candidates.reduce((best, c) => (size(c) > size(best) * 1.0001 || (size(c) >= size(best) * 0.999 && c.length > best.length) ? c : best), candidates[0]);
     if (parts.length > chosen.length) {
       w.add(`Imported ${chosen.map(p => `"${p.name}"`).join(' and ')}; the file has ${plural(parts.length, 'part')} – choose others to import them instead.`);
     }
   }
   const pianoPair = chosen.length === 2 && looksLikePianoPair(chosen[0], chosen[1]);
   const master = chosen[0];
-  const instrument: InstrumentId = opts.instrument ?? guessInstrument(master.names.length ? master.names : [master.name], master.program) ?? 'piano';
+  const own = partInstrument(master);
+  const instrument: InstrumentId = (opts.keepPartInstrument && own) || opts.instrument || own || 'piano';
 
   // ---- output staves and their voices
   interface OutStaff {
@@ -924,6 +1004,8 @@ export function importMusicXml(xml: string, opts: MusicXmlOptions = {}): ImportR
       borrowTabStrings(part);
       nums = nonTab;
     }
+    const crossed = homeCrossStaffNotes(part);
+    if (crossed) w.add(`${plural(crossed, 'cross-staff note')} ${crossed > 1 ? 'are' : 'is'} written on ${crossed > 1 ? 'their' : 'its'} own hand's staff (with ledger lines), so each hand practises its own notes.`);
     const withNotes = nums.filter(s => part.measures.some(m => m.groups.some(g => g.staff === s && g.notes.length)));
     for (const s of withNotes.length ? withNotes : nums.slice(0, 1)) staves.push({ part, staff: s, slots: chooseVoices(part, s, w) });
   }
@@ -938,38 +1020,84 @@ export function importMusicXml(xml: string, opts: MusicXmlOptions = {}): ImportR
   };
   const out: OutMeasure[] = [];
   const cut: string[] = [];
+  /** Nothing sounds in a placed source bar from this tick (relative to the bar) on. */
+  const silentFrom = (pl: { src: number; offset: number }, from: number) =>
+    chosen.every(p => (p.measures[pl.src]?.groups ?? []).every(g => !g.notes.length || pl.offset + g.end <= from + 1e-6));
+  const irregular: string[] = [];
+  if (!master.metered && master.measures.length > 1) w.add('The score has no time signature; each bar is written with a time signature that fits it.');
   for (const { m: src, pass } of order) {
     const sm = master.measures[src];
-    const full = measureTicks(sm.time);
+    let time = sm.time;
+    let full = measureTicks(time);
     let len = Math.round(measureLen(src));
     if (len === 0) len = full;
-    if (len > full) {
-      if (!cut.includes(sm.number)) cut.push(sm.number);
+    // a cadenza longer than its bar, or music with no time signature at all: the bar keeps
+    // its length (and its number) under a time signature of its own
+    const own = len !== full && (!master.metered || len > full + 6) ? fitTime(len, sm.time[1]) : null;
+    if (own) {
+      time = own;
+      full = len;
+      if (master.metered && !irregular.includes(sm.number)) irregular.push(sm.number);
+    } else if (len > full) {
+      // a few ticks over is the rounding of an odd tuplet: nothing is lost
+      if (len > full + 6 && !cut.includes(sm.number)) cut.push(sm.number);
       len = full;
     }
     const lastOut = out[out.length - 1];
+    // the pickup again after a repeat or D.C.: it sounds in the rests that end the bar before
+    const replayedPickup = out.length > 0 && src === order[0].m && out[0].len < out[0].full && len < full;
+    if (replayedPickup && lastOut && !lastOut.partial && lastOut.len === lastOut.full && lastOut.places.length === 1 && silentFrom(lastOut.places[0], lastOut.len - len)) {
+      lastOut.places.push({ src, pass, offset: lastOut.len - len, len });
+      continue;
+    }
     if (len === full) {
-      out.push({ time: sm.time, key: sm.key, len: full, full, places: [{ src, pass, offset: 0, len }], partial: false });
+      out.push({ time, key: sm.key, len: full, full, places: [{ src, pass, offset: 0, len }], partial: false });
     } else if (lastOut?.partial && lastOut.full === full && lastOut.len + len <= full) {
       // the second half of a bar split by a repeat sign
       lastOut.places.push({ src, pass, offset: lastOut.len, len });
       lastOut.len += len;
       lastOut.partial = lastOut.len < full;
     } else if (!out.length) {
-      if (pickupToken(len)) out.push({ time: sm.time, key: sm.key, len, full, places: [{ src, pass, offset: 0, len }], partial: false });
+      if (pickupToken(len)) out.push({ time, key: sm.key, len, full, places: [{ src, pass, offset: 0, len }], partial: false });
       else {
         w.add('The opening pickup has an unusual length; it was written as a full bar starting with rests.');
-        out.push({ time: sm.time, key: sm.key, len: full, full, places: [{ src, pass, offset: full - len, len }], partial: false });
+        out.push({ time, key: sm.key, len: full, full, places: [{ src, pass, offset: full - len, len }], partial: false });
       }
     } else {
-      out.push({ time: sm.time, key: sm.key, len, full, places: [{ src, pass, offset: 0, len }], partial: true });
+      out.push({ time, key: sm.key, len, full, places: [{ src, pass, offset: 0, len }], partial: true });
     }
   }
-  const hasPickup = out.length > 0 && out[0].len < out[0].full;
+  let hasPickup = out.length > 0 && out[0].len < out[0].full;
   const padded: string[] = [];
+  const shortBars: string[] = [];
+  // every staff of a bar ends together, and more than one line says so: the bar is meant
+  // to be short, not missing notes
+  const allEndTogether = (src: number, len: number) => {
+    let lines = 0;
+    const ok = chosen.every(p => {
+      const ends = new Map<number, number>();
+      const voices = new Set<string>();
+      for (const g of p.measures[src]?.groups ?? []) {
+        ends.set(g.staff, Math.max(ends.get(g.staff) ?? 0, g.end));
+        voices.add(`${g.staff}/${g.voice}`);
+      }
+      lines += voices.size;
+      return [...ends.values()].every(e => Math.abs(Math.round(e) - len) <= 1);
+    });
+    return ok && lines > 1;
+  };
   out.forEach((m, k) => {
-    // a short final bar may stay short after a pickup; any other short bar is filled with rests
+    // a short final bar may stay short after a pickup; any other short bar is filled with rests,
+    // unless the whole bar is written short on purpose (then it gets a time signature of its own)
     if (m.len < m.full && k > 0 && !(k === out.length - 1 && hasPickup)) {
+      const own = k < out.length - 1 && m.places.length === 1 && allEndTogether(m.places[0].src, m.len) ? fitTime(m.len, m.time[1]) : null;
+      if (own) {
+        m.time = own;
+        m.full = m.len;
+        const num = master.measures[m.places[0].src].number;
+        if (!shortBars.includes(num)) shortBars.push(num);
+        return;
+      }
       for (const pl of m.places) {
         const sm = master.measures[pl.src];
         if (!sm.implicit && !padded.includes(sm.number)) padded.push(sm.number);
@@ -977,8 +1105,20 @@ export function importMusicXml(xml: string, opts: MusicXmlOptions = {}): ImportR
       m.len = m.full;
     }
   });
+  if (irregular.length) w.add(`${irregular.length > 1 ? 'Measures' : 'Measure'} ${listNums(irregular)} ${irregular.length > 1 ? 'are' : 'is'} longer than the time signature (a cadenza?); ${irregular.length > 1 ? 'each was' : 'it was'} given a time signature of its own.`);
+  if (shortBars.length) w.add(`${shortBars.length > 1 ? 'Measures' : 'Measure'} ${listNums(shortBars)} ${shortBars.length > 1 ? 'are' : 'is'} shorter than the time signature; ${shortBars.length > 1 ? 'each was' : 'it was'} given a time signature of its own.`);
   if (cut.length) w.add(`${cut.length > 1 ? 'Measures' : 'Measure'} ${listNums(cut)} had more beats than the time signature allows; the extra notes were cut.`);
   if (padded.length) w.add(`${padded.length > 1 ? 'Measures' : 'Measure'} ${listNums(padded)} ${padded.length > 1 ? 'were' : 'was'} incomplete and filled with rests.`);
+  if (opts.trimLeadingRests) {
+    // a band's lead part waits out the intro: start where it starts playing
+    let silent = 0;
+    while (silent < out.length - 1 && out[silent].places.every(pl => silentFrom(pl, 0))) silent++;
+    if (silent) {
+      out.splice(0, silent);
+      hasPickup = out[0].len < out[0].full;
+      w.add(`${plural(silent, 'empty bar')} at the start ${silent > 1 ? 'were' : 'was'} left out.`);
+    }
+  }
 
   // ---- keys (as the app's pitches sound) and the layout
   const plans = new Map(chosen.map(p => [p, pitchPlan(p, instrument, w)]));
@@ -991,6 +1131,10 @@ export function importMusicXml(xml: string, opts: MusicXmlOptions = {}): ImportR
   // ---- timed notes per staff / voice
   const fretted = familyOf(instrument) === 'fretted';
   const tuning = fretted ? (master.tuning?.length ? master.tuning : defaultTuning(instrument)) : [];
+  // the app plays in standard tuning: keep a string mark only where the note can be played on that string there
+  const appTuning = fretted ? appTuningFor(instrument, master.tuning) : [];
+  const retuned = fretted && !!master.tuning?.length && master.tuning.some((o, i) => appTuning[i] !== o);
+  let movedStrings = 0;
   const [fLo, fHi] = fingerRange[instrument];
   const voicesNotes: TimedNote<LyricTag>[][][] = staves.map(st => st.slots.map(() => []));
   staves.forEach((st, si) => {
@@ -1013,6 +1157,13 @@ export function importMusicXml(xml: string, opts: MusicXmlOptions = {}): ImportR
               if (s >= 0) string = s + 1;
             }
             if (string !== undefined && (string < 1 || string > Math.max(tuning.length, 1))) string = undefined;
+            if (string !== undefined && retuned) {
+              const fret = midiOf(pitch) - (appTuning[string - 1] ?? -99);
+              if (fret < 0 || fret > 24) {
+                string = undefined;
+                movedStrings++;
+              }
+            }
             const finger = n.finger !== undefined && n.finger >= fLo && n.finger <= fHi ? n.finger : undefined;
             voicesNotes[si][vi].push({
               start,
@@ -1028,6 +1179,13 @@ export function importMusicXml(xml: string, opts: MusicXmlOptions = {}): ImportR
       }
     });
   });
+
+  if (retuned) {
+    w.add(retunedWarning(`The ${instrumentDef(instrument).name.toLowerCase()} part`, master.tuning!, appTuning, movedStrings));
+  }
+
+  // major or minor, where the file doesn't say
+  if (!master.modeGiven) inferModes(layout, voicesNotes.flat(2));
 
   // ---- chord symbols (from the chosen parts, else any part that has them)
   const harmonyPart = [...chosen, ...parts].find(p => p.measures.some(m => m.harmonies.length));
@@ -1047,18 +1205,17 @@ export function importMusicXml(xml: string, opts: MusicXmlOptions = {}): ImportR
 
   // ---- quantise everything onto a grid the notation can write
   const all = voicesNotes.flat(2);
-  const q = makeQuantizer(layout, [...all.flatMap(n => [{ t: n.start, w: 1 }, { t: n.end, w: 1 }]), ...chordChanges.map(c => ({ t: c.tick, w: 1 }))], { binary: 6, triplet: 8 });
+  const q = makeQuantizer(layout, [...all.flatMap(n => [{ t: n.start, w: 1 }, { t: n.end, w: 1 }]), ...chordChanges.map(c => ({ t: c.tick, w: 1 }))], { binary: 3, triplet: 8 });
   let moved = 0;
   const snap = (t: number) => {
     const s = q.snap(t);
     if (Math.abs(s - t) > 0.01) moved++;
     return s;
   };
-  for (const n of all) {
-    n.start = snap(n.start);
-    n.end = snap(n.end);
-  }
+  let spread = 0;
+  for (const voice of voicesNotes.flat()) spread += snapVoice(voice, snap, 3, layoutEnd(layout));
   for (const c of chordChanges) c.tick = snap(c.tick);
+  if (spread) w.add(`${plural(spread, 'note')} in very fast runs ${spread > 1 ? 'were' : 'was'} spaced out evenly so that every note is kept.`);
   const oddTuplets = chosen.reduce((s, p) => s + p.counts.oddTuplets, 0);
   if (oddTuplets) w.add(`${plural(oddTuplets, 'note')} in tuplets other than triplets ${oddTuplets > 1 ? 'were' : 'was'} rounded to the nearest rhythm Clef Coach can write.`);
   else if (moved) w.add('Some very short notes or unusual rhythms were rounded to the nearest value Clef Coach can write.');
@@ -1068,6 +1225,7 @@ export function importMusicXml(xml: string, opts: MusicXmlOptions = {}): ImportR
   let dropped = 0;
   let brokenTies = 0;
   let lyricAttacks: (LyricTag | undefined)[] = [];
+  const staffClefs = staves.map((st, si) => clefPlan(st, out, layout, instrument, voicesNotes[si].flat().map(n => midiOf(n.pitches[0])), snap, w));
   const staffDefs: SongStaffDef[] = staves.map((st, si) => {
     const voices = st.slots.map((_, vi) => {
       const built = buildVoice(voicesNotes[si][vi], layout);
@@ -1075,16 +1233,13 @@ export function importMusicXml(xml: string, opts: MusicXmlOptions = {}): ImportR
       dropped += built.dropped;
       brokenTies += built.brokenTies;
       if (si === 0 && vi === 0) lyricAttacks = built.attacks;
-      return writeVoice(built.specs, layout);
+      return writeVoice(built.specs, layout, undefined, vi === 0 ? staffClefs[si].changes : undefined);
     });
-    const midis = voicesNotes[si].flat().map(n => midiOf(n.pitches[0]));
-    const clef = appClef(instrument, st.part.firstClefs.get(st.staff), midis, w);
-    if (st.part.clefChanges.has(st.staff)) w.add(`A staff changes clef during the piece; Clef Coach keeps its first clef (${clef.replace('8vb', ' 8vb')}).`);
-    return { clef, voices, name: chosen.length > 1 && !pianoPair ? st.part.name : undefined };
+    return { clef: staffClefs[si].clef, voices, name: chosen.length > 1 && !pianoPair ? st.part.name : undefined };
   });
   if (shortened) w.add(`${plural(shortened, 'note')} overlapping the next note in the same voice ${shortened > 1 ? 'were' : 'was'} shortened.`);
   if (dropped) w.add(`${plural(dropped, 'note')} with no room left ${dropped > 1 ? 'were' : 'was'} dropped.`);
-  if (brokenTies) w.add(`${plural(brokenTies, 'tie')} between chords that change ${brokenTies > 1 ? 'were' : 'was'} left out (the note is played again).`);
+  if (brokenTies) w.add(`${plural(brokenTies, 'tie')} leading into another voice ${brokenTies > 1 ? 'were' : 'was'} left out (the note is played again).`);
 
   // hands: piano grand staff R over L; a single piano staff by its clef
   if ((instrument === 'piano' || instrument === 'mallets') && staffDefs.length === 2) {
@@ -1113,7 +1268,7 @@ export function importMusicXml(xml: string, opts: MusicXmlOptions = {}): ImportR
     composer: header.composer,
     arranger: header.arranger,
     license: header.rights,
-    source: `Imported from MusicXML${header.software ? ` (${header.software})` : ''}`,
+    source: read.source,
     blurb: header.lyricist ? `Words by ${header.lyricist}.` : undefined,
     instrument,
     level: 3,
@@ -1128,6 +1283,15 @@ export function importMusicXml(xml: string, opts: MusicXmlOptions = {}): ImportR
   return { song, warnings: w.list, parts: partList };
 }
 
+/** A time signature that holds exactly this many ticks (n/4, n/8, n/16 or n/32, `prefer` first), if any does. */
+function fitTime(len: number, prefer?: number): TimeSig | null {
+  for (const den of [...(prefer && prefer >= 4 ? [prefer] : []), 4, 8, 16, 32]) {
+    const unit = measureTicks([1, den]);
+    if (len % unit === 0 && len / unit <= MAX_BEATS) return [len / unit, den];
+  }
+  return null;
+}
+
 /** "3, 5 and 8". */
 function listNums(xs: string[]): string {
   const shown = xs.slice(0, 6);
@@ -1135,13 +1299,88 @@ function listNums(xs: string[]): string {
   return shown.length > 1 && !more ? `${shown.slice(0, -1).join(', ')} and ${shown[shown.length - 1]}` : shown.join(', ') + more;
 }
 
+/**
+ * Put cross-staff notes back on their own voice's staff. A voice that dips onto the
+ * other staff of a grand staff (a right-hand arpeggio drawn in the bass clef) is still
+ * one line played by one hand: within a measure its notes and rests follow one another
+ * without overlapping. A voice number used for two lines at once (some programs number
+ * each staff's voices from 1) overlaps itself in time and is left alone.
+ * Returns the number of notes moved.
+ */
+function homeCrossStaffNotes(part: XPart): number {
+  if (part.staves < 2) return 0;
+  const onStaff = (g: XGroup) => !part.tabStaves.has(g.staff);
+  // a voice's own staff: where it spends most of its time
+  const time = new Map<string, Map<number, number>>();
+  for (const m of part.measures) for (const g of m.groups) {
+    if (!onStaff(g)) continue;
+    let t = time.get(g.voice);
+    if (!t) time.set(g.voice, (t = new Map()));
+    t.set(g.staff, (t.get(g.staff) ?? 0) + Math.max(g.end - g.start, 1));
+  }
+  const home = new Map([...time].map(([v, t]) => [v, [...t].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0][0]]));
+  let moved = 0;
+  for (const m of part.measures) {
+    const byVoice = new Map<string, XGroup[]>();
+    for (const g of m.groups) if (onStaff(g)) byVoice.set(g.voice, [...(byVoice.get(g.voice) ?? []), g]);
+    for (const [v, gs] of byVoice) {
+      const h = home.get(v)!;
+      const away = gs.filter(g => g.staff !== h);
+      if (!away.length) continue;
+      const here = gs.filter(g => g.staff === h);
+      if (away.some(a => here.some(b => a.start < b.end - 1e-6 && b.start < a.end - 1e-6))) continue;
+      for (const g of away) {
+        g.staff = h;
+        moved += g.notes.length;
+      }
+    }
+  }
+  return moved;
+}
+
+/**
+ * Order two voices of a staff upper first (the app draws its first voice stems up):
+ * by the stems the file gives them where they sound together, else by pitch.
+ */
+function upperFirst(part: XPart, staff: number, voices: string[]): string[] {
+  if (voices.length < 2) return voices;
+  const stats = new Map(voices.map(v => [v, { stem: 0, stems: 0, pitch: 0, notes: 0 }]));
+  for (const m of part.measures) {
+    const gs = m.groups.filter(g => g.staff === staff && g.notes.length && stats.has(g.voice));
+    if (voices.some(v => !gs.some(g => g.voice === v))) continue;
+    for (const g of gs) {
+      const s = stats.get(g.voice)!;
+      if (g.stem) {
+        s.stem += g.stem;
+        s.stems++;
+      }
+      for (const n of g.notes) {
+        s.pitch += midiOf(n.written);
+        s.notes++;
+      }
+    }
+  }
+  const lean = (v: string) => {
+    const s = stats.get(v)!;
+    return s.stems ? s.stem / s.stems : 0;
+  };
+  const height = (v: string) => {
+    const s = stats.get(v)!;
+    return s.notes ? s.pitch / s.notes : 0;
+  };
+  const [a, b] = voices;
+  const byStem = lean(a) - lean(b);
+  if (Math.abs(byStem) >= 0.5) return byStem > 0 ? [a, b] : [b, a];
+  return height(b) > height(a) + 1e-6 ? [b, a] : [a, b];
+}
+
 /** Pick the (up to) two voices a staff keeps; merge the others into chords where they line up, drop the rest. */
 function chooseVoices(part: XPart, staff: number, w: Warnings): string[] {
   const counts = new Map<string, number>();
   for (const m of part.measures) for (const g of m.groups) if (g.staff === staff && g.notes.length) counts.set(g.voice, (counts.get(g.voice) ?? 0) + g.notes.length);
   const byVoice = (a: string, b: string) => num(a, 99) - num(b, 99) || a.localeCompare(b);
-  // the two busiest voices (lower voice numbers first on a tie)
-  const keep = [...counts].sort((a, b) => b[1] - a[1] || byVoice(a[0], b[0])).slice(0, 2).map(([v]) => v).sort(byVoice);
+  // the two busiest voices (lower voice numbers first on a tie), the upper one first
+  const keep = upperFirst(part, staff, [...counts].sort((a, b) => b[1] - a[1] || byVoice(a[0], b[0])).slice(0, 2).map(([v]) => v).sort(byVoice));
   if (!keep.length) return ['1'];
   let merged = 0;
   let dropped = 0;
@@ -1149,10 +1388,20 @@ function chooseVoices(part: XPart, staff: number, w: Warnings): string[] {
   for (const m of part.measures) {
     for (const g of m.groups) {
       if (g.staff !== staff || !g.notes.length || keep.includes(g.voice)) continue;
-      // join the kept voice nearest in pitch that has a note with the same start and length
-      const target = m.groups
-        .filter(h => h.staff === staff && keep.includes(h.voice) && h.notes.length && Math.abs(h.start - g.start) < 1e-6 && Math.abs(h.end - g.end) < 1e-6)
-        .sort((a, b) => Math.abs(avg(a) - avg(g)) - Math.abs(avg(b) - avg(g)))[0];
+      const kept = m.groups.filter(h => h.staff === staff && keep.includes(h.voice) && h.notes.length);
+      const nearest = (a: XGroup, b: XGroup) => Math.abs(avg(a) - avg(g)) - Math.abs(avg(b) - avg(g));
+      // 1. join the kept voice nearest in pitch that has a note with the same start and length
+      const same = kept.filter(h => Math.abs(h.start - g.start) < 1e-6 && Math.abs(h.end - g.end) < 1e-6).sort(nearest)[0];
+      // 2. or move into a kept voice that is silent all the while (nothing changes but the stems)
+      const free = keep.filter(v => !kept.some(h => h.voice === v && h.start < g.end - 1e-6 && g.start < h.end - 1e-6));
+      if (!same && free.length) {
+        const others = kept.flatMap(h => h.notes.map(n => midiOf(n.written)));
+        const above = !others.length || avg(g) >= others.reduce((s, x) => s + x, 0) / others.length;
+        g.voice = free.length === 1 ? free[0] : above ? keep[0] : keep[keep.length - 1];
+        continue;
+      }
+      // 3. or join a chord that starts with it (the note takes that chord's length)
+      const target = same ?? kept.filter(h => Math.abs(h.start - g.start) < 1e-6).sort(nearest)[0];
       if (target) {
         joinGroup(target, g);
         merged += g.notes.length;
@@ -1166,21 +1415,23 @@ function chooseVoices(part: XPart, staff: number, w: Warnings): string[] {
   }
   // a second voice that only ever doubles the first in rhythm (octaves, a hymn's alto) reads better as chords
   if (keep.length === 2) {
-    const pairs: [XGroup, XGroup][] = [];
-    const lined = part.measures.every(m =>
-      m.groups.every(g => {
-        if (g.staff !== staff || g.voice !== keep[1] || !g.notes.length) return true;
-        const t = m.groups.find(h => h.staff === staff && h.voice === keep[0] && h.notes.length && Math.abs(h.start - g.start) < 1e-6 && Math.abs(h.end - g.end) < 1e-6);
-        if (t) pairs.push([t, g]);
-        return !!t;
-      }),
-    );
-    if (lined) {
-      for (const [t, g] of pairs) {
-        joinGroup(t, g);
-        g.notes = [];
+    for (const [into, from] of [keep, [keep[1], keep[0]]]) {
+      const pairs: [XGroup, XGroup][] = [];
+      const lined = part.measures.every(m =>
+        m.groups.every(g => {
+          if (g.staff !== staff || g.voice !== from || !g.notes.length) return true;
+          const t = m.groups.find(h => h.staff === staff && h.voice === into && h.notes.length && Math.abs(h.start - g.start) < 1e-6 && Math.abs(h.end - g.end) < 1e-6);
+          if (t) pairs.push([t, g]);
+          return !!t;
+        }),
+      );
+      if (lined) {
+        for (const [t, g] of pairs) {
+          joinGroup(t, g);
+          g.notes = [];
+        }
+        return [into];
       }
-      return [keep[0]];
     }
   }
   return keep;
@@ -1208,6 +1459,43 @@ function borrowTabStrings(part: XPart): void {
       }
     }
   }
+}
+
+/**
+ * A staff's clefs along the performance: the opening clef and every change (at the
+ * tick it takes effect, repeats written out). Tablature and percussion clefs are skipped.
+ */
+function clefPlan(
+  st: { part: XPart; staff: number },
+  out: OutMeasure[],
+  layout: Layout,
+  instrument: InstrumentId,
+  midis: number[],
+  snap: (t: number) => number,
+  w: Warnings,
+): { clef: Clef; changes: { tick: number; clef: Clef }[] } {
+  let clef: Clef | null = null;
+  const changes: { tick: number; clef: Clef }[] = [];
+  out.forEach((om, k) => {
+    for (const pl of om.places) {
+      const sm = st.part.measures[pl.src];
+      if (!sm) continue;
+      const begin = layout.starts[k] + pl.offset;
+      const events = [{ tick: 0, info: sm.clefStart.get(st.staff) }, ...sm.clefs.filter(c => c.staff === st.staff).map(c => ({ tick: c.tick, info: c.clef }))];
+      for (const e of events) {
+        if (!e.info || !['G', 'F', 'C'].includes(e.info.sign) || e.tick > pl.len + 1e-6) continue;
+        const c = appClef(instrument, e.info, midis, w);
+        if (clef === null) clef = c;
+        else if (c !== (changes[changes.length - 1]?.clef ?? clef)) {
+          const tick = snap(begin + e.tick);
+          // two changes at one moment: the later one wins
+          if (changes.length && changes[changes.length - 1].tick === tick) changes.pop();
+          if (c !== (changes[changes.length - 1]?.clef ?? clef)) changes.push({ tick, clef: c });
+        }
+      }
+    }
+  });
+  return { clef: clef ?? appClef(instrument, st.part.firstClefs.get(st.staff), midis, w), changes: changes.filter(c => c.tick > 0) };
 }
 
 function appClef(instrument: InstrumentId, clef: ClefInfo | undefined, midis: number[], w: Warnings): Clef {

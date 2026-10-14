@@ -126,9 +126,9 @@ function NotationViewImpl(props: NotationViewProps) {
             const svg = svgHostRef.current.querySelector('svg');
             if (svg) {
               const clone = svg.cloneNode(true) as SVGSVGElement;
-              // keep only the clef/key/time header group
+              // keep only the clef/key/time header groups (one per clef, key or time change)
               [...clone.children].forEach(ch => {
-                if (!(ch.getAttribute('class') ?? '').includes('vf-header')) ch.remove();
+                if (!(ch.getAttribute('class') ?? '').split(/\s+/).includes('vf-header')) ch.remove();
               });
               clone.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
               clone.style.overflow = 'hidden';
@@ -191,6 +191,23 @@ function NotationViewImpl(props: NotationViewProps) {
     return Math.max(0, Math.min(focusX * scale - anchor, maxOff + 200));
   }, [result, layout, scale, box.w, focusX]);
 
+  // the fixed header shows the clef, key and time of the music passing under it
+  const headerIndex = useMemo(() => {
+    if (!result || result.headers.length < 2) return 0;
+    const edge = offset / scale + result.headerWidth;
+    let i = 0;
+    while (i + 1 < result.headers.length && result.headers[i + 1].x <= edge) i++;
+    return i;
+  }, [result, offset, scale]);
+  useEffect(() => {
+    headerHostRef.current?.querySelectorAll('[data-header]').forEach(g => {
+      if (g.getAttribute('data-header') === String(headerIndex)) g.removeAttribute('display');
+      else g.setAttribute('display', 'none');
+    });
+  }, [headerIndex, result]);
+  // tick of the music in focus (for the clef a ghost note is drawn in)
+  const focusTick = playheadTick ?? (focusId ? elById.get(focusId)?.tick : undefined) ?? 0;
+
   // Note names don't move with the playhead: build them only when they change, so a
   // tempo-mode frame (playhead and scroll only) stays cheap.
   const nameLabels = useMemo(() => {
@@ -200,7 +217,7 @@ function NotationViewImpl(props: NotationViewProps) {
       if (!el || el.rest || el.tiePrev) return null;
       if (noteNames === 'focus' && pos.id !== focusId) return null;
       const geom = result.staves[pos.staff];
-      const lowest = Math.max(...el.pitches.map(p => yForPitch(geom, p)));
+      const lowest = Math.max(...el.pitches.map(p => yForPitch(geom, p, el.tick)));
       const fretted = isFretted(score.instrument);
       const fingerBelow = fingering && ((isKeyboard(score.instrument) && score.staves[pos.staff].hand === 'L') || fretted);
       const extra = fingerBelow ? 16 * (fretted && strings ? 1.4 : el.pitches.length) : 0;
@@ -253,8 +270,9 @@ function NotationViewImpl(props: NotationViewProps) {
               const geom = result.staves[g.staff] ?? result.staves[0];
               const near = g.nearId ? result.notes.get(g.nearId)?.x : focusX;
               const x = (near ?? focusX) + 22;
-              const y = yForPitch(geom, g.pitch);
-              const ledgers = ledgerLinesFor(geom, g.pitch);
+              const tick = (g.nearId ? elById.get(g.nearId)?.tick : undefined) ?? focusTick;
+              const y = yForPitch(geom, g.pitch, tick);
+              const ledgers = ledgerLinesFor(geom, g.pitch, tick);
               return (
                 <g key={g.key} className={`ghost ghost-${g.tone}`}>
                   {ledgers.map(ly => (

@@ -48,10 +48,11 @@ A song is ONE JSON object:
   token := head [/duration] [@fingers] [%strings] [~]
   head  := pitch | r (rest) | [pitch pitch …] (chord, low to high)
   pitch := letter + accidental + octave: C4 (middle C), F#4, Bb3, Ebb5, Fx4 (double sharp), Cn5 (natural)
-  duration := w h q e s t (whole, half, quarter, eighth, 16th, 32nd), "." per dot, "3" = triplet
+  duration := w h q e s t x (whole, half, quarter, eighth, 16th, 32nd, 64th), "." per dot, "3" = triplet
               e.g. q.  e  h..  e3 (an eighth of a triplet)
   The duration carries over until it changes: "C4/q D4 E4 F4 |" is four quarters.
   ~        := tie to the next note (same pitch), e.g. "G4/h~ | G4/q …"
+              inside a chord, after one pitch, ties only that note: "[C4~ E4]/h [C4 F4]" holds C4
   @fingers := printed fingering: piano 1-5; guitar/ukulele/bass fretting finger 0-4 (0 = open);
               mallets sticking L or R (or 1-4 with four mallets). One per chord note, "-" to skip one.
   %strings := guitar/ukulele/bass string number per note (1 = highest string), e.g. "%3"
@@ -66,6 +67,7 @@ A song is ONE JSON object:
 ## Structure tokens (inside the voice strings)
   |:  start repeat     :|  end repeat     |1  first ending starts     :|2  second ending starts
   ||  double bar       [K:G]  key change at the start of a bar     [T:3/4]  time change at the start of a bar
+  [C:treble] / [C:bass]  clef change on that staff, right before the note it applies to
   Every voice must use the same repeat signs at the same places. D.C./D.S. must be written out.
 
 ## Chords (optional "chords" line)
@@ -73,10 +75,23 @@ Same bars and durations as the notes: "C/h G7/h | Am/w |". Symbols like C, Cm, C
 Cdim, Caug, Csus4, C6, C9, Cadd9, Cm7b5, C/E (slash bass). "r" = no chord.
 
 ## Tablature
-For guitar/ukulele/bass TAB: turn each (string, fret) into the pitch it sounds with the standard
-tuning (guitar E2 A2 D3 G3 B3 E4 low→high, string 1 = high E; ukulele G4 C4 E4 A4, string 1 = A;
-bass E1 A1 D2 G2, string 1 = G), and keep the string as "%n". Take rhythm from the notation
-staff or rhythm stems if present; otherwise use the simplest rhythm that fits the bars.
+For guitar/ukulele/bass TAB: turn each (string, fret) into the pitch it sounds and keep the string
+as "%n" (string 1 = the highest string, the top line of the tab).
+- Standard tunings, low→high: guitar E2 A2 D3 G3 B3 E4; bass E1 A1 D2 G2 (a 5-string adds B0);
+  ukulele G4 C4 E4 A4 (string 1 = A4; low-G ukulele has G3).
+- Other tunings: read them from the string names at the start of the tab lines or a "Tuning:" note
+  ("Drop D": the low E string tuned down to D2; "half step down": every string a semitone lower).
+  A capo at fret n raises every note n semitones (frets are counted from the capo).
+- The instrument: 6 strings → guitar; 4 strings named G D A E (or 5 with B) → bass; A E C G → ukulele.
+- Techniques: h, p (hammer-on, pull-off), / \\ s (slides) and t (tap) — every fret number is its own
+  note; "7b9" (a bend) is ONE note, at fret 7; "x" is a muted note (write a rest); "<12>" or "[12]" is a
+  harmonic (write that fret's pitch); "~" (vibrato) and "PM" (palm mute) change nothing.
+- Rhythm: from the notation staff or rhythm stems when the tab has them. Tab written as TEXT rarely
+  shows rhythm: use a rhythm line (w h q e s t, or counts like "1 & 2 &") if there is one; otherwise
+  read the spacing — each "|" is a bar line and the notes are usually spaced in proportion to their
+  length — and if you know the song, use its real rhythm. Pick the time signature that fits (most tab
+  is 4/4). "x4" after a passage means it is played four times: repeat signs for twice, written out
+  for more.
 
 ## Lyrics
 One string per verse: syllables separated by spaces, a syllable that continues the word ends with "-"
@@ -93,10 +108,13 @@ Answer with the JSON object only — no explanations before or after (a \`\`\`js
 
 ${SONG_FORMAT_GUIDE}`;
 
-/** The user-turn instruction that goes with the images. */
-export function transcribeTask(opts: { instrument?: InstrumentId; title?: string; hints?: string; pages?: number } = {}): string {
+/** The user-turn instruction that goes with the images (or the text tab). */
+export function transcribeTask(opts: { instrument?: InstrumentId; title?: string; hints?: string; pages?: number; textTab?: boolean } = {}): string {
   const parts = [
-    `Transcribe ${opts.pages && opts.pages > 1 ? `these ${opts.pages} pages` : 'this music'} into one Clef Coach song file.`,
+    `Transcribe ${opts.pages && opts.pages > 1 ? `these ${opts.pages} ${opts.textTab ? 'documents' : 'pages'}` : 'this music'} into one Clef Coach song file.`,
+    opts.textTab
+      ? 'The tab is written as plain text (ASCII tab). Read the tuning, capo and strings from it, and work out the rhythm as described under Tablature; say in "source" how the rhythm was decided (e.g. "rhythm from the tab spacing" or "rhythm as recorded").'
+      : '',
     opts.instrument ? `It is for ${opts.instrument === 'mallets' ? 'mallet percussion (marimba/xylophone)' : opts.instrument}: use "instrument": "${opts.instrument}".` : 'Work out which instrument it is for (piano grand staff, guitar, ukulele, bass guitar or mallets).',
     opts.title ? `The title is "${opts.title}".` : '',
     opts.hints ? `Notes from the player: ${opts.hints}` : '',

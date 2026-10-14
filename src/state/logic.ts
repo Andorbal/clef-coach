@@ -6,6 +6,7 @@ import { dayKey, daysBetween } from './dates';
 import { type ItemResult, updateItem } from './srs';
 import { mergeSongProgress } from './songs';
 import { parseSongDoc } from '../songs/format';
+import { cleanTags } from './tags';
 import type { SongDef } from '../music/parse';
 import {
   DEFAULT_SETTINGS,
@@ -203,6 +204,7 @@ export function makeExport(data: PersistedData, appVersion: string, profileIds?:
     profiles,
     activeProfileId: data.activeProfileId && profiles[data.activeProfileId] ? data.activeProfileId : Object.keys(profiles)[0] ?? null,
     ...(data.songs && Object.keys(data.songs).length ? { songs: data.songs } : {}),
+    ...(data.songTags && Object.keys(data.songTags).length ? { songTags: data.songTags } : {}),
   };
 }
 
@@ -278,7 +280,21 @@ export function parseImport(text: string): PersistedData {
       }
     }
   }
-  return { app: 'clef-coach', version: 1, profiles, activeProfileId: active, ...(Object.keys(songs).length ? { songs } : {}) };
+  // tags given to library songs
+  const songTags: Record<string, string[]> = {};
+  if (isObj(raw.songTags)) {
+    for (const [id, tags] of Object.entries(raw.songTags)) {
+      if (Array.isArray(tags)) songTags[id] = cleanTags(tags.filter((t): t is string => typeof t === 'string'));
+    }
+  }
+  return {
+    app: 'clef-coach',
+    version: 1,
+    profiles,
+    activeProfileId: active,
+    ...(Object.keys(songs).length ? { songs } : {}),
+    ...(Object.keys(songTags).length ? { songTags } : {}),
+  };
 }
 
 function mergeTrack(a: TrackProgress | undefined, b: TrackProgress | undefined): TrackProgress | undefined {
@@ -356,5 +372,12 @@ export function mergeData(cur: PersistedData, inc: PersistedData): PersistedData
     profiles[id] = profiles[id] ? mergeProfiles(profiles[id], p) : p;
   }
   const songs = { ...cur.songs, ...inc.songs };
-  return { ...cur, profiles, activeProfileId: cur.activeProfileId ?? inc.activeProfileId, ...(Object.keys(songs).length ? { songs } : {}) };
+  const songTags = { ...cur.songTags, ...inc.songTags };
+  return {
+    ...cur,
+    profiles,
+    activeProfileId: cur.activeProfileId ?? inc.activeProfileId,
+    ...(Object.keys(songs).length ? { songs } : {}),
+    ...(Object.keys(songTags).length ? { songTags } : {}),
+  };
 }

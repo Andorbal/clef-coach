@@ -163,6 +163,8 @@ export interface PersistedData {
   activeProfileId: string | null;
   /** Songs imported on this device (shared by every profile), in the Clef Coach song format. */
   songs?: Record<string, SongDef>;
+  /** Tags given to library songs (by song id); an imported song keeps its tags in the song itself. */
+  songTags?: Record<string, string[]>;
 }
 
 export type InputMode = 'touch' | 'midi' | 'mic';

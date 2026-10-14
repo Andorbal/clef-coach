@@ -46,16 +46,49 @@ export interface NoteEl {
   tieNext?: boolean;
   /** This note continues a tie from the previous note (no new attack). */
   tiePrev?: boolean;
+  /**
+   * Per pitch: tied on to the next note of the voice holding that pitch – the next
+   * chord when only some of its notes are held, or a later one when an arpeggio's notes
+   * are held into a chord. Only when the tie isn't the whole chord's (tieNext).
+   */
+  ties?: boolean[];
+  /** Per pitch: continues a tie from the previous note (set from the previous note's `ties`). */
+  held?: boolean[];
 }
+
+/** Does this note tie its pitch at index `i` on (see NoteEl.ties)? */
+export const tiesOn = (n: Pick<NoteEl, 'tieNext' | 'ties'>, i: number): boolean => !!n.tieNext || !!n.ties?.[i];
+
+/** Is the pitch at index `i` held over from the previous note (no new attack)? */
+export const isHeld = (n: Pick<NoteEl, 'tiePrev' | 'held'>, i: number): boolean => !!n.tiePrev || !!n.held?.[i];
 
 export interface VoicePart {
   notes: NoteEl[];
 }
 
 export interface StaffPart {
+  /** The opening clef. */
   clef: Clef;
   hand?: Hand;
   voices: VoicePart[];
+  /** Clef changes later in the music, sorted by tick. */
+  clefChanges?: ClefChange[];
+}
+
+/** A clef change on one staff, from an absolute tick on. */
+export interface ClefChange {
+  tick: number;
+  clef: Clef;
+}
+
+/** Clef in force on a staff at a tick. */
+export function clefAt(staff: Pick<StaffPart, 'clef' | 'clefChanges'>, tick: number): Clef {
+  let c = staff.clef;
+  for (const ch of staff.clefChanges ?? []) {
+    if (ch.tick > tick) break;
+    c = ch.clef;
+  }
+  return c;
 }
 
 export interface Score {
@@ -163,13 +196,18 @@ export function buildSteps(score: Score): PlayStep[] {
       for (let i = 0; i < ns.length; i++) {
         const n = ns[i];
         if (n.rest || n.tiePrev) continue;
-        // total length through ties
-        let total = n.ticks;
-        let j = i;
-        while (ns[j].tieNext && j + 1 < ns.length) {
-          j++;
-          total += ns[j].ticks;
-        }
+        // total length through ties (a chord's notes may be tied on one by one)
+        const lengthOf = (pi: number) => {
+          let j = i;
+          let k = pi;
+          while (tiesOn(ns[j], k)) {
+            const next = tieTarget(ns, j, k);
+            if (!next) break;
+            [j, k] = next;
+          }
+          return ns[j].tick + ns[j].ticks - n.tick;
+        };
+        if (n.pitches.every((_, pi) => isHeld(n, pi))) continue;
         let entry = byTick.get(n.tick);
         if (!entry) {
           entry = { notes: [], elIds: [], measure: n.measure };
@@ -177,6 +215,7 @@ export function buildSteps(score: Score): PlayStep[] {
         }
         entry.elIds.push(n.id);
         n.pitches.forEach((p, pi) => {
+          if (isHeld(n, pi)) return;
           entry!.notes.push({
             midi: midiOf(p),
             pitch: p,
@@ -186,7 +225,7 @@ export function buildSteps(score: Score): PlayStep[] {
             finger: n.fingers?.[pi],
             string: n.strings?.[pi],
             hand: staff.hand,
-            ticks: total,
+            ticks: lengthOf(pi),
           });
         });
       }
@@ -237,6 +276,8 @@ export interface NoteSpec {
   fingers?: (number | undefined)[];
   strings?: (number | undefined)[];
   tieNext?: boolean;
+  /** Per pitch: tied into the next note (when only some notes of a chord are). */
+  ties?: boolean[];
 }
 
 /** Assign ids, ticks and measure indexes to a flat list of note specs. */
@@ -281,11 +322,53 @@ export function buildVoice(specs: NoteSpec[], time: TimeSig, idPrefix: string, p
       strings: s.strings ? order.map(k => s.strings![k]) : undefined,
       tieNext: s.tieNext,
     };
+    if (!s.tieNext && s.ties?.some(Boolean)) el.ties = order.map(k => !!s.ties![k]);
     tick += ticks;
     return el;
   });
-  for (let i = 1; i < notes.length; i++) if (notes[i - 1].tieNext) notes[i].tiePrev = true;
+  for (let i = 0; i < notes.length; i++) {
+    const n = notes[i];
+    if (n.rest) continue;
+    if (n.tieNext && n.pitches.length > 1) {
+      if (notes[i + 1]) notes[i + 1].tiePrev = true;
+      continue;
+    }
+    n.pitches.forEach((_, k) => {
+      const to = tiesOn(n, k) ? tieTarget(notes, i, k) : null;
+      if (!to) return;
+      const target = notes[to[0]];
+      (target.held ??= target.pitches.map(() => false))[to[1]] = true;
+    });
+  }
+  for (const n of notes) {
+    if (n.held?.every(Boolean)) {
+      n.tiePrev = true;
+      n.held = undefined;
+    }
+  }
   return { notes };
+}
+
+/**
+ * Where the tie on pitch `k` of note `i` lands: [note, pitch index] of the next note
+ * in the voice holding that pitch, with no rest or gap on the way; null if none. A
+ * whole chord's tie goes into the very next note.
+ */
+export function tieTarget(notes: NoteEl[], i: number, k: number): [number, number] | null {
+  const n = notes[i];
+  const midi = midiOf(n.pitches[k]);
+  if (n.tieNext && n.pitches.length > 1) {
+    const next = notes[i + 1];
+    const j = next ? next.pitches.findIndex(q => midiOf(q) === midi) : -1;
+    return j >= 0 ? [i + 1, j] : null;
+  }
+  for (let j = i + 1; j < notes.length; j++) {
+    const m = notes[j];
+    if (m.rest || m.tick !== notes[j - 1].tick + notes[j - 1].ticks) return null;
+    const at = m.pitches.findIndex(q => midiOf(q) === midi);
+    if (at >= 0) return [j, at];
+  }
+  return null;
 }
 
 export function rest(base: BaseDuration, dots = 0): NoteSpec {
@@ -303,16 +386,19 @@ export function sliceScore(score: Score, from: number, to: number): Score {
   const b = Math.max(a, Math.min(to, score.measures - 1));
   if (a === 0 && b === score.measures - 1) return score;
   const start = measureStartTick(score, a);
+  const end = measureStartTick(score, b + 1);
   const staves = score.staves.map(st => ({
     ...st,
+    clef: clefAt(st, start),
+    clefChanges: st.clefChanges?.filter(c => c.tick > start && c.tick < end).map(c => ({ ...c, tick: c.tick - start })),
     voices: st.voices.map(v => {
       const notes = v.notes
         .filter(n => n.measure >= a && n.measure <= b)
         .map(n => ({ ...n, tick: n.tick - start, measure: n.measure - a }));
       if (notes.length) {
-        if (notes[0].tiePrev) notes[0] = { ...notes[0], tiePrev: false };
+        if (notes[0].tiePrev || notes[0].held) notes[0] = { ...notes[0], tiePrev: false, held: undefined };
         const last = notes.length - 1;
-        if (notes[last].tieNext) notes[last] = { ...notes[last], tieNext: false };
+        if (notes[last].tieNext || notes[last].ties) notes[last] = { ...notes[last], tieNext: false, ties: undefined };
       }
       return { notes };
     }),

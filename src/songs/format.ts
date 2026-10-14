@@ -84,7 +84,7 @@ const isObj = (x: unknown): x is Record<string, unknown> => typeof x === 'object
 export function parseTempo(t: unknown): number {
   if (typeof t === 'number' && Number.isFinite(t)) return t;
   if (typeof t === 'string') {
-    const m = /^\s*([whqest])(\.{0,2})\s*=\s*(\d+(?:\.\d+)?)\s*$/.exec(t);
+    const m = /^\s*([whqestx])(\.{0,2})\s*=\s*(\d+(?:\.\d+)?)\s*$/.exec(t);
     if (m) {
       const beat = durationTicks(m[1] as BaseDuration, m[2].length);
       return (Number(m[3]) * beat) / PPQ;
@@ -167,7 +167,7 @@ export function parseSongDoc(input: string | unknown, opts: { id?: string } = {}
     issues.push((e as Error).message);
   }
   if (tempo < 20 || tempo > 400) issues.push(`tempo ${tempo} is out of range (20–400).`);
-  if (raw.pickup !== undefined && (typeof raw.pickup !== 'string' || !/^[whqest]\.{0,2}$/.test(raw.pickup))) issues.push('"pickup" should be a duration like "q", "e" or "q.".');
+  if (raw.pickup !== undefined && (typeof raw.pickup !== 'string' || !/^[whqestx]\.{0,2}$/.test(raw.pickup))) issues.push('"pickup" should be a duration like "q", "e" or "q.".');
   const stavesRaw = Array.isArray(raw.staves) ? raw.staves : [];
   if (!stavesRaw.length) issues.push('"staves" must list at least one staff.');
   const staves: SongDef['staves'] = [];
@@ -278,7 +278,7 @@ export interface ChordEvent {
   measure: number;
 }
 
-const CHORD_DUR_RE = /\/([whqest])(\.{0,2})(3)?$/;
+const CHORD_DUR_RE = /\/([whqestx])(\.{0,2})(3)?$/;
 
 /** Read the "chords" line ("C/h G7/h | C/w |") into timed events. */
 export function parseChordTimeline(text: string, score: Pick<Score, 'time' | 'pickup' | 'measures' | 'changes' | 'key'>): { events: ChordEvent[]; unknown: string[] } {
