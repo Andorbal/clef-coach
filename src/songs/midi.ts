@@ -41,6 +41,7 @@ import {
   pickupToken,
   plural,
   spellInKey,
+  writeChordLine,
   writeVoice,
 } from './importkit';
 
@@ -453,12 +454,19 @@ export function importMidi(bytes: Uint8Array, opts: MidiOptions = {}): ImportRes
     if (chosen.length < opts.tracks.length) w.add(`Some requested tracks don't exist (the file has ${plural(logical.length, 'track')}).`);
     if (!chosen.length) throw new ImportError(`None of the requested tracks exist; the file has ${plural(logical.length, 'track')}.`);
   } else {
-    const g0 = guessOf(logical[0]);
-    const g1 = logical[1] ? guessOf(logical[1]) : null;
-    const pianoish = (g: InstrumentId | null) => g === null || g === 'piano';
-    const target = opts.instrument ?? g0;
-    chosen = logical.length === 2 && pianoish(g0) && pianoish(g1) && (target === null || target === 'piano' || target === 'mallets') ? [0, 1] : [0];
-    if (logical.length > chosen.length) w.add(`Imported ${chosen.map(i => `"${logical[i].name}"`).join(' and ')}; the file has ${plural(logical.length, 'track')} – choose others to import them instead.`);
+    // a keyboard piece is often spread over several tracks (hands, voices, a channel per
+    // register): take them all; otherwise the first track
+    const pianoish = (t: LogicalTrack) => {
+      const g = guessOf(t);
+      return g === null || g === 'piano';
+    };
+    const target = opts.instrument ?? guessOf(logical[0]);
+    const keys = logical.flatMap((t, i) => (pianoish(t) ? [i] : []));
+    chosen = (target === null || target === 'piano' || target === 'mallets') && keys.length >= 2 ? keys : [0];
+    if (logical.length > chosen.length) {
+      const names = chosen.length > 2 ? `${chosen.length} keyboard tracks` : chosen.map(i => `"${logical[i].name}"`).join(' and ');
+      w.add(`Imported ${names}; the file has ${plural(logical.length, 'track')} – choose others to import them instead.`);
+    }
   }
   const tracks = chosen.map(i => logical[i]);
   const instrument: InstrumentId = opts.instrument ?? guessOf(tracks[0]) ?? 'piano';
@@ -468,10 +476,13 @@ export function importMidi(bytes: Uint8Array, opts: MidiOptions = {}): ImportRes
   const raw = tracks.map(t => t.notes.map(n => ({ start: n.start * scale, end: n.end * scale, midi: n.midi })));
   const allRaw = raw.flat();
   const lastEnd = allRaw.reduce((m, n) => Math.max(m, n.end), 0);
+  if (allRaw.length >= 30 && gridShare(allRaw.map(n => n.start)) < 0.62) {
+    w.add("This MIDI file is a recording of someone playing: its notes don't line up with its beats, so the rhythm here is only a rough guess. A MIDI file made in a notation program or sequencer – or MusicXML – imports much better.");
+  }
 
   // ---- bars from the time signatures
   const sigs = [...file.timeSigs].sort((a, b) => a.tick - b.tick).map(s => ({ tick: s.tick * scale, time: s.time }));
-  const validSig = (t: TimeSig) => t[0] >= 1 && t[0] <= 32 && VALID_DEN.includes(t[1]);
+  const validSig = (t: TimeSig) => t[0] >= 1 && t[0] <= 64 && VALID_DEN.includes(t[1]);
   for (const s of sigs) {
     if (!validSig(s.time)) {
       w.add(`The time signature ${s.time[0]}/${s.time[1]} isn't supported; 4/4 was used.`);
@@ -537,10 +548,9 @@ export function importMidi(bytes: Uint8Array, opts: MidiOptions = {}): ImportRes
   if (!pickup && s0 > bars[0].start - shift + 1e-6) {
     const off = s0 - (bars[0].start - shift);
     const len = bars[0].len - off;
-    // starting on one of the time signature's counts (a quarter in 4/4, an eighth in 6/8)
-    const unit = (4 * PPQ) / bars[0].time[1];
-    const onBeat = Math.abs(off / unit - Math.round(off / unit)) < 1e-6;
-    if (onBeat && pickupToken(len) && len <= bars[0].len / 2) {
+    // a lead-in of a single note value (a quarter, or three eighths starting off the beat)
+    // taking at most half the bar
+    if (pickupToken(len) && len <= bars[0].len / 2) {
       pickup = len;
       shift += off;
       bars[0] = { ...bars[0], start: bars[0].start + off, len };
@@ -572,11 +582,23 @@ export function importMidi(bytes: Uint8Array, opts: MidiOptions = {}): ImportRes
   let staffNotes: { notes: QNote[]; hand?: 'R' | 'L' }[];
   const melodyOnly = notes.length !== 2 && monophonic(notes.flat(), gridAt);
   if ((instrument === 'piano' || (instrument === 'mallets' && spread(notes.flat()) > 24)) && !melodyOnly) {
-    let rh: QNote[];
-    let lh: QNote[];
-    if (notes.length === 2) {
-      const avg = (xs: QNote[]) => xs.reduce((s, n) => s + n.midi, 0) / Math.max(1, xs.length);
+    let rh: QNote[] = [];
+    let lh: QNote[] = [];
+    const avg = (xs: QNote[]) => xs.reduce((s, n) => s + n.midi, 0) / Math.max(1, xs.length);
+    const named = tracks.map(t => handFromName(t.name));
+    if (notes.length === 2 && !(named[0] && named[1] && named[0] !== named[1])) {
       [rh, lh] = avg(notes[0]) >= avg(notes[1]) ? [notes[0], notes[1]] : [notes[1], notes[0]];
+    } else if (notes.length >= 2) {
+      // each track to the hand its name says, else by register; a track using both hands is split
+      notes.forEach((list, k) => {
+        if (named[k] === 'R') rh.push(...list);
+        else if (named[k] === 'L') lh.push(...list);
+        else if (spread(list) > 24 && !monophonic(list, gridAt)) {
+          const [r, l] = splitHands(list);
+          rh.push(...r);
+          lh.push(...l);
+        } else (avg(list) >= 60 ? rh : lh).push(...list);
+      });
     } else [rh, lh] = splitHands(notes.flat());
     staffNotes = [{ notes: rh, hand: 'R' as const }, { notes: lh, hand: 'L' as const }].filter(s => s.notes.length);
     if (staffNotes.length === 1 && instrument === 'mallets') staffNotes[0].hand = undefined;
@@ -609,14 +631,21 @@ export function importMidi(bytes: Uint8Array, opts: MidiOptions = {}): ImportRes
   });
   if (simplified + shortened) w.add(`${plural(simplified + shortened, 'overlapping note')} didn't fit in two voices and ${simplified + shortened > 1 ? 'were' : 'was'} shortened or joined to a chord.`);
 
+  // ---- chord symbols, from a block-chord accompaniment anywhere in the file
+  const chordChanges = chordsFromTracks(logical.map(t => t.notes.map(n => ({ start: q.snap(n.start * scale) - shift, end: q.snap(n.end * scale) - shift, midi: n.midi }))), layout);
+  const chords = chordChanges.length ? writeChordLine(chordChanges, layout) : undefined;
+
   // ---- tempo and title
   const tempos = [...file.tempos].sort((a, b) => a.tick - b.tick);
-  if (new Set(tempos.map(t => Math.round(t.bpm))).size > 1) w.add('Tempo changes were left out; the song uses the opening tempo.');
+  // a tempo map full of small changes (rubato, a ritardando) is summed up by its typical tempo
+  const tempo = typicalTempo(tempos, lastEnd / scale);
+  if (new Set(tempos.map(t => Math.round(t.bpm))).size > 1) w.add(`Tempo changes were left out; the song keeps one tempo (${Math.round(tempo ?? 120)}), the one most of it is played at.`);
   const t0 = file.tracks[0];
   // the first track's name is the title in a type 0 file or a conductor track, unless it just names an instrument
   const titleFromFile = (file.format === 0 || !t0.notes.length) && t0.name && !GENERIC_NAME.test(t0.name) && !guessInstrument([t0.name]) ? t0.name : '';
   const title = titleFromFile || opts.title?.trim() || 'Imported MIDI';
-  w.add("MIDI files don't hold fingering, note spelling, lyrics or chord symbols, so none were imported; notes are spelled from the key signature.");
+  if (chords) w.add('Chord symbols were worked out from the accompaniment’s chords.');
+  w.add(`MIDI files don't hold fingering, note spelling${chords ? ' or lyrics' : ', lyrics or chord symbols'}, so none were imported; notes are spelled from the key signature.`);
 
   const song: SongDef = {
     id: newSongId(title),
@@ -627,11 +656,115 @@ export function importMidi(bytes: Uint8Array, opts: MidiOptions = {}): ImportRes
     level: 3,
     key: keyName(layout.keys[0]),
     time: layout.times[0],
-    tempo: cleanTempo(tempos[0]?.bpm, 120),
+    tempo: cleanTempo(tempo, 120),
     pickup: pickup ? pickupToken(pickup) ?? undefined : undefined,
     staves,
+    chords,
   };
   return { song, warnings: w.list, parts };
+}
+
+/** Chord shapes (semitones above the root) and their symbols; incomplete sevenths too. */
+const CHORD_SHAPES: [string, number[]][] = [
+  ['', [0, 4, 7]], ['m', [0, 3, 7]], ['dim', [0, 3, 6]], ['aug', [0, 4, 8]], ['sus4', [0, 5, 7]], ['sus2', [0, 2, 7]],
+  ['7', [0, 4, 7, 10]], ['maj7', [0, 4, 7, 11]], ['m7', [0, 3, 7, 10]], ['m7b5', [0, 3, 6, 10]], ['dim7', [0, 3, 6, 9]],
+  ['6', [0, 4, 7, 9]], ['m6', [0, 3, 7, 9]], ['7sus4', [0, 5, 7, 10]], ['add9', [0, 2, 4, 7]],
+  ['7', [0, 4, 10]], ['m7', [0, 3, 10]], ['maj7', [0, 4, 11]],
+];
+
+/** The chord symbol for notes sounding together (the bass as root when it can be), or null. */
+export function chordSymbolFor(midis: number[], key: KeySig): string | null {
+  const sorted = [...midis].sort((a, b) => a - b);
+  const pcs = [...new Set(sorted.map(m => ((m % 12) + 12) % 12))];
+  if (pcs.length < 3) return null;
+  const bass = ((sorted[0] % 12) + 12) % 12;
+  const name = (pc: number) => {
+    const p = spellInKey(60 + pc, key);
+    return `${p.step}${p.alter > 0 ? '#' : p.alter < 0 ? 'b' : ''}`;
+  };
+  for (const root of [bass, ...pcs.filter(p => p !== bass)]) {
+    const shape = pcs.map(p => (p - root + 12) % 12).sort((a, b) => a - b);
+    const hit = CHORD_SHAPES.find(([, s]) => s.length === shape.length && s.every((x, i) => x === shape[i]));
+    if (hit) return `${name(root)}${hit[0]}${root !== bass ? `/${name(bass)}` : ''}`;
+  }
+  return null;
+}
+
+/**
+ * Chord symbols from the track that plays block chords (most of its onsets three or
+ * more notes at once) – a folk tune's chord track, a hymn's left hand. Returns the
+ * changes, or nothing when no track plays chords or too few of them can be named.
+ */
+function chordsFromTracks(tracks: QNote[][], L: Layout): { tick: number; symbol: string | null }[] {
+  let best: { onsets: { start: number; end: number; midis: number[] }[]; block: number } | null = null;
+  for (const notes of tracks) {
+    const byStart = new Map<number, { start: number; end: number; midis: number[] }>();
+    for (const n of notes) {
+      if (n.end <= n.start || n.start < 0) continue;
+      const o = byStart.get(n.start);
+      if (o) {
+        o.midis.push(n.midi);
+        o.end = Math.max(o.end, n.end);
+      } else byStart.set(n.start, { start: n.start, end: n.end, midis: [n.midi] });
+    }
+    const onsets = [...byStart.values()].sort((a, b) => a.start - b.start);
+    const block = onsets.filter(o => new Set(o.midis.map(m => m % 12)).size >= 3).length;
+    if (onsets.length >= 2 && block >= onsets.length * 0.6 && (!best || block > best.block)) best = { onsets, block };
+  }
+  if (!best) return [];
+  const out: { tick: number; symbol: string | null }[] = [];
+  let named = 0;
+  let current: string | null | undefined;
+  best.onsets.forEach((o, i) => {
+    const sym = chordSymbolFor(o.midis, L.keys[measureAt(L, o.start)]);
+    if (sym) named++;
+    // an unnamed chord or a single note keeps the chord going
+    if (sym && sym !== current) {
+      out.push({ tick: o.start, symbol: sym });
+      current = sym;
+    }
+    const next = best!.onsets[i + 1];
+    // a rest of a beat or more: no chord
+    if (current && (!next || next.start - o.end >= 48)) {
+      out.push({ tick: o.end, symbol: null });
+      current = null;
+    }
+  });
+  return named >= best.block * 0.7 ? out : [];
+}
+
+/** Share of onsets (ticks at PPQ 48) on a 16th or triplet grid – near 1 for a sequenced file, about ½ for a live recording. */
+function gridShare(onsets: number[]): number {
+  const near = (t: number, g: number) => {
+    const o = ((t % g) + g) % g;
+    return Math.min(o, g - o);
+  };
+  return onsets.filter(t => near(t, 12) <= 1.5 || near(t, 8) <= 1.5 || near(t, 16) <= 1.5).length / Math.max(1, onsets.length);
+}
+
+/** The tempo most of the music is played at (median over time), from a sorted tempo map. */
+function typicalTempo(tempos: { tick: number; bpm: number }[], end: number): number | undefined {
+  if (tempos.length < 2) return tempos[0]?.bpm;
+  const spans = tempos.map((t, i) => ({ bpm: t.bpm, len: Math.max(0, Math.min(end, tempos[i + 1]?.tick ?? end) - Math.max(0, t.tick)) })).filter(s => s.len > 0);
+  if (!spans.length) return tempos[0].bpm;
+  spans.sort((a, b) => a.bpm - b.bpm);
+  const half = spans.reduce((s, x) => s + x.len, 0) / 2;
+  let acc = 0;
+  for (const s of spans) {
+    acc += s.len;
+    if (acc >= half) return s.bpm;
+  }
+  return spans[spans.length - 1].bpm;
+}
+
+const RIGHT_HAND = /right|(^|\W)r\.?\s?h(\W|$)|treble|upper|rechte|droite|destra/i;
+const LEFT_HAND = /left|(^|\W)l\.?\s?h(\W|$)|\bbass\b|lower|linke|gauche|sinistra/i;
+
+/** The hand a track's name gives it ("Piano RH", "No. 1 Treble", "Left Voice 1"), if any. */
+function handFromName(name: string): 'R' | 'L' | null {
+  const r = RIGHT_HAND.test(name);
+  const l = LEFT_HAND.test(name);
+  return r && !l ? 'R' : l && !r ? 'L' : null;
 }
 
 /** Does a line play one note at a time (overlaps of more than a grid step are rare)? */
