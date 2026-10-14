@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { type ReactNode, useEffect, useId } from 'react';
+import { createPortal } from 'react-dom';
 import './ui.css';
 
 export function ProgressRing({ value, size = 64, stroke = 6, color = 'var(--gold)', track = 'rgba(255,255,255,0.08)', children }: { value: number; size?: number; stroke?: number; color?: string; track?: string; children?: ReactNode }) {
@@ -83,7 +84,12 @@ export function Modal({ open, onClose, title, children, wide }: { open: boolean;
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
-  return (
+  // Portalled to <body>: an ancestor with backdrop-filter, filter or transform
+  // (a frosted sticky header, say) becomes the containing block of a fixed
+  // element, which would centre the dialog on that ancestor instead of the
+  // screen and could push it off the top.
+  if (typeof document === 'undefined') return null;
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
@@ -107,7 +113,8 @@ export function Modal({ open, onClose, title, children, wide }: { open: boolean;
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
 
