@@ -26,6 +26,7 @@ import { manualPrompt } from '../songs/llmPrompt';
 import type { ScanFile } from '../songs/transcribe';
 import { useApp, useProfile } from '../state/store';
 import './songimport.css';
+import { isIOS } from '../platform';
 
 const KEY_STORAGE = 'clefcoach.anthropicKey';
 
@@ -241,7 +242,16 @@ export default function SongImport() {
               <p className="dim">
                 <strong>MusicXML</strong> (.musicxml, .xml, .mxl) is the open standard every notation app exports — MuseScore, Finale, Sibelius, Dorico, Flat, Noteflight — and so do sheet-music scanners like Audiveris, PlayScore and SmartScore. It keeps the fingering, chord symbols, lyrics and repeats. <strong>MIDI</strong> works too, but it only knows which keys were pressed, so spelling and rhythm are worked out for you.
               </p>
-              <input ref={fileRef} type="file" accept={IMPORT_ACCEPT} hidden onChange={e => onFile(e.target.files?.[0])} />
+              <input
+                ref={fileRef}
+                type="file"
+                accept={isIOS() ? undefined : IMPORT_ACCEPT}
+                hidden
+                onChange={e => {
+                  onFile(e.target.files?.[0]);
+                  e.target.value = ''; // the same file can be picked again (after fixing it, say)
+                }}
+              />
               <button className="btn btn-primary btn-lg" onClick={() => fileRef.current?.click()} disabled={!!busy}>
                 <FileMusic size={18} /> Choose file
               </button>

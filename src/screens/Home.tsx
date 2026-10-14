@@ -15,6 +15,7 @@ import { mastery } from '../state/srs';
 import { useApp, useDevice, useProfile } from '../state/store';
 import type { TrackId } from '../state/types';
 import './home.css';
+import { isIOS } from '../platform';
 
 function greeting() {
   const h = new Date().getHours();
@@ -31,9 +32,8 @@ export default function Home() {
   const device = useDevice();
   const updateDevice = useApp(s => s.updateDevice);
   const navigate = useNavigate();
-  const isIOS = typeof navigator !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
   const standalone = typeof window !== 'undefined' && (window.matchMedia?.('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true);
-  const showInstall = isIOS && !standalone && !device.installPromptDismissed;
+  const showInstall = isIOS() && !standalone && !device.installPromptDismissed;
   const today = dayKey();
   const tracks = useMemo(() => (profile?.trackOrder ?? []).map(id => getTrack(id)).filter(Boolean) as NonNullable<ReturnType<typeof getTrack>>[], [profile?.trackOrder]);
   if (!profile) return null;

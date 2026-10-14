@@ -23,6 +23,12 @@ export interface ImportOptions {
   parts?: string[];
 }
 
+/**
+ * `accept` for the song file picker. Not for iOS/iPadOS: their picker filters by the
+ * file types the system knows, and it knows nothing of .mxl, .musicxml or .clefsong,
+ * so listing them greys those very files out. There the picker offers every file and
+ * {@link importBytes} tells them apart by name and content.
+ */
 export const IMPORT_ACCEPT = '.json,.clefsong,.musicxml,.xml,.mxl,.mid,.midi,application/json,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,audio/midi,audio/x-midi';
 
 export function fileKind(name: string): ImportOutcome['kind'] | null {
@@ -33,6 +39,18 @@ export function fileKind(name: string): ImportOutcome['kind'] | null {
   return null;
 }
 
+/** What a file holds, judged by its first bytes (for names without a known extension). */
+export function sniffKind(bytes: Uint8Array): ImportOutcome['kind'] | null {
+  if (bytes[0] === 0x4d && bytes[1] === 0x54) return 'midi'; // "MThd"
+  if (bytes[0] === 0x50 && bytes[1] === 0x4b) return 'musicxml'; // zip: compressed .mxl
+  if ((bytes[0] === 0xff && bytes[1] === 0xfe) || (bytes[0] === 0xfe && bytes[1] === 0xff)) return 'musicxml'; // UTF-16 XML
+  let i = bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf ? 3 : 0; // UTF-8 BOM
+  while (i < bytes.length && (bytes[i] === 0x20 || bytes[i] === 0x09 || bytes[i] === 0x0a || bytes[i] === 0x0d)) i++;
+  if (bytes[i] === 0x3c) return 'musicxml'; // "<"
+  if (bytes[i] === 0x7b) return 'clefsong'; // "{"
+  return null;
+}
+
 /** Validate a song after conversion so every importer hands back something that loads. */
 function checked(song: SongDef, warnings: string[]): ParsedSong {
   const parsed = parseSongDoc(song, { id: song.id });
@@ -40,7 +58,13 @@ function checked(song: SongDef, warnings: string[]): ParsedSong {
 }
 
 export async function importBytes(name: string, bytes: Uint8Array, opts: ImportOptions = {}): Promise<ImportOutcome> {
-  const kind = fileKind(name) ?? (bytes[0] === 0x4d && bytes[1] === 0x54 ? 'midi' : bytes[0] === 0x50 && bytes[1] === 0x4b ? 'musicxml' : 'clefsong');
+  const kind = fileKind(name) ?? sniffKind(bytes);
+  if (!kind) {
+    const shown = name.replace(/^.*[\\/]/, '');
+    throw new SongFormatError([
+      `“${shown}” isn’t a song file Clef Coach can read. Choose a MusicXML (.musicxml, .mxl, .xml), MIDI (.mid) or Clef Coach song (.json) file. For a PDF or a photo of sheet music, use “Scan sheet music”.`,
+    ]);
+  }
   if (kind === 'clefsong') {
     const text = new TextDecoder().decode(bytes);
     const { song, warnings } = parseSongDoc(text);
