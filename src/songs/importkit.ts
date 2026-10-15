@@ -11,12 +11,14 @@
  *     every piece as a single duration token (so formatVoice never has to split),
  *   - write the chord-symbol line with the same bar lines,
  *   - spell MIDI numbers in a key, guess an instrument from part names / programs,
- *     estimate a key, and say how a fretted part's tuning differs from the app's.
+ *     estimate a key, and say how a fretted part's tuning differs from the app's,
+ *   - write drum hits as a voice, and keep the parts not chosen as the song's band.
  */
+import type { BandPartDef } from '../music/band';
 import { type InstrumentId, TUNINGS } from '../music/instruments';
 import { type KeySig, keyAlterations, tonicOf } from '../music/keys';
 import { type SongDef, formatVoice } from '../music/parse';
-import { type Pitch, type Step, STEPS, STEP_SEMIS, midiOf } from '../music/pitch';
+import { type Pitch, type Step, STEPS, STEP_SEMIS, midiOf, spellMidi } from '../music/pitch';
 import { type BaseDuration, type TimeSig, beatTicks, durationTicks, measureTicks } from '../music/rhythm';
 import type { ClefChange, MeterChange, NoteSpec } from '../music/score';
 
@@ -805,6 +807,115 @@ export function guessInstrument(names: string[], program?: number): InstrumentId
   // "Bass" alone is a bass guitar in a band score but a singer in a choir
   if (/^\s*bass\s*\d*\s*$/.test(text) && program === undefined) return 'bass';
   return null;
+}
+
+/** Names → General MIDI program, most specific first ("bassoon" before "bass", "bass guitar" before "guitar"). */
+const PROGRAM_NAMES: [RegExp, number][] = [
+  [/bassoon|fagott/, 71],
+  [/bass clarinet|clarinet|klarinette/, 72],
+  [/\bsax/, 66],
+  [/contrabass|double ?bass|upright bass|string bass|kontrabass/, 33],
+  [/\bbass/, 34],
+  [/\be(lectric|\.|-)? ?piano|rhodes|wurli/, 5],
+  [/harpsichord|cembalo/, 7],
+  [/organ|orgel/, 17],
+  [/accordion|akkordeon/, 22],
+  [/harmonica/, 23],
+  [/nylon|classical guitar|spanish guitar/, 25],
+  [/guit|gtr|gitarr|chitarra/, 26],
+  [/piano|klavier|keyboard|\bkeys\b/, 1],
+  [/celest/, 9],
+  [/glock/, 10],
+  [/vibra/, 12],
+  [/marimba/, 13],
+  [/xylo/, 14],
+  [/violin|geige|fiddle/, 41],
+  [/viola|bratsche/, 42],
+  [/cello/, 43],
+  [/harp\b|harfe/, 47],
+  [/timpan|pauke/, 48],
+  [/string|streicher|orchestra/, 49],
+  [/choir|chorus|chor\b|vocal|voice|voix|soprano|alto|tenor|singer|aahs|oohs/, 53],
+  [/trumpet|trompete|cornet|flugel/, 57],
+  [/trombone|posaune/, 58],
+  [/tuba/, 59],
+  [/horn/, 61],
+  [/brass|blech/, 62],
+  [/oboe/, 69],
+  [/piccolo/, 73],
+  [/flute|flöte|flauto/, 74],
+  [/recorder|blockfl/, 75],
+  [/synth|lead/, 81],
+  [/\bpad\b/, 89],
+];
+
+/**
+ * A General MIDI program (1–128) for a part known only by its names: strings 49, bass 34,
+ * guitar 26, piano 1, organ 17, trumpet 57, sax 66, flute 74, choir 53… Piano (1) when
+ * nothing fits.
+ */
+export function programFromName(names: string[]): number {
+  const text = names.join(' ').toLowerCase();
+  return PROGRAM_NAMES.find(([re]) => re.test(text))?.[1] ?? 1;
+}
+
+// ---------------------------------------------------------------------------
+// Band parts
+// ---------------------------------------------------------------------------
+
+/** Most band parts a song keeps (one per MIDI channel, more or less). */
+export const MAX_BAND_PARTS = 16;
+
+/**
+ * Drum hits (already quantised) as one voice: hits struck together form a chord, each
+ * lasting until the next hit – at most a beat, and never over a bar line – with rests in
+ * between. Keys are spelled as plain pitches, for pitchesToDrumWords to name.
+ */
+export function drumVoice(hits: { start: number; key: number }[], L: Layout): TimedNote[] {
+  const total = layoutEnd(L);
+  const byStart = new Map<number, Set<number>>();
+  for (const h of hits) {
+    if (h.start < -1e-6 || h.start >= total - 1e-6) continue;
+    let keys = byStart.get(h.start);
+    if (!keys) byStart.set(h.start, (keys = new Set()));
+    keys.add(h.key);
+  }
+  const starts = [...byStart.keys()].sort((a, b) => a - b);
+  const out: TimedNote[] = [];
+  starts.forEach((s, i) => {
+    const m = measureAt(L, s);
+    // drums don't sustain: what matters is when the next hit comes
+    const end = Math.min(starts[i + 1] ?? total, s + beatLen(L.times[m]), L.starts[m] + L.lens[m]);
+    for (const key of byStart.get(s)!) out.push({ start: Math.max(0, s), end, pitches: [spellMidi(key)] });
+  });
+  return out;
+}
+
+/** "Bass", "Drums" and "Strings" – quoted, the first few. */
+export function quoteList(names: string[], max = 4): string {
+  const q = names.map(n => `"${n}"`);
+  if (q.length > max) return `${q.slice(0, max).join(', ')}, …`;
+  return q.length > 1 ? `${q.slice(0, -1).join(', ')} and ${q[q.length - 1]}` : (q[0] ?? '');
+}
+
+/**
+ * Keep at most MAX_BAND_PARTS band parts – leaving out those with the fewest notes, and
+ * saying so – in the file's order.
+ */
+export function limitBand(parts: { part: BandPartDef; notes: number }[], w: Warnings, unit: 'part' | 'track'): BandPartDef[] {
+  const kept = parts.filter(p => p.notes > 0);
+  if (kept.length > MAX_BAND_PARTS) {
+    const dropped = [...kept].sort((a, b) => a.notes - b.notes).slice(0, kept.length - MAX_BAND_PARTS);
+    w.add(`${plural(dropped.length, unit)} (${quoteList(dropped.map(d => d.part.name))}) ${dropped.length > 1 ? 'were' : 'was'} left out: a song keeps at most ${MAX_BAND_PARTS} band parts.`);
+    return kept.filter(p => !dropped.includes(p)).map(p => p.part);
+  }
+  return kept.map(p => p.part);
+}
+
+/** "Imported "Piano"; the other 2 parts ("Bass" and "Drums") play as the band." */
+export function bandNote(imported: string, band: string[], unit: 'part' | 'track'): string {
+  const others = band.length === 1 ? `the other ${unit} (${quoteList(band)}) plays` : `the other ${band.length} ${unit}s (${quoteList(band)}) play`;
+  return `Imported ${imported}; ${others} as the band.`;
 }
 
 export function median(xs: number[]): number {

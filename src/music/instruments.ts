@@ -43,7 +43,8 @@ export const TUNINGS = {
   bass5: { id: 'bass-5', label: '5-string (B E A D G)', open: [43, 38, 33, 28, 23] },
 } satisfies Record<string, Tuning>;
 
-export type SynthVoiceId = 'piano' | 'guitar' | 'ukulele' | 'bass' | 'marimba' | 'xylophone' | 'glockenspiel' | 'vibraphone';
+/** The app's synthesised voices: the instruments it teaches, and an electric piano for the band. */
+export type SynthVoiceId = 'piano' | 'epiano' | 'guitar' | 'ukulele' | 'bass' | 'marimba' | 'xylophone' | 'glockenspiel' | 'vibraphone';
 
 export interface FrettedLook {
   /** Relative string thickness per string (index 0 = string 1). */

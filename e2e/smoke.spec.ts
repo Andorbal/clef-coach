@@ -24,7 +24,7 @@ test('every screen renders without errors', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', e => errors.push(e.message));
   await onboard(page, 'Screens');
-  for (const path of ['/', '/learn', '/songs', '/songs/import', '/song/prh-ode-to-joy', '/studio', '/studio/free', '/studio/fretboard', '/studio/tuner', '/studio/scales', '/studio/gym', '/studio/metronome', '/progress', '/settings', '/track/piano-bass', '/track/guitar-fretboard']) {
+  for (const path of ['/', '/learn', '/songs', '/songs/import', '/song/prh-ode-to-joy', '/studio', '/studio/free', '/studio/fretboard', '/studio/tuner', '/studio/scales', '/studio/gym', '/studio/metronome', '/progress', '/settings', '/settings/sounds', '/track/piano-bass', '/track/guitar-fretboard']) {
     await page.goto(`/#${path}`);
     await page.waitForTimeout(500);
     await expect(page.locator('#root')).not.toBeEmpty();

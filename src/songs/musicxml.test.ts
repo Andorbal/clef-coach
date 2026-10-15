@@ -488,7 +488,12 @@ describe('MusicXML import: parts', () => {
     const first = importMusicXml(xml);
     expect(check(first).staves.map(s => s.voices[0])).toEqual(['E5/w |']);
     expect(first.parts.map(p => p.id)).toEqual(['P1', 'P2']);
-    expect(first.warnings.join(' ')).toMatch(/Imported "Flute"; the file has 2 parts/);
+    expect(first.warnings).toEqual(['Imported "Flute"; the other part ("Cello") plays as the band.']);
+    // no <midi-program>: the sound is guessed from the name
+    expect(first.song.band).toEqual([{ name: 'Cello', program: 43, staves: [{ clef: 'bass', voices: ['C3/w |'] }] }]);
+    const alone = importMusicXml(xml, { band: false });
+    expect(alone.song).toEqual({ ...first.song, id: alone.song.id, band: undefined });
+    expect(alone.warnings.join(' ')).toMatch(/Imported "Flute"; the file has 2 parts – choose others to import them instead/);
     const second = check(importMusicXml(xml, { partIds: ['P2'] }));
     expect(second.staves).toEqual([{ clef: 'bass', hand: 'L', voices: ['C3/w |'] }]);
     const both = check(importMusicXml(xml, { partIds: ['P1', 'P2'], instrument: 'mallets' }));
@@ -737,6 +742,134 @@ describe('MusicXML import: real-score details', () => {
     const song = check(r);
     expect(song.staves[0].voices[0]).toMatch(/^C4\/w \| \[T:6\/4\] .* \| \[T:4\/4\] G4\/w \|$/);
     expect(r.warnings.join(' ')).toMatch(/Measure 2 is longer than the time signature/);
+  });
+});
+
+describe('MusicXML import: the band', () => {
+  /** An unpitched note: its place on the staff, and the instrument it plays. */
+  const hit = (step: string, d: number, opts: { instrument?: string; chord?: boolean; x?: boolean } = {}) =>
+    `<note>${opts.chord ? '<chord/>' : ''}<unpitched><display-step>${step[0]}</display-step><display-octave>${step[1]}</display-octave></unpitched><duration>${d}</duration>` +
+    `${opts.instrument ? `<instrument id="${opts.instrument}"/>` : ''}<voice>1</voice><type>quarter</type>${opts.x ? '<notehead>x</notehead>' : ''}</note>`;
+  const kitList = (id: string, kit: [string, string, number][]) =>
+    kit.map(([inst, name]) => `<score-instrument id="${id}-${inst}"><instrument-name>${name}</instrument-name></score-instrument>`).join('') +
+    kit.map(([inst, , key]) => `<midi-instrument id="${id}-${inst}"><midi-channel>10</midi-channel><midi-program>1</midi-program><midi-unpitched>${key}</midi-unpitched></midi-instrument>`).join('');
+  const withKit = (xml: string, id: string, kit: [string, string, number][]) => xml.replace(new RegExp(`(<score-part id="${id}"><part-name>[^<]*</part-name>)(<midi-instrument.*?</midi-instrument>)?`), `$1${kitList(id, kit)}`);
+  const perc = attributes({ divisions: 2, time: [4, 4], clefs: [clef('percussion', 0)] });
+
+  // a melody with a pickup and a repeat with two endings, a bass, a drum kit and a piano
+  const a = attributes({ divisions: 2, fifths: 0, time: [4, 4], clefs: [clef('G', 2)] });
+  const ab = attributes({ divisions: 2, fifths: 0, time: [4, 4], clefs: [clef('F', 4)] });
+  const groove = hit('F4', 2, { instrument: 'P3-K' }) + hit('G5', 2, { instrument: 'P3-H', chord: true, x: true }) + hit('C5', 2, { instrument: 'P3-S' }) + hit('F4', 2, { instrument: 'P3-K' }) + hit('C5', 2, { instrument: 'P3-S' }) + hit('G5', 2, { instrument: 'P3-H', chord: true, x: true });
+  const xml = withKit(score({
+    title: 'Combo',
+    parts: [
+      {
+        id: 'P1', name: 'Flute', program: 74, measures: [
+          `<measure number="0" implicit="yes">${a}${notes({ p: 'G4', d: 2, type: 'quarter' })}</measure>`,
+          barline('left', repeat('forward')) + notes({ p: 'C5', d: 4, type: 'half' }, { p: 'D5', d: 4, type: 'half' }),
+          barline('left', ending('1', 'start')) + notes({ p: 'E5', d: 6, type: 'half', dots: 1 }) + barline('right', ending('1', 'stop') + repeat('backward')),
+          barline('left', ending('2', 'start')) + attributes({ time: [3, 4] }) + notes({ p: 'C5', d: 6, type: 'half', dots: 1 }) + barline('right', ending('2', 'stop')),
+        ],
+      },
+      {
+        id: 'P2', name: 'Electric Bass', program: 34, measures: [
+          `<measure number="0" implicit="yes">${ab}${notes({ p: 'G2', d: 2, type: 'quarter' })}</measure>`,
+          barline('left', repeat('forward')) + notes({ p: 'C3', d: 8, type: 'whole' }),
+          barline('left', ending('1', 'start')) + notes({ p: 'G2', d: 6, type: 'half', dots: 1 }) + barline('right', ending('1', 'stop') + repeat('backward')),
+          barline('left', ending('2', 'start')) + attributes({ time: [3, 4] }) + notes({ p: 'C3', d: 6, type: 'half', dots: 1 }) + barline('right', ending('2', 'stop')),
+        ],
+      },
+      {
+        id: 'P3', name: 'Drum Set', measures: [
+          `<measure number="0" implicit="yes">${perc}${hit('C5', 2, { instrument: 'P3-S' })}</measure>`,
+          barline('left', repeat('forward')) + groove,
+          barline('left', ending('1', 'start')) + hit('F4', 2, { instrument: 'P3-K' }) + hit('C5', 2, { instrument: 'P3-S' }) + hit('C5', 2, { instrument: 'P3-S' }) + barline('right', ending('1', 'stop') + repeat('backward')),
+          barline('left', ending('2', 'start')) + attributes({ time: [3, 4] }) + hit('A5', 6, { instrument: 'P3-C', x: true }) + barline('right', ending('2', 'stop')),
+        ],
+      },
+      {
+        id: 'P4', name: 'Piano', program: 1, measures: [
+          `<measure number="0" implicit="yes">${attributes({ divisions: 2, fifths: 0, time: [4, 4], staves: 2, clefs: [clef('G', 2, 1), clef('F', 4, 2)] })}${notes({ p: 'r', d: 2, staff: 1 })}<backup><duration>2</duration></backup>${notes({ p: 'r', d: 2, voice: 5, staff: 2 })}</measure>`,
+          barline('left', repeat('forward')) + notes({ p: 'E4', d: 8, type: 'whole', staff: 1 }, { p: 'G4', d: 8, type: 'whole', staff: 1, chord: true }) + '<backup><duration>8</duration></backup>' + notes({ p: 'C3', d: 8, type: 'whole', voice: 5, staff: 2 }),
+          barline('left', ending('1', 'start')) + notes({ p: 'D4', d: 6, type: 'half', dots: 1, staff: 1 }) + '<backup><duration>6</duration></backup>' + notes({ p: 'G2', d: 6, type: 'half', dots: 1, voice: 5, staff: 2 }) + barline('right', ending('1', 'stop') + repeat('backward')),
+          barline('left', ending('2', 'start')) + attributes({ time: [3, 4] }) + notes({ p: 'E4', d: 6, type: 'half', dots: 1, staff: 1 }) + '<backup><duration>6</duration></backup>' + notes({ p: 'C3', d: 6, type: 'half', dots: 1, voice: 5, staff: 2 }) + barline('right', ending('2', 'stop')),
+        ],
+      },
+    ],
+  }), 'P3', [['K', 'Bass Drum 1', 37], ['S', 'Acoustic Snare', 39], ['H', 'Closed Hi-Hat', 43], ['C', 'Crash Cymbal 1', 50]]);
+
+  const flute = { partIds: ['P1'] };
+
+  it('keeps the other parts as the band, bar for bar with the repeats written out', () => {
+    const r = importMusicXml(xml, flute);
+    const song = check(r);
+    expect(song.pickup).toBe('q');
+    expect(song.staves[0].voices).toEqual(['G4/q | C5/h D5 | E5/h. r/q | C5/h D5 | [T:3/4] C5/h. |']);
+    expect(song.staves).toEqual(importMusicXml(xml, { ...flute, band: false }).song.staves);
+    expect(r.parts.map(p => p.id)).toEqual(['P1', 'P2', 'P4']); // percussion is never the part to learn
+    const [bass, drums, piano] = song.band!;
+    // the bass guitar sounds an octave below the page; its sound is its <midi-program>
+    expect(bass).toEqual({ name: 'Electric Bass', program: 34, staves: [{ clef: 'bass8vb', voices: ['G1/q | C2/w | G1/h. r/q | C2/w | [T:3/4] C2/h. |'] }] });
+    expect(drums).toMatchObject({ name: 'Drum Set', program: 1, drums: true });
+    expect(drums.staves[0].voices).toEqual(['snare/q | [kick hat] snare kick [snare hat] | kick snare snare r | [kick hat] snare kick [snare hat] | [T:3/4] crash r/h |']);
+    // a piano part keeps both its staves
+    expect(piano.staves).toEqual([
+      { clef: 'treble', voices: ['r/q | [E4 G4]/w | D4/h. r/q | [E4 G4]/w | [T:3/4] E4/h. |'] },
+      { clef: 'bass', voices: ['r/q | C3/w | G2/h. r/q | C3/w | [T:3/4] C3/h. |'] },
+    ]);
+    expect(r.warnings).toEqual(['Imported "Flute"; the other 3 parts ("Electric Bass", "Drum Set" and "Piano") play as the band.', 'Measure 3 was incomplete and filled with rests.']);
+  });
+
+  it('survives writing the song out and reading it back', () => {
+    const { song } = importMusicXml(xml, flute);
+    const again = parseSongDoc(songToDoc(song));
+    expect(again.warnings).toEqual([]);
+    expect(again.song.band).toEqual(song.band);
+    expect(again.score.measures).toBe(5);
+  });
+
+  it('leaves the band out on request, exactly as before', () => {
+    const with_ = importMusicXml(xml);
+    const without = importMusicXml(xml, { band: false });
+    expect(without.song).toEqual({ ...with_.song, id: without.song.id, band: undefined });
+    expect(without.parts.map(p => p.id)).toEqual(['P1', 'P2', 'P3', 'P4']);
+    expect(without.warnings[0]).toBe('Imported "Piano"; the file has 4 parts – choose others to import them instead.');
+    expect(with_.warnings[0]).toBe('Imported "Piano"; the other 3 parts ("Flute", "Electric Bass" and "Drum Set") play as the band.');
+  });
+
+  it('plays percussion in the band even when it is asked for', () => {
+    const r = importMusicXml(xml, { partIds: ['P3', 'P2'] });
+    expect(check(r).instrument).toBe('bass');
+    expect(r.warnings).toContain('"Drum Set" is a percussion part, so it plays in the band.');
+    expect(r.song.band?.map(p => p.name)).toEqual(['Flute', 'Drum Set', 'Piano']);
+    expect(() => importMusicXml(xml, { partIds: ['P3'] })).toThrow(/"Drum Set" is a percussion part; choose a part with pitched notes/);
+  });
+
+  it('reads drums from their place on the staff when the file names no sounds', () => {
+    // bass drum, snare, hi-hat (x above the staff), crash (x on the ledger line), side stick (x in the snare space), toms
+    const kit = score({
+      title: 'Kit',
+      parts: [
+        { id: 'P1', name: 'Melody', measures: [a + notes({ p: 'C5', d: 8, type: 'whole' }), notes({ p: 'D5', d: 8, type: 'whole' })] },
+        {
+          id: 'P2', name: 'Percussion', measures: [
+            perc + hit('F4', 2) + hit('G5', 2, { chord: true, x: true }) + hit('C5', 2) + hit('A5', 2, { x: true }) + hit('C5', 2, { x: true }),
+            hit('E5', 2) + hit('D5', 2) + hit('A4', 2) + hit('D4', 2, { x: true }),
+          ],
+        },
+      ],
+    });
+    const r = importMusicXml(kit);
+    expect(check(r).band).toEqual([{ name: 'Percussion', program: 1, drums: true, staves: [{ clef: 'bass', voices: ['[kick hat]/q snare crash rim | tom-hi tom-himid floor-hi pedal-hat |'] }] }]);
+    // a part of one instrument says what it is by its name
+    const triangle = withKit(kit, 'P2', [['T', 'Triangle', 0]]).replace(/<midi-unpitched>0<\/midi-unpitched>/, '');
+    expect(check(importMusicXml(triangle)).band?.[0].staves[0].voices[0]).toBe('triangle/q triangle triangle triangle | triangle triangle triangle triangle |');
+  });
+
+  it('says when a score has nothing but percussion', () => {
+    const only = score({ parts: [{ id: 'P1', name: 'Drums', measures: [perc + hit('F4', 8)] }] });
+    expect(() => importMusicXml(only)).toThrow(/only has percussion parts/);
+    expect(importMusicXml(only, { band: false }).warnings).toContain('1 percussion note without a pitch was left out.');
   });
 });
 

@@ -12,13 +12,15 @@
     "test:watch": "vitest",
     "e2e": "playwright test",
     "preview": "vite preview",
-    "clefsong": "node tools/clefsong.mjs"
+    "clefsong": "node tools/clefsong.mjs",
+    "sounds": "node tools/fetch-sounds.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
     "@coderline/alphatab": "^1.8.4",
     "@fontsource-variable/fraunces": "^5.3.0",
     "@fontsource-variable/inter": "^5.3.0",
+    "@wasm-audio-decoders/ogg-vorbis": "^0.1.20",
     "framer-motion": "^14.2.0",
     "lucide-react": "^1.56.0",
     "react": "^19.3.0",

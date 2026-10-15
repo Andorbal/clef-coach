@@ -22,6 +22,7 @@ import {
 import type { AppSoundMark } from '../context';
 import { clamp, interp } from '../dsp/util';
 import { MALLET_VARIANTS, type SynthVoiceId } from '../../music/instruments';
+import { epianoAudibleSeconds, epianoNoteLength, renderEPianoSamples } from './epiano';
 import { guitarNoteLength, renderGuitarSamples } from './guitar';
 import { type MalletVoice, malletAudibleSeconds, malletNoteLength, renderMalletSamples } from './mallets';
 import { pianoNoteLength, renderPianoSamples } from './piano';
@@ -48,6 +49,18 @@ export interface PlayOptions {
   when?: number;
   /** Instrument; default: the current voice (see setVoice). */
   voice?: SynthVoice;
+  /** Where the note goes (default: the synth bus). A band track passes its channel strip. */
+  destination?: AudioNode;
+  /**
+   * Stereo position −1..1 (default: keyboards spread low-left / high-right, others centred).
+   * Ignored when there's no StereoPannerNode.
+   */
+  pan?: number;
+  /**
+   * Intervals at which the microphone could mistake this note for one the player plays
+   * (see markAppSound); false = don't tell the microphone at all. Default: the usual set.
+   */
+  mark?: readonly number[] | false;
 }
 
 export interface SequenceEvent {
@@ -70,7 +83,18 @@ const DEFAULT_VELOCITY = 0.7;
 /** Render velocities for the three timbre buckets. */
 const BUCKET_VELOCITY = [0.32, 0.62, 0.9];
 const MAX_VOICES = 48;
+/** Default memory for rendered notes; raised on devices with plenty (see setSynthCacheBudget). */
 const CACHE_BUDGET_BYTES = 48 * 1024 * 1024;
+let cacheBudget = CACHE_BUDGET_BYTES;
+
+/** How much memory rendered notes may keep (bytes). Rendering again costs CPU, not sound. */
+export function setSynthCacheBudget(bytes: number): void {
+  cacheBudget = Math.max(8 * 1024 * 1024, bytes);
+}
+
+export function getSynthCacheBudget(): number {
+  return cacheBudget;
+}
 /** How long a voice that was queued while the context was suspended may still sound. */
 const STALE_MS = 400;
 
@@ -86,6 +110,7 @@ function velocityGain(v: number): number {
 /** Output trim per instrument so both sit at a similar loudness. */
 const VOICE_TRIM: Record<SynthVoice, number> = {
   piano: 0.55,
+  epiano: 0.55,
   guitar: 0.6,
   ukulele: 0.6,
   bass: 0.72,
@@ -110,21 +135,41 @@ function releaseTau(voice: SynthVoice, midi: number): number {
 /** Roughly how long a (sounding) note stays clearly audible (for the mic's self-hearing guard). */
 function audibleSeconds(voice: SynthVoice, midi: number): number {
   if (voice === 'piano') return interp([[21, 3.2], [48, 2.4], [60, 1.9], [84, 1.1], [108, 0.5]], midi);
+  if (voice === 'epiano') return epianoAudibleSeconds(midi);
   if (isMalletVoice(voice)) return malletAudibleSeconds(voice, midi);
   const base = interp([[28, 3.0], [40, 2.6], [64, 1.7], [88, 0.9]], midi);
   return voice === 'ukulele' ? base * 0.7 : voice === 'bass' ? base * 1.2 : base;
 }
 
+/**
+ * Another sound for a voice — a sampled instrument from a sound bank — played instead of
+ * the rendered one, or layered with it.
+ */
+export interface ExternalVoice {
+  /** Start a note (sounding pitch) at `when` into `out`; null if it can't play it (yet). */
+  noteOn(midi: number, velocity: number, when: number, out: AudioNode): ExternalNote | null;
+  /** Get these notes ready (decode their samples). */
+  prepare?(notes: { midi: number; velocity: number }[]): Promise<unknown>;
+}
+
+export interface ExternalNote {
+  release(at: number): void;
+  stop(at?: number): void;
+}
+
 interface Voice {
-  src: AudioBufferSourceNode;
-  gain: GainNode;
+  /** The rendered note (null when an external sound plays instead). */
+  src: AudioBufferSourceNode | null;
+  gain: GainNode | null;
   pan: StereoPannerNode | null;
+  /** An external sound's note, instead of or with the rendered one. */
+  ext?: ExternalNote;
   midi: number;
   voice: SynthVoice;
   level: number;
   start: number;
   releasedAt: number | null;
-  mark: AppSoundMark;
+  mark: AppSoundMark | null;
   /** performance.now() when queued on a non-running context, else null. */
   queuedSuspendedAt: number | null;
   onEnd?: () => void;
@@ -159,7 +204,7 @@ class BufferCache {
     this.map.set(key, buf);
     this.bytes += buf.length * buf.numberOfChannels * 4;
     for (const [k, b] of this.map) {
-      if (this.bytes <= CACHE_BUDGET_BYTES || k === key) break;
+      if (this.bytes <= cacheBudget || k === key) break;
       this.map.delete(k);
       this.bytes -= b.length * b.numberOfChannels * 4;
     }
@@ -169,6 +214,19 @@ class BufferCache {
     this.map.clear();
     this.bytes = 0;
   }
+
+  get size(): number {
+    return this.bytes;
+  }
+}
+
+/** One cache for every engine (the app's instrument and the band render the same notes). */
+const sharedCache = new BufferCache();
+let sharedCacheRate = 0;
+
+/** Bytes of rendered notes held in memory. */
+export function synthCacheBytes(): number {
+  return sharedCache.size;
 }
 
 export class SynthEngine {
@@ -176,12 +234,27 @@ export class SynthEngine {
   private readonly held = new Map<number, Voice>();
   private readonly active = new Set<Voice>();
   private readonly sequences = new Set<SequenceHandle>();
-  private readonly cache = new BufferCache();
-  private cacheRate = 0;
+  private readonly cache = sharedCache;
   private stateHooked = false;
+  private readonly maxVoices: number;
+  private readonly externals = new Map<SynthVoice, { ext: ExternalVoice; layer: boolean }>();
+
+  constructor(opts: { maxVoices?: number } = {}) {
+    this.maxVoices = opts.maxVoices ?? MAX_VOICES;
+  }
 
   setVoice(v: SynthVoice): void {
     this.voiceType = v;
+  }
+
+  /** Play a voice through another sound (a sampled instrument), instead of the rendered one or layered with it. */
+  setExternal(voice: SynthVoice, ext: ExternalVoice | null, layer = false): void {
+    if (ext) this.externals.set(voice, { ext, layer });
+    else this.externals.delete(voice);
+  }
+
+  hasExternal(voice: SynthVoice): boolean {
+    return this.externals.has(voice);
   }
 
   getVoice(): SynthVoice {
@@ -191,9 +264,9 @@ export class SynthEngine {
   /** Get (rendering on first use) the buffer for a note. */
   getBuffer(voice: SynthVoice, midi: number, velocity = DEFAULT_VELOCITY): AudioBuffer {
     const ctx = getAudioContext();
-    if (this.cacheRate !== ctx.sampleRate) {
+    if (sharedCacheRate !== ctx.sampleRate) {
       this.cache.clear();
-      this.cacheRate = ctx.sampleRate;
+      sharedCacheRate = ctx.sampleRate;
     }
     const m = Math.round(midi);
     const b = bucketOf(velocity);
@@ -201,11 +274,13 @@ export class SynthEngine {
     const hit = this.cache.get(key);
     if (hit) return hit;
     const sr = ctx.sampleRate;
-    const len = voice === 'piano' ? pianoNoteLength(m, sr) : isMalletVoice(voice) ? malletNoteLength(voice, m, sr) : guitarNoteLength(m, sr, voice);
+    const len =
+      voice === 'piano' ? pianoNoteLength(m, sr) : voice === 'epiano' ? epianoNoteLength(m, sr) : isMalletVoice(voice) ? malletNoteLength(voice, m, sr) : guitarNoteLength(m, sr, voice);
     const buf = ctx.createBuffer(1, len, sr);
     // Render straight into the buffer's memory – no extra copy.
     const data = buf.getChannelData(0);
     if (voice === 'piano') renderPianoSamples(m, BUCKET_VELOCITY[b], sr, { out: data });
+    else if (voice === 'epiano') renderEPianoSamples(m, BUCKET_VELOCITY[b], sr, { out: data });
     else if (isMalletVoice(voice)) renderMalletSamples(voice, m, BUCKET_VELOCITY[b], sr, { out: data });
     else renderGuitarSamples(m, BUCKET_VELOCITY[b], sr, { out: data, variant: voice });
     this.cache.set(key, buf);
@@ -242,9 +317,20 @@ export class SynthEngine {
     const written = Math.round(midi);
     const m = written + voiceOffset(voice);
     if (!(m >= 0 && m <= 127)) return null;
-    const buffer = this.getBuffer(voice, m, vel);
     const now = ctx.currentTime;
     const start = Math.max(now, opts.when ?? now);
+    const external = this.externals.get(voice);
+    const extNote = external?.ext.noteOn(m, vel, start, opts.destination ?? getBus('synth')) ?? undefined;
+    if (extNote && !external!.layer) {
+      // the sampled sound alone
+      const mark = opts.mark === false ? null : markAppSound(start + 2, { from: start, midis: [m], kind: 'tonal', intervals: opts.mark });
+      const v: Voice = { src: null, gain: null, pan: null, ext: extNote, midi: written, voice, level: 1, start, releasedAt: null, mark, queuedSuspendedAt: running ? null : performance.now() };
+      this.active.add(v);
+      this.enforcePolyphony();
+      if (opts.duration !== undefined && Number.isFinite(opts.duration)) this.release(v, start + Math.max(0.02, opts.duration));
+      return v;
+    }
+    const buffer = this.getBuffer(voice, m, vel);
 
     const src = ctx.createBufferSource();
     src.buffer = buffer;
@@ -253,18 +339,19 @@ export class SynthEngine {
     gain.gain.setValueAtTime(level, now);
     src.connect(gain);
     let pan: StereoPannerNode | null = null;
+    const out = opts.destination ?? getBus('synth');
     if (typeof ctx.createStereoPanner === 'function') {
       pan = ctx.createStereoPanner();
       // Keyboards and mallets: low notes slightly left, high slightly right (player's perspective).
-      pan.pan.value = voice === 'piano' || isMalletVoice(voice) ? clamp((m - 64 - voiceOffset(voice)) / 48, -1, 1) * 0.35 : 0.05;
+      pan.pan.value = opts.pan ?? (voice === 'piano' || voice === 'epiano' || isMalletVoice(voice) ? clamp((m - 64 - voiceOffset(voice)) / 48, -1, 1) * 0.35 : 0.05);
       gain.connect(pan);
-      pan.connect(getBus('synth'));
+      pan.connect(out);
     } else {
-      gain.connect(getBus('synth'));
+      gain.connect(out);
     }
 
     const audible = Math.min(buffer.duration, audibleSeconds(voice, m));
-    const mark = markAppSound(start + audible, { from: start, midis: [m], kind: 'tonal' });
+    const mark = opts.mark === false ? null : markAppSound(start + audible, { from: start, midis: [m], kind: 'tonal', intervals: opts.mark });
     const v: Voice = {
       src,
       gain,
@@ -276,6 +363,7 @@ export class SynthEngine {
       releasedAt: null,
       mark,
       queuedSuspendedAt: running ? null : performance.now(),
+      ext: extNote,
     };
     src.onended = () => {
       try {
@@ -299,12 +387,12 @@ export class SynthEngine {
   }
 
   private enforcePolyphony(): void {
-    if (this.active.size <= MAX_VOICES) return;
+    if (this.active.size <= this.maxVoices) return;
     // Steal the oldest voices, preferring ones already releasing.
     const sorted = [...this.active].sort(
       (a, b) => (a.releasedAt === null ? 1 : 0) - (b.releasedAt === null ? 1 : 0) || a.start - b.start,
     );
-    for (let i = 0; i < sorted.length && this.active.size > MAX_VOICES; i++) this.kill(sorted[i]);
+    for (let i = 0; i < sorted.length && this.active.size > this.maxVoices; i++) this.kill(sorted[i]);
   }
 
   /** Begin the key-up fade at context time `at`. */
@@ -313,6 +401,17 @@ export class SynthEngine {
     const t = Math.max(at, ctx.currentTime);
     if (v.releasedAt !== null && v.releasedAt <= t) return;
     v.releasedAt = t;
+    v.ext?.release(t);
+    if (!v.src || !v.gain) {
+      // an external sound alone: it fades by itself; forget the voice once it has
+      if (v.mark && v.mark.until > t + 0.5) updateAppSoundMark(v.mark, t + 0.5);
+      setTimeout(() => {
+        this.active.delete(v);
+        if (this.held.get(v.midi) === v) this.held.delete(v.midi);
+        v.onEnd?.();
+      }, Math.max(0, (t - ctx.currentTime) * 1000) + 1500);
+      return;
+    }
     const g = v.gain.gain;
     g.cancelScheduledValues(t);
     g.setValueAtTime(v.level, t);
@@ -323,7 +422,7 @@ export class SynthEngine {
     } catch {
       /* already stopped */
     }
-    if (v.mark.until > t + tau * 3) updateAppSoundMark(v.mark, t + tau * 3);
+    if (v.mark && v.mark.until > t + tau * 3) updateAppSoundMark(v.mark, t + tau * 3);
   }
 
   /** Stop a voice almost immediately (voice stealing / stale notes). */
@@ -331,16 +430,19 @@ export class SynthEngine {
     const ctx = getAudioContext();
     const now = ctx.currentTime;
     v.releasedAt = now;
-    const g = v.gain.gain;
-    g.cancelScheduledValues(now);
-    g.setValueAtTime(g.value, now);
-    g.setTargetAtTime(0, now, 0.012);
-    try {
-      v.src.stop(now + 0.08);
-    } catch {
-      /* ignore */
+    v.ext?.stop(now);
+    if (v.gain && v.src) {
+      const g = v.gain.gain;
+      g.cancelScheduledValues(now);
+      g.setValueAtTime(g.value, now);
+      g.setTargetAtTime(0, now, 0.012);
+      try {
+        v.src.stop(now + 0.08);
+      } catch {
+        /* ignore */
+      }
     }
-    updateAppSoundMark(v.mark, now + 0.05);
+    if (v.mark) updateAppSoundMark(v.mark, now + 0.05);
     this.active.delete(v);
     if (this.held.get(v.midi) === v) this.held.delete(v.midi);
   }
@@ -469,6 +571,11 @@ export class SynthEngine {
    * notes of a lesson never hitch. Safe to call before audio is unlocked.
    */
   async preload(voice: SynthVoice, midis: number[], velocity = DEFAULT_VELOCITY): Promise<void> {
+    const external = this.externals.get(voice);
+    if (external?.ext.prepare) {
+      await external.ext.prepare(midis.map(m => ({ midi: Math.round(m) + voiceOffset(voice), velocity })));
+      if (!external.layer) return;
+    }
     let sr: number;
     try {
       sr = getAudioContext().sampleRate;
@@ -479,7 +586,7 @@ export class SynthEngine {
     for (const m of [...new Set(midis.map((x) => Math.round(x)))]) {
       if (!(m >= 0 && m <= 127)) continue;
       const sounding = m + voiceOffset(voice);
-      if (this.cacheRate === sr && this.cache.has(`${voice}:${sounding}:${b}`)) continue;
+      if (sharedCacheRate === sr && this.cache.has(`${voice}:${sounding}:${b}`)) continue;
       await yieldToMain();
       this.getBuffer(voice, sounding, velocity);
     }

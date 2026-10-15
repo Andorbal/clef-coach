@@ -11,12 +11,15 @@
  *     for keyboard and fretted instruments, written for mallets),
  *   - key / time changes, pickup bar, tempo, repeats, endings, D.C. / D.S. / Fine /
  *     Coda (written out in performance order, like the notation's own unroller),
- *   - fingering, string and fret, chord symbols and lyrics.
+ *   - fingering, string and fret, chord symbols and lyrics,
+ *   - the parts not chosen become the song's band parts (percussion read as GM drum keys).
  *
  * Whatever is simplified or dropped is listed in `warnings`. Pure TypeScript: runs in
  * the browser and in Node.
  */
+import type { BandPartDef } from '../music/band';
 import { chordSymbolText, parseChordSymbol } from '../music/chords';
+import { DRUM_KEYS, clampProgram, pitchesToDrumWords } from '../music/gm';
 import { type InstrumentId, TUNINGS, familyOf, instrumentDef } from '../music/instruments';
 import { type KeySig, type Mode, parseKey, keyName, tonicOf } from '../music/keys';
 import type { SongDef, SongStaffDef } from '../music/parse';
@@ -32,16 +35,21 @@ import {
   ImportError,
   Warnings,
   appTuningFor,
+  bandNote,
   buildVoice,
   cleanTempo,
+  drumVoice,
   guessInstrument,
   makeLayout,
   inferModes,
   layoutEnd,
+  limitBand,
   makeQuantizer,
   median,
   pickupToken,
   plural,
+  programFromName,
+  quoteList,
   retunedWarning,
   snapVoice,
   writeChordLine,
@@ -67,6 +75,8 @@ export interface MusicXmlOptions {
   keepPartInstrument?: boolean;
   /** Leave out the bars before the chosen parts start playing. */
   trimLeadingRests?: boolean;
+  /** Keep the parts not imported as the song's band parts (default true). */
+  band?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -108,6 +118,8 @@ export interface XGroup {
   clef: ClefInfo | undefined;
   /** Stem direction written in the file: 1 up, -1 down. */
   stem?: 1 | -1;
+  /** Percussion struck here, as General MIDI drum keys (36 bass drum, 38 snare …). */
+  drums?: number[];
 }
 
 export interface XHarmony {
@@ -167,6 +179,8 @@ export interface XPart {
   metered: boolean;
   /** Says its keys are minor (many files give only the signature, or "major" for everything). */
   modeGiven: boolean;
+  /** A percussion part: all its notes are drums (in XGroup.drums). */
+  drums?: boolean;
   counts: { grace: number; unpitched: number; microtones: number; oddTuplets: number };
 }
 
@@ -230,6 +244,8 @@ interface PartInfo {
   names: string[];
   program?: number;
   braces: number[];
+  /** Percussion instruments by id: the GM drum key each plays (from <midi-unpitched>) and its name. */
+  kit: Map<string, { key?: number; name: string }>;
 }
 
 function readPartList(root: XmlElement): Map<string, PartInfo> {
@@ -245,7 +261,15 @@ function readPartList(root: XmlElement): Map<string, PartInfo> {
       const name = flatText(childText(el, 'part-name'));
       const names = [name, childText(el, 'part-abbreviation'), ...kids(el, 'score-instrument').map(i => childText(i, 'instrument-name'))].filter(Boolean);
       const program = kids(el, 'midi-instrument').map(m => childNumber(m, 'midi-program')).find(p => p !== undefined);
-      out.set(el.attrs.id ?? '', { name: name || names[0] || '', names, program, braces: [...open.values()] });
+      const kit = new Map<string, { key?: number; name: string }>(kids(el, 'score-instrument').map(i => [i.attrs.id ?? '', { name: flatText(childText(i, 'instrument-name')) }]));
+      for (const m of kids(el, 'midi-instrument')) {
+        const u = childNumber(m, 'midi-unpitched');
+        if (u === undefined) continue;
+        const id = m.attrs.id ?? '';
+        // <midi-unpitched> counts from 1, like <midi-program>
+        kit.set(id, { name: kit.get(id)?.name ?? '', key: Math.round(u) - 1 });
+      }
+      out.set(el.attrs.id ?? '', { name: name || names[0] || '', names, program, braces: [...open.values()], kit });
     }
   }
   return out;
@@ -428,6 +452,64 @@ function readTechnical(note: XmlElement, x: XNote): void {
   if (fr !== undefined && fr >= 0) x.fret = Math.round(fr);
 }
 
+/**
+ * Common drum-set notation on a five-line staff: where a note sits says which drum it is
+ * (bass drum in the bottom space, snare in the third, hi-hat above the staff…). GM drum
+ * keys for [a normal notehead, an x notehead]; notes beyond either end count as the end.
+ */
+const DRUM_STAFF: [string, number, number][] = [
+  ['D4', 44, 44], // below the staff: hi-hat pedal
+  ['E4', 35, 44], // bottom line: a second bass drum
+  ['F4', 36, 36], // bass drum
+  ['G4', 41, 41], // low floor tom
+  ['A4', 43, 43], // floor tom
+  ['B4', 47, 47], // middle line: low-mid tom
+  ['C5', 38, 37], // snare; with an x, side stick
+  ['D5', 48, 48], // high-mid tom
+  ['E5', 50, 50], // high tom
+  ['F5', 51, 51], // top line: ride cymbal
+  ['G5', 42, 42], // above the staff: hi-hat
+  ['A5', 49, 49], // crash cymbal
+];
+
+/** Percussion instrument names → GM drum keys, for parts that name their instruments but give no key. */
+const DRUM_NAMES: [RegExp, number][] = [
+  [/open hi-?hat/, 46], [/pedal hi-?hat|hi-?hat pedal|hi-?hat foot/, 44], [/hi-?hat/, 42],
+  [/side ?stick|cross ?stick|rim/, 37], [/snare/, 38], [/kick|bass ?drum|gran ?cassa/, 36],
+  [/floor tom/, 43], [/high tom/, 50], [/low tom/, 45], [/tom/, 47],
+  [/ride bell/, 53], [/ride/, 51], [/splash/, 55], [/china/, 52], [/crash|cymbal|piatti/, 49],
+  [/tambourine/, 54], [/cowbell/, 56], [/clap/, 39], [/triangle/, 81], [/wood ?block|temple block/, 76],
+  [/claves/, 75], [/shaker/, 82], [/maraca/, 70], [/cabasa/, 69], [/castanet/, 85], [/bongo/, 60],
+  [/conga/, 63], [/timbale/, 65], [/agogo/, 67], [/guiro/, 73], [/bell tree/, 84], [/jingle|sleigh/, 83],
+];
+
+/**
+ * The GM drum key of an unpitched note: its instrument's <midi-unpitched>, else what the
+ * instrument's name says, else where the note sits on a drum-set staff (and its notehead).
+ */
+function drumKeyOfNote(note: XmlElement, unpitched: XmlElement, info: PartInfo | undefined): number {
+  const kit = info?.kit ?? new Map<string, { key?: number; name: string }>();
+  const id = child(note, 'instrument')?.attrs.id;
+  // a part of one instrument (a snare drum, a triangle) doesn't say which on each note
+  const inst = id !== undefined ? kit.get(id) : kit.size === 1 ? [...kit.values()][0] : undefined;
+  if (inst?.key !== undefined && inst.key >= 0 && inst.key <= 127) return inst.key;
+  const name = inst?.name.toLowerCase().trim();
+  if (name) {
+    const exact = DRUM_KEYS.find(d => d.gm.toLowerCase() === name || d.name === name);
+    const known = exact?.key ?? DRUM_NAMES.find(([re]) => re.test(name))?.[1];
+    if (known !== undefined) return known;
+  }
+  const step = childText(unpitched, 'display-step').toUpperCase() as Step;
+  if (!STEPS.includes(step)) return 38;
+  const at = diatonicIndex({ step, alter: 0, octave: num(childText(unpitched, 'display-octave'), 4) });
+  const pos = (s: string) => diatonicIndex({ step: s[0] as Step, alter: 0, octave: Number(s[1]) });
+  const row = DRUM_STAFF.find(([s]) => pos(s) >= at) ?? DRUM_STAFF[DRUM_STAFF.length - 1];
+  const head = childText(note, 'notehead');
+  if (head === 'circle-x' && row[0] === 'G5') return 46; // open hi-hat
+  if (head === 'diamond' && row[0] === 'F5') return 53; // ride bell
+  return /x|cross/.test(head) ? row[2] : row[1];
+}
+
 export function emptyMeasure(number: string, implicit: boolean, time: TimeSig, key: KeySig, transpose: Transpose | null): XMeasure {
   return {
     number, implicit, len: 0, time, key, transpose, groups: [], harmonies: [], clefStart: new Map(), clefs: [],
@@ -550,7 +632,14 @@ function readPart(el: XmlElement, info: PartInfo | undefined, w: Warnings): XPar
           const voice = childText(c, 'voice') || '1';
           let note: XNote | null = null;
           const p = child(c, 'pitch');
-          if (child(c, 'unpitched')) part.counts.unpitched++;
+          const unpitched = child(c, 'unpitched');
+          let drum: number | null = null;
+          if (unpitched) {
+            part.counts.unpitched++;
+            // a hit tied on from the note before is still sounding: it isn't struck again
+            const tiedOn = [...kids(c, 'tie'), ...kids(c, 'notations').flatMap(n => kids(n, 'tied'))].some(t => t.attrs.type === 'stop' || t.attrs.type === 'continue');
+            if (!tiedOn) drum = drumKeyOfNote(c, unpitched, info);
+          }
           if (p && !child(c, 'rest')) {
             const step = childText(p, 'step').toUpperCase() as Step;
             const alterRaw = num(childText(p, 'alter'), 0);
@@ -566,10 +655,12 @@ function readPart(el: XmlElement, info: PartInfo | undefined, w: Warnings): XPar
           }
           if (isChord && last) {
             if (note) last.notes.push(note);
+            if (drum !== null) (last.drums ??= []).push(drum);
             readLyrics(c, lyricLabels, last.lyrics);
             break;
           }
           const g: XGroup = { staff, voice, start, end: start + len, notes: note ? [note] : [], lyrics: new Map(), transpose: transposeFor(staff), clef: clefs.get(staff) };
+          if (drum !== null) g.drums = [drum];
           const stem = childText(c, 'stem');
           if (stem === 'up' || stem === 'down') g.stem = stem === 'up' ? 1 : -1;
           readLyrics(c, lyricLabels, g.lyrics);
@@ -610,6 +701,7 @@ function readPart(el: XmlElement, info: PartInfo | undefined, w: Warnings): XPar
     m.endingNums = cur;
     if (m.endingStop || (cur && m.bwdRepeat)) cur = undefined;
   }
+  if (part.counts.unpitched && !hasNotes(part)) part.drums = true;
   return part;
 }
 
@@ -957,10 +1049,15 @@ export function partInstrument(p: XPart): InstrumentId | null {
  * lay out the bars, place notes in voices and write the text notation. Shared by
  * MusicXML and Guitar Pro (converted to the same parts on reading).
  */
-export function buildSong(read: { header: Header; parts: XPart[]; source: string }, opts: MusicXmlOptions, w: Warnings): ImportResult {
+export function buildSong(read: { header: Header; parts: XPart[]; source: string; unit?: 'part' | 'track' }, opts: MusicXmlOptions, w: Warnings): ImportResult {
   const { header, parts } = read;
+  const unit = read.unit ?? 'part';
   if (!parts.length || !parts.some(p => p.measures.length)) throw new ImportError('The score has no music in it.');
-  const partList: ImportPart[] = parts.map(p => ({ id: p.id, name: p.name, staves: p.staves - (p.tabStaves.size && p.tabStaves.size < p.staves ? p.tabStaves.size : 0) }));
+  const keepBand = opts.band !== false;
+  // percussion plays in the band: it is never the part to learn
+  const pool = keepBand ? parts.filter(p => !p.drums) : parts;
+  if (!pool.length) throw new ImportError('This score only has percussion parts; Clef Coach needs pitched notes.');
+  const partList: ImportPart[] = pool.map(p => ({ id: p.id, name: p.name, staves: p.staves - (p.tabStaves.size && p.tabStaves.size < p.staves ? p.tabStaves.size : 0) }));
 
   // ---- which parts
   let chosen: XPart[];
@@ -968,6 +1065,13 @@ export function buildSong(read: { header: Header; parts: XPart[]; source: string
     chosen = [...new Set(opts.partIds)].map(id => parts.find(p => p.id === id)).filter((p): p is XPart => !!p);
     const missing = opts.partIds.filter(id => !parts.some(p => p.id === id));
     if (missing.length) w.add(`Part${missing.length > 1 ? 's' : ''} ${missing.join(', ')} not found in the file.`);
+    const drums = chosen.filter(p => !pool.includes(p));
+    if (drums.length) {
+      chosen = chosen.filter(p => pool.includes(p));
+      const what = `${quoteList(drums.map(p => p.name))} ${drums.length > 1 ? `are percussion ${unit}s` : `is a percussion ${unit}`}`;
+      if (!chosen.length) throw new ImportError(`${what}; choose a ${unit} with pitched notes.`);
+      w.add(`${what}, so ${drums.length > 1 ? 'they play' : 'it plays'} in the band.`);
+    }
     if (!chosen.length) throw new ImportError(`None of the requested parts (${opts.partIds.join(', ')}) are in this file.`);
   } else {
     // the part with the most notes (or a right-hand / left-hand pair of piano parts), so a
@@ -975,15 +1079,17 @@ export function buildSong(read: { header: Header; parts: XPart[]; source: string
     const playable = parts.filter(hasNotes);
     // a guitarist wants the guitar part of a band score, a bassist the bass part
     const forInstrument = opts.instrument && familyOf(opts.instrument) === 'fretted' ? playable.filter(p => partInstrument(p) === opts.instrument) : [];
-    const list = forInstrument.length ? forInstrument : playable.length ? playable : parts;
+    const list = forInstrument.length ? forInstrument : playable.length ? playable : pool;
     const candidates: XPart[][] = list.map(p => [p]);
     for (let i = 0; i + 1 < list.length; i++) if (looksLikePianoPair(list[i], list[i + 1])) candidates.push([list[i], list[i + 1]]);
     const size = (ps: XPart[]) => ps.reduce((s, p) => s + noteCount(p), 0);
     chosen = candidates.reduce((best, c) => (size(c) > size(best) * 1.0001 || (size(c) >= size(best) * 0.999 && c.length > best.length) ? c : best), candidates[0]);
-    if (parts.length > chosen.length) {
+    if (parts.length > chosen.length && !keepBand) {
       w.add(`Imported ${chosen.map(p => `"${p.name}"`).join(' and ')}; the file has ${plural(parts.length, 'part')} – choose others to import them instead.`);
     }
   }
+  // the note about the band goes here, once the band is known
+  const bandNoteAt = w.list.length;
   const pianoPair = chosen.length === 2 && looksLikePianoPair(chosen[0], chosen[1]);
   const master = chosen[0];
   const own = partInstrument(master);
@@ -1241,6 +1347,11 @@ export function buildSong(read: { header: Header; parts: XPart[]; source: string
   if (dropped) w.add(`${plural(dropped, 'note')} with no room left ${dropped > 1 ? 'were' : 'was'} dropped.`);
   if (brokenTies) w.add(`${plural(brokenTies, 'tie')} leading into another voice ${brokenTies > 1 ? 'were' : 'was'} left out (the note is played again).`);
 
+  // ---- the parts not chosen play as the band
+  const others = keepBand ? parts.filter(p => !chosen.includes(p)) : [];
+  const band = limitBand(others.map(p => bandPart(p, out, layout)), w, unit);
+  if (band.length) w.list.splice(bandNoteAt, 0, bandNote(chosen.map(p => `"${p.name}"`).join(' and '), band.map(p => p.name), unit));
+
   // hands: piano grand staff R over L; a single piano staff by its clef
   if ((instrument === 'piano' || instrument === 'mallets') && staffDefs.length === 2) {
     staffDefs[0].hand = 'R';
@@ -1251,6 +1362,8 @@ export function buildSong(read: { header: Header; parts: XPart[]; source: string
 
   // ---- part-level warnings
   const counts = chosen.reduce((s, p) => ({ grace: s.grace + p.counts.grace, unpitched: s.unpitched + p.counts.unpitched, microtones: s.microtones + p.counts.microtones }), { grace: 0, unpitched: 0, microtones: 0 });
+  // percussion notes in a part that also has pitched notes don't make a drum part of their own
+  for (const p of others) if (!p.drums) counts.unpitched += p.counts.unpitched;
   if (counts.grace) w.add(`${plural(counts.grace, 'grace note')} ${counts.grace > 1 ? 'were' : 'was'} left out.`);
   if (counts.unpitched) w.add(`${plural(counts.unpitched, 'percussion note')} without a pitch ${counts.unpitched > 1 ? 'were' : 'was'} left out.`);
   if (counts.microtones) w.add('Microtonal accidentals were rounded to the nearest semitone.');
@@ -1280,7 +1393,72 @@ export function buildSong(read: { header: Header; parts: XPart[]; source: string
     chords: writeChordLine(chordChanges, layout),
     lyrics: lyrics.lines.length ? lyrics.lines : undefined,
   };
+  if (band.length) song.band = band;
   return { song, warnings: w.list, parts: partList };
+}
+
+/** Run through a part's notes as the performance places them: each group with its start on the song's timeline. */
+function eachPlaced(part: XPart, out: OutMeasure[], layout: Layout, fn: (g: XGroup, start: number, end: number) => void): void {
+  out.forEach((om, k) => {
+    for (const pl of om.places) {
+      for (const g of part.measures[pl.src]?.groups ?? []) {
+        if (g.start >= pl.len - 1e-6) continue;
+        const at = layout.starts[k] + pl.offset;
+        fn(g, at + g.start, at + Math.min(g.end, pl.len));
+      }
+    }
+  });
+}
+
+/**
+ * A part not chosen, as a band part: through the same performance order, bars and pitch
+ * conversion (sounding pitch) as the chosen part, but quantised on a grid of its own so
+ * the chosen part is written exactly as it would be alone. A percussion part becomes a
+ * drum part written with drum names. Returns the part and how many notes it has.
+ */
+function bandPart(part: XPart, out: OutMeasure[], layout: Layout): { part: BandPartDef; notes: number } {
+  const quiet = new Warnings(); // warnings are about the part being learned
+  const end = layoutEnd(layout);
+  const grid = (points: number[]) => makeQuantizer(layout, points.map(t => ({ t, w: 1 })), { binary: 3, triplet: 8 });
+  if (part.drums) {
+    const hits: { start: number; key: number }[] = [];
+    eachPlaced(part, out, layout, (g, start) => {
+      for (const key of g.drums ?? []) hits.push({ start, key });
+    });
+    const q = grid(hits.map(h => h.start));
+    const voice = buildVoice(drumVoice(hits.map(h => ({ start: q.snap(h.start), key: h.key })), layout), layout);
+    return { part: { name: part.name, program: clampProgram(part.program ?? 1), drums: true, staves: [{ clef: 'bass', voices: [pitchesToDrumWords(writeVoice(voice.specs, layout))] }] }, notes: hits.length };
+  }
+  // the instrument only decides how written notes sound (an octave down for guitar and bass)
+  const own = partInstrument(part);
+  const instrument: InstrumentId = own && familyOf(own) === 'fretted' ? own : 'piano';
+  let nums = Array.from({ length: part.staves }, (_, k) => k + 1);
+  const nonTab = nums.filter(s => !part.tabStaves.has(s));
+  if (nonTab.length && nonTab.length < nums.length) {
+    borrowTabStrings(part);
+    nums = nonTab;
+  }
+  homeCrossStaffNotes(part);
+  const staves = nums.filter(s => part.measures.some(m => m.groups.some(g => g.staff === s && g.notes.length))).map(s => ({ part, staff: s, slots: chooseVoices(part, s, quiet) }));
+  const plan = pitchPlan(part, instrument, quiet);
+  const notes: TimedNote[][][] = staves.map(st => st.slots.map(() => []));
+  eachPlaced(part, out, layout, (g, start, stop) => {
+    const si = staves.findIndex(st => st.staff === g.staff);
+    const vi = si < 0 ? -1 : staves[si].slots.indexOf(g.voice);
+    if (vi < 0) return;
+    for (const n of g.notes) notes[si][vi].push({ start, end: stop, pitches: [plan.convert(n, g)], tieNext: n.tieStart });
+  });
+  const all = notes.flat(2);
+  const q = grid(all.flatMap(n => [n.start, n.end]));
+  const snap = (t: number) => q.snap(t);
+  for (const voice of notes.flat()) snapVoice(voice, snap, 3, end);
+  const program = clampProgram(part.program ?? programFromName(part.names.length ? part.names : [part.name]));
+  const staffDefs = staves.map((st, si) => {
+    const clefs = clefPlan(st, out, layout, instrument, notes[si].flat().map(n => midiOf(n.pitches[0])), snap, quiet);
+    const voices = st.slots.map((_, vi) => writeVoice(buildVoice(notes[si][vi], layout).specs, layout, undefined, vi === 0 ? clefs.changes : undefined));
+    return { clef: clefs.clef, voices };
+  });
+  return { part: { name: part.name, program, staves: staffDefs }, notes: all.length };
 }
 
 /** A time signature that holds exactly this many ticks (n/4, n/8, n/16 or n/32, `prefer` first), if any does. */

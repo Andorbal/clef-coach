@@ -1,6 +1,6 @@
-import { Download, FileUp, Plus, Share2, Trash2, Upload, UserRound } from 'lucide-react';
+import { ChevronRight, Download, FileUp, Plus, Share2, Trash2, Upload, UserRound } from 'lucide-react';
 import { useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { setMasterVolume } from '../audio/context';
 import { micInput } from '../audio/input/mic';
 import { setSfxEnabled, setSfxVolume, sfx } from '../audio/sfx';
@@ -246,6 +246,13 @@ export default function Settings() {
           </label>
         )}
         <Toggle checked={s.metronome} onChange={v => update({ metronome: v })} label="Metronome clicks" sub="Audible click during tempo exercises (the count-in always plays)." />
+        <Link to="/settings/sounds" className="set-link">
+          <span>
+            Instrument sounds
+            <span className="faint toggle-sub">Sound banks (SoundFonts and SFZ) for the band and your instrument, free downloads, memory.</span>
+          </span>
+          <ChevronRight size={18} />
+        </Link>
       </section>
 
       <section className="set-section card">

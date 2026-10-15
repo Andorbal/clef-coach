@@ -3,9 +3,10 @@
  * (extended Karplus–Strong). See ./piano.ts, ./guitar.ts and ./engine.ts.
  */
 import { SynthEngine } from './engine';
-import type { PlayOptions, SequenceEvent, SequenceHandle, SynthVoice } from './engine';
+import type { ExternalVoice, PlayOptions, SequenceEvent, SequenceHandle, SynthVoice } from './engine';
 
-export type { PlayOptions, SequenceEvent, SequenceHandle, SynthVoice } from './engine';
+export type { ExternalNote, ExternalVoice, PlayOptions, SequenceEvent, SequenceHandle, SynthVoice } from './engine';
+export { setSynthCacheBudget, synthCacheBytes } from './engine';
 export { renderPianoSamples, pianoNoteDuration, pianoNoteLength, pianoInharmonicity, PIANO_LOWEST, PIANO_HIGHEST } from './piano';
 export { renderGuitarSamples, guitarNoteDuration, guitarNoteLength, GUITAR_LOWEST, GUITAR_HIGHEST } from './guitar';
 export type { PluckedVariant } from './guitar';
@@ -47,5 +48,9 @@ export const synth = {
   /** Pre-render note buffers in idle slices so first notes don't glitch. */
   preload(voice: SynthVoice, midis: number[]): Promise<void> {
     return engine.preload(voice, midis);
+  },
+  /** Play a voice with a sampled instrument instead of (or layered over) the built-in sound; null = built-in. */
+  setExternal(voice: SynthVoice, ext: ExternalVoice | null, layer = false): void {
+    engine.setExternal(voice, ext, layer);
   },
 };

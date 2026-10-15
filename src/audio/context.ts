@@ -2,9 +2,13 @@
  * Shared AudioContext, master signal chain and app-sound bookkeeping.
  *
  *   synth ─┐                         ┌──────────────── dry ─────────────────┐
- *   sfx   ─┼─ bus gains ─────────────┤                                      ├─ compressor ─ master ─ out
- *   metro ─┘        └─ per-bus send ─┴─ Convolver (procedural 1.6 s room) ─┘
+ *   sfx   ─┤                         │                                      │
+ *   metro ─┼─ bus gains ─────────────┤                                      ├─ compressor ─ master ─ out
+ *   band  ─┘        └─ per-bus send ─┴─ Convolver (procedural 1.6 s room) ─┘
  *                                       → high-pass → wet (0.12)
+ *
+ * The band bus has no send of its own: each band track sends to the reverb at its
+ * own level (see getReverbInput).
  *
  * Nothing here touches the DOM at import time; the context is created lazily
  * on first use. On iOS/iPadOS the context starts "suspended" and must be
@@ -14,7 +18,7 @@
  */
 import { generateImpulseResponse } from './dsp/reverb';
 
-export type BusName = 'synth' | 'sfx' | 'metronome';
+export type BusName = 'synth' | 'sfx' | 'metronome' | 'band';
 
 interface Graph {
   ctx: AudioContext;
@@ -22,13 +26,15 @@ interface Graph {
   compressor: DynamicsCompressorNode;
   master: GainNode;
   buses: Record<BusName, GainNode>;
+  /** Input of the shared reverb (before its wet level). */
+  reverbIn: AudioNode;
 }
 
 /** Wet level of the shared reverb return. */
 const REVERB_WET = 0.12;
 /** How much of each bus feeds the reverb (× REVERB_WET). */
-const BUS_SEND: Record<BusName, number> = { synth: 1, sfx: 1.5, metronome: 0.25 };
-const BUS_GAIN: Record<BusName, number> = { synth: 0.9, sfx: 0.85, metronome: 0.9 };
+const BUS_SEND: Record<BusName, number> = { synth: 1, sfx: 1.5, metronome: 0.25, band: 0 };
+const BUS_GAIN: Record<BusName, number> = { synth: 0.9, sfx: 0.85, metronome: 0.9, band: 0.9 };
 
 let graph: Graph | null = null;
 let masterVolume = 0.85;
@@ -58,9 +64,14 @@ export function getAudioContext(): AudioContext {
   return ensureGraph().ctx;
 }
 
-/** Input node of a mixer bus (synth / sfx / metronome). */
+/** Input node of a mixer bus (synth / sfx / metronome / band). */
 export function getBus(name: BusName): AudioNode {
   return ensureGraph().buses[name];
+}
+
+/** Input of the shared room reverb, for sends (a band track's reverb level). */
+export function getReverbInput(): AudioNode {
+  return ensureGraph().reverbIn;
 }
 
 function ensureGraph(): Graph {
@@ -113,16 +124,19 @@ function ensureGraph(): Graph {
     const bus = ctx.createGain();
     bus.gain.value = BUS_GAIN[name];
     bus.connect(preComp);
-    const send = ctx.createGain();
-    send.gain.value = BUS_SEND[name];
-    bus.connect(send);
-    send.connect(convolver);
+    if (BUS_SEND[name] > 0) {
+      const send = ctx.createGain();
+      send.gain.value = BUS_SEND[name];
+      bus.connect(send);
+      send.connect(convolver);
+    }
     return bus;
   };
   const buses: Record<BusName, GainNode> = {
     synth: makeBus('synth'),
     sfx: makeBus('sfx'),
     metronome: makeBus('metronome'),
+    band: makeBus('band'),
   };
 
   ctx.addEventListener('statechange', () => {
@@ -135,7 +149,7 @@ function ensureGraph(): Graph {
     }
   });
 
-  graph = { ctx, preComp, compressor, master, buses };
+  graph = { ctx, preComp, compressor, master, buses, reverbIn: convolver };
   installGestureHooks();
   return graph;
 }

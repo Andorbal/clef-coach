@@ -288,16 +288,30 @@ describe('MIDI import: tracks and instruments', () => {
     track([M.name('Bass'), M.program(33, 2), M.note(0, 4 * Q, 40, 2)]),
   ]);
 
-  it('lists the pitched tracks, imports the first and leaves out drums', () => {
+  it('lists the pitched tracks, imports the first and keeps the others and the drums as the band', () => {
     const r = importMidi(bytes);
     const song = check(r);
     expect(r.parts).toEqual([{ id: '0', name: 'Melody', staves: 1 }, { id: '1', name: 'Bass', staves: 1 }]);
     expect(song.instrument).toBe('piano');
     expect(song.staves[0].voices).toEqual(['C5/h D5 |']);
+    expect(song.band).toEqual([
+      { name: 'Bass', program: 34, staves: [{ clef: 'bass8vb', voices: ['E2/w |'] }] },
+      // each hit lasts until the next one, at most a beat
+      { name: 'Drums', program: 1, drums: true, staves: [{ clef: 'bass', voices: ['kick/q snare r/h |'] }] },
+    ]);
+    expect(r.warnings[0]).toBe('Imported "Melody"; the other 2 tracks ("Bass" and "Drums") play as the band.');
+    expect(r.warnings.join(' ')).not.toMatch(/left out|choose others/);
+  });
+
+  it('leaves the other tracks and the drums out on request, exactly as before', () => {
+    const r = importMidi(bytes, { band: false });
+    expect(r.song.band).toBeUndefined();
+    expect(r.song.staves).toEqual(importMidi(bytes).song.staves);
     expect(r.warnings).toEqual(expect.arrayContaining([
       '2 drum notes (MIDI channel 10) were left out.',
       'Imported "Melody"; the file has 2 tracks – choose others to import them instead.',
     ]));
+    expect(importMidi(bytes, { tracks: [1], band: false }).song.band).toBeUndefined();
   });
 
   it('imports a chosen bass track on a bass 8vb staff', () => {
@@ -320,6 +334,75 @@ describe('MIDI import: tracks and instruments', () => {
     expect(song.instrument).toBe('ukulele');
     expect(song.staves[0].clef).toBe('treble');
     expect(() => importMidi(bytes, { tracks: [7] })).toThrow(/None of the requested tracks/);
+  });
+});
+
+describe('MIDI import: the band', () => {
+  const Q = 96;
+  const bar = 3 * Q;
+  // 3/4 with a quarter-note pickup in the melody; the band comes in on the downbeat
+  const bytes = smf(1, Q, [
+    track([M.name('Waltz'), M.tempo(120), M.time(3, 4), M.key(0)]),
+    track([M.name('Melody'), M.program(73), M.note(2 * Q, Q, 67), M.note(bar, 2 * Q, 72), M.note(bar + 2 * Q, Q, 74), M.note(2 * bar, bar, 76)]),
+    track([
+      M.name('Kit'),
+      M.program(32, 9), // the jazz kit
+      ...[0, 1, 2].flatMap(b => [M.note(bar + b * bar, 10, 36, 9), M.note(bar + b * bar + Q, 10, 38, 9), M.note(bar + b * bar + 2 * Q, 10, 38, 9)]),
+      ...Array.from({ length: 12 }, (_, i) => M.note(bar + (i * Q) / 2, 10, 42, 9)),
+    ]),
+    track([M.name('Bass'), M.program(33, 2), M.note(bar, bar, 36, 2), M.note(2 * bar, bar, 43, 2)]),
+    track([
+      M.name('Piano comp'),
+      M.program(0, 3),
+      ...[1, 2].flatMap(b => [M.note(b * bar, bar, 36, 3), M.chord(b * bar + Q, 2 * Q, [60, 64, 67], 3), M.chord(b * bar + Q, 2 * Q, [72, 76], 3)]),
+    ]),
+  ]);
+
+  it('keeps every other track with its sound, and the chosen part as it was', () => {
+    const r = importMidi(bytes, { tracks: [0] });
+    const song = check(r);
+    expect(song.pickup).toBe('q');
+    expect(song.staves).toEqual(importMidi(bytes, { tracks: [0], band: false }).song.staves);
+    expect(song.band?.map(p => [p.name, p.program, !!p.drums])).toEqual([['Bass', 34, false], ['Piano comp', 1, false], ['Kit', 33, true]]);
+    const [bass, comp, kit] = song.band!;
+    expect(bass.staves).toEqual([{ clef: 'bass8vb', voices: ['r/q | C2/h. | G2 |'] }]);
+    // a wide part playing chords gets two staves
+    expect(comp.staves.map(s => s.clef)).toEqual(['treble', 'bass']);
+    expect(comp.staves[0].voices).toEqual(['r/q | r [E4 G4 C5 E5]/h | r/q [E4 G4 C5 E5]/h |']);
+    expect(comp.staves[1].voices).toEqual(['r/q | r C4/h | r/q C4/h |', 'r/q | C2/h. | C2 |']);
+    expect(kit.staves[0].voices).toEqual(['r/q | [kick hat]/e hat [snare hat] hat [snare hat] hat | [kick hat] hat [snare hat] hat [snare hat] hat |']);
+    expect(r.warnings[0]).toBe('Imported "Melody"; the other 3 tracks ("Bass", "Piano comp" and "Kit") play as the band.');
+  });
+
+  it('says which band notes fall outside the imported part', () => {
+    // the bar of drums before the pickup has no place in the song
+    const r = importMidi(bytes, { tracks: [1] });
+    expect(check(r).instrument).toBe('bass');
+    expect(r.song.band?.map(p => p.name)).toEqual(['Melody', 'Piano comp', 'Kit']);
+    expect(r.warnings).toContain('Imported "Bass"; the other 3 tracks ("Melody", "Piano comp" and "Kit") play as the band.');
+    const early = importMidi(smf(1, Q, [
+      track([M.time(4, 4), M.key(0)]),
+      track([M.name('Lead'), M.note(4 * Q, 4 * Q, 72)]),
+      track([M.name('Drums'), M.note(0, 10, 49, 9), M.note(4 * Q, 10, 49, 9)]),
+    ]));
+    expect(check(early).band?.[0].staves[0].voices).toEqual(['crash/q r/h. |']);
+    expect(early.warnings).toContain("1 band note before the imported part's first bar or after its last was left out.");
+  });
+
+  it('survives writing the song out and reading it back', () => {
+    const { song } = importMidi(bytes, { tracks: [0] });
+    const again = parseSongDoc(songToDoc(song));
+    expect(again.warnings).toEqual([]);
+    expect(again.song.band).toEqual(song.band);
+  });
+
+  it('keeps at most 16 band parts, leaving out the emptiest', () => {
+    const others = Array.from({ length: 17 }, (_, i) => track([M.name(i === 5 ? 'Thin' : `Part ${i + 1}`), M.program(40 + (i % 8), i % 9), M.note(0, Q, 60 + i, i % 9), ...(i === 5 ? [] : [M.note(Q, Q, 60 + i, i % 9)])]));
+    const r = importMidi(smf(1, Q, [track([M.time(2, 4), M.key(0)]), track([M.name('Lead'), M.program(73), M.note(0, 2 * Q, 72)]), ...others]), { tracks: [0] });
+    check(r);
+    expect(r.song.band).toHaveLength(16);
+    expect(r.song.band?.map(p => p.name)).not.toContain('Thin');
+    expect(r.warnings).toContain('1 track ("Thin") was left out: a song keeps at most 16 band parts.');
   });
 });
 

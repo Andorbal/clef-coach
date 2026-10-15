@@ -2,7 +2,7 @@
  * clefsong — validate, convert and scan songs for Clef Coach.
  *
  *   clefsong validate song.json [more.json…]
- *   clefsong convert  score.musicxml|score.mxl|tune.mid|song.gp5|tab.txt [-o song.json] [--instrument piano] [--parts P1,P2]
+ *   clefsong convert  score.musicxml|score.mxl|tune.mid|song.gp5|tab.txt [-o song.json] [--instrument piano] [--parts P1,P2] [--no-band]
  *   clefsong scan     page1.jpg page2.jpg|music.pdf|tab.txt [-o song.json] [--instrument piano] [--title "…"] [--hints "…"] [--model claude-opus-5-5]
  *   clefsong prompt   [--instrument ukulele]      print the transcription prompt for any AI assistant
  *
@@ -23,7 +23,8 @@ const HELP = `clefsong — Clef Coach song tools
   convert <file> [-o out.json]     MusicXML (.musicxml/.xml/.mxl), MIDI (.mid), Guitar Pro (.gp3–.gp5, .gpx, .gp)
                                    or text tab (.txt/.tab) → Clef Coach song
           [--instrument <id>]      piano | guitar | ukulele | bass | mallets
-          [--parts <ids>]          MusicXML part ids / MIDI and Guitar Pro track numbers to keep (comma-separated)
+          [--parts <ids>]          MusicXML part ids / MIDI and Guitar Pro track numbers to learn (comma-separated)
+          [--no-band]              leave the other parts out (by default they, and the drums, play as the band)
   scan <images/pdf/txt…>           transcribe photos or a PDF of sheet music / tab, or text tab, with Claude
           [-o out.json]
           [--instrument <id>] [--title <t>] [--hints <text>] [--model <id>]
@@ -38,6 +39,8 @@ interface Args {
   out?: string;
   instrument?: InstrumentId;
   parts?: string[];
+  /** false: leave the parts not imported out instead of keeping them as the band. */
+  band?: boolean;
   title?: string;
   hints?: string;
   model?: string;
@@ -51,6 +54,7 @@ function parseArgs(argv: string[]): Args {
     if (v === '-o' || v === '--out') a.out = next();
     else if (v === '--instrument' || v === '-i') a.instrument = next() as InstrumentId;
     else if (v === '--parts') a.parts = next().split(',');
+    else if (v === '--no-band') a.band = false;
     else if (v === '--title') a.title = next();
     else if (v === '--hints') a.hints = next();
     else if (v === '--model') a.model = next();
@@ -64,8 +68,9 @@ function outName(input: string): string {
   return `${basename(input, extname(input))}.clefsong.json`;
 }
 
-function report(song: { title: string; instrument: string; staves: unknown[] }, warnings: string[], measures?: number) {
-  console.log(`✓ ${song.title} — ${song.instrument}, ${song.staves.length} ${song.staves.length > 1 ? 'staves' : 'staff'}${measures ? `, ${measures} bars` : ''}`);
+function report(song: { title: string; instrument: string; staves: unknown[]; band?: { name: string }[] }, warnings: string[], measures?: number) {
+  const band = song.band?.length ? `; band: ${song.band.map(p => p.name).join(', ')}` : '';
+  console.log(`✓ ${song.title} — ${song.instrument}, ${song.staves.length} ${song.staves.length > 1 ? 'staves' : 'staff'}${measures ? `, ${measures} bars` : ''}${band}`);
   for (const w of warnings) console.log(`  ⚠ ${w}`);
 }
 
@@ -88,7 +93,7 @@ async function validate(a: Args): Promise<number> {
 async function convert(a: Args): Promise<number> {
   const f = a.files[0];
   if (!f) throw new Error('convert: give a MusicXML, MIDI, Guitar Pro or text tab file');
-  const res = await importBytes(f, new Uint8Array(readFileSync(f)), { instrument: a.instrument, parts: a.parts });
+  const res = await importBytes(f, new Uint8Array(readFileSync(f)), { instrument: a.instrument, parts: a.parts, band: a.band });
   if (res.parts && res.parts.length > 1) console.log(`  parts in the file: ${res.parts.map(p => `${p.id}${p.name ? ` (${p.name})` : ''}`).join(', ')}  — choose with --parts`);
   const out = a.out ?? outName(f);
   writeFileSync(out, songToJson(res.song));

@@ -2,7 +2,8 @@ import { lazy, Suspense, useEffect, useRef } from 'react';
 import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import type { ComponentType } from 'react';
 import { hasAudioContext, setMasterVolume, unlockAudio } from './audio/context';
-import { synth } from './audio/synth';
+import { setSynthCacheBudget, synth } from './audio/synth';
+import { deviceCapability } from './platform';
 import { inputManager } from './audio/input/manager';
 import { micInput } from './audio/input/mic';
 import { setSfxEnabled, setSfxVolume, sfx } from './audio/sfx';
@@ -27,6 +28,7 @@ const MetronomeTool = lazy(() => import('./screens/MetronomeTool'));
 const ChordChart = lazy(() => import('./screens/ChordChart'));
 const Progress = lazy(() => import('./screens/Progress'));
 const Settings = lazy(() => import('./screens/Settings'));
+const SoundsSettings = lazy(() => import('./screens/SoundsSettings'));
 const InstrumentsPreview = lazy(() => import('./dev/InstrumentsPreview'));
 const NotationPreview = lazy(() => import('./dev/NotationPreview'));
 const IconPreview = lazy(() => import('./dev/IconPreview'));
@@ -81,6 +83,10 @@ function AudioSettingsSync() {
   useEffect(() => {
     setSfxEnabled(sfxOn !== false);
   }, [sfxOn]);
+  // sampled instruments chosen for this device (their banks open when first needed)
+  useEffect(() => {
+    if (device.sounds) void import('./audio/samples/apply').then(m => m.applySoundSettings(device.sounds));
+  }, [device.sounds]);
   // iOS/Safari: audio (and mic processing) can only start inside a user gesture
   useEffect(() => {
     const onGesture = () => {
@@ -101,6 +107,13 @@ function AudioSettingsSync() {
     };
   }, []);
   return null;
+}
+
+// rendered notes are kept for reuse: a band needs many more than one instrument, so
+// devices with memory to spare keep more of them
+{
+  const cap = deviceCapability();
+  setSynthCacheBudget((cap.low ? 64 : cap.memoryGB !== undefined && cap.memoryGB >= 8 ? 256 : 128) * 1024 * 1024);
 }
 
 const Fallback = () => <div className="route-loading" />;
@@ -147,6 +160,7 @@ export default function App() {
                         <Route path="/chords" element={<ChordChart />} />
                         <Route path="/progress" element={<Progress />} />
                         <Route path="/settings" element={<Settings />} />
+                        <Route path="/settings/sounds" element={<SoundsSettings />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                       </Routes>
                     </Suspense>

@@ -1,6 +1,8 @@
 import * as alphaTab from '@coderline/alphatab';
 import { describe, expect, it } from 'vitest';
 import { isSongArchive } from './bulk';
+import { parseSongDoc, songToDoc } from './format';
+import { gpDrumKey } from './guitarpro';
 import { importBytes, sniffKind } from './importers';
 
 alphaTab.Logger.logLevel = alphaTab.LogLevel.None;
@@ -70,10 +72,46 @@ r.1 | r.1 | 0.1.1`));
     expect(r.warnings).toContain('2 empty bars at the start were left out.');
   });
 
-  it('leaves out drum tracks', async () => {
+  it('plays drum tracks in the band, and leaves them out on request', async () => {
     const drums = String.raw`\track "Drums" \instrument percussion \staff {score} \articulation defaults "Kick (hit)".4 "Kick (hit)" "Kick (hit)" "Kick (hit)"`;
     await expect(importBytes('drums.gp', gp(`. ${drums}`))).rejects.toThrow(/only has drum tracks/);
-    const r = await importBytes('band.gp', gp(String.raw`. \track "Lead" \staff {tabs} 0.1.1 ${drums}`));
-    expect(r.warnings).toContain('1 drum track was left out.');
+    const bytes = gp(String.raw`. \track "Lead" \staff {tabs} 0.1.1 ${drums}`);
+    const r = await importBytes('band.gp', bytes);
+    expect(r.song.band).toEqual([{ name: 'Drums', program: 1, drums: true, staves: [{ clef: 'bass', voices: ['kick2/q kick2 kick2 kick2 |'] }] }]);
+    expect(r.parts?.map(p => p.name)).toEqual(['Lead']);
+    expect(r.warnings).toContain('Imported "Lead"; the other track ("Drums") plays as the band.');
+    const alone = await importBytes('band.gp', bytes, { band: false });
+    expect(alone.song.band).toBeUndefined();
+    expect(alone.song.staves).toEqual(r.song.staves);
+    expect(alone.warnings).toContain('1 drum track was left out.');
+  });
+
+  it('writes a drum track with drum names, and the other tracks with their sounds', async () => {
+    const r = await importBytes(
+      'groove.gp',
+      gp(String.raw`. \track "Lead" \staff {tabs} 0.1.2 2.1 | 3.1.1
+\track "Bass" \staff {tabs} \tuning g2 d2 a1 e1 \instrument 33
+0.3.1 | 0.4.1
+\track "Kit" \instrument percussion \staff {score} \articulation defaults
+("Kick (hit)" "Hi-Hat (closed)").8 "Hi-Hat (closed)" ("Snare (hit)" "Hi-Hat (closed)") "Hi-Hat (closed)" ("Kick (hit)" "Hi-Hat (closed)") "Hi-Hat (closed)" ("Snare (hit)" "Hi-Hat (closed)") "Hi-Hat (open)" | "Crash high (hit)".1`),
+    );
+    expect(r.song.staves[0].voices[0]).toBe('E4/h%1 F#4%1 | G4/w%1 |');
+    const [bass, kit] = r.song.band!;
+    expect(bass).toEqual({ name: 'Bass', program: 34, staves: [{ clef: 'bass8vb', voices: ['A1/w | E1 |'] }] });
+    expect(kit.drums).toBe(true);
+    expect(kit.staves[0].voices).toEqual(['[kick2 hat]/e hat [snare hat] hat [kick2 hat] hat [snare hat] open-hat | crash/q r/h. |']);
+    const again = parseSongDoc(songToDoc(r.song));
+    expect(again.song.band).toEqual(r.song.band);
+  });
+
+  it('finds the drum a percussion note plays', () => {
+    // the track's own articulations (Guitar Pro 6 and later) say which key each sounds
+    expect(gpDrumKey(1, [{ outputMidiNumber: 36 }, { outputMidiNumber: 42 }])).toBe(42);
+    // past them: Guitar Pro 7 articulation ids, which are the GM key up to 87 (and the fret in GP3–5)
+    expect(gpDrumKey(38, [])).toBe(38);
+    expect(gpDrumKey(91, [])).toBe(38); // snare rim shot
+    expect(gpDrumKey(92, [])).toBe(46); // half-open hi-hat
+    expect(gpDrumKey(-1, [])).toBeNull();
+    expect(gpDrumKey(200, [])).toBeNull();
   });
 });
