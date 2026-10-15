@@ -8,7 +8,9 @@
  * two or three detuned oscillators → a low-pass filter that follows the pitch (with a
  * little envelope for brass) → an amplitude envelope, plus a vibrato that comes in
  * after the attack, like a player's. Each note costs a handful of nodes, cheap enough
- * for a string section on a tablet.
+ * for a string section on a tablet — as long as the slow movements (vibrato, a filter's
+ * sweep) are worked out once per block rather than for every sample (see kRate), and
+ * the oscillators stop once the release is inaudible.
  */
 import { clamp } from '../dsp/util';
 
@@ -229,6 +231,23 @@ export interface LiveNote {
 const freq = (midi: number) => 440 * Math.pow(2, (midi - 69) / 12);
 
 /**
+ * Work a parameter out once per 128-sample block instead of per sample. A vibrato or a
+ * filter sweep moves far too slowly to tell the difference, and per sample an oscillator
+ * modulated through its detune works out a power of two for every sample (and a biquad
+ * its coefficients) — most of a string section's cost. Browsers without it ignore it.
+ */
+function kRate(p: AudioParam): void {
+  try {
+    p.automationRate = 'k-rate';
+  } catch {
+    /* a parameter whose rate is fixed */
+  }
+}
+
+/** Release time constants an oscillator keeps running for: −78 dB, well below hearing in a mix. */
+const TAIL = 3;
+
+/**
  * Play a note of a live patch for `duration` seconds from `when`, into `out`.
  * Velocity 0..1 sets level, attack and brightness.
  */
@@ -239,7 +258,7 @@ export function playLive(ctx: BaseAudioContext, patch: LivePatch, midi: number, 
   const start = Math.max(when, ctx.currentTime);
   const attack = Math.min(p.attack + (p.velAttack ?? 0) * (1 - vel), Math.max(0.005, duration * 0.8));
   const releaseAt = start + Math.max(duration, attack);
-  const end = releaseAt + p.release * 5;
+  const end = releaseAt + p.release * TAIL;
   const peak = p.level * (0.25 + 0.75 * Math.pow(vel, 1.3));
 
   const amp = ctx.createGain();
@@ -288,6 +307,7 @@ export function playLive(ctx: BaseAudioContext, patch: LivePatch, midi: number, 
     const bright = 0.7 + 0.6 * vel;
     const cutoff = clamp(f * p.filter.mult * bright, p.filter.min, p.filter.max);
     if (p.filter.env) {
+      kRate(lp.frequency);
       lp.frequency.setValueAtTime(clamp(cutoff * p.filter.env.from * bright, p.filter.min, 16000), start);
       lp.frequency.setTargetAtTime(cutoff, start, p.filter.env.time);
     } else lp.frequency.value = cutoff;
@@ -300,6 +320,7 @@ export function playLive(ctx: BaseAudioContext, patch: LivePatch, midi: number, 
     const lfo = ctx.createOscillator();
     lfo.frequency.value = p.vibrato.rate;
     vib = ctx.createGain();
+    kRate(vib.gain);
     vib.gain.setValueAtTime(0, start);
     vib.gain.linearRampToValueAtTime(0, start + p.vibrato.delay);
     vib.gain.linearRampToValueAtTime(p.vibrato.cents, start + p.vibrato.delay + 0.4);
@@ -315,7 +336,10 @@ export function playLive(ctx: BaseAudioContext, patch: LivePatch, midi: number, 
     else osc.type = o.type;
     osc.frequency.value = f * (o.ratio ?? 1);
     osc.detune.value = o.detune;
-    if (vib) vib.connect(osc.detune);
+    if (vib) {
+      kRate(osc.detune);
+      vib.connect(osc.detune);
+    }
     const g = ctx.createGain();
     g.gain.value = o.gain / total;
     osc.connect(g).connect(into);

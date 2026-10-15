@@ -11,6 +11,7 @@ import {
   xForTick,
   yForPitch,
 } from './render';
+import { scrollOffset, scrollPath, scrollView } from './scroll';
 import './notation.css';
 
 export type NoteState = 'active' | 'good' | 'bad' | 'done' | 'hint' | 'missed';
@@ -31,6 +32,12 @@ export interface NotationViewProps {
   focusId?: string;
   /** Tempo-mode playhead position in ticks (overrides focus for scrolling) */
   playheadTick?: number | null;
+  /**
+   * Tempo mode, the smooth way: the playhead moves by itself, reaching tick t at
+   * performance.now() = startMs + t × msPerTick. The browser animates the scrolling (on
+   * the compositor), so nothing re-renders per frame. Overrides playheadTick.
+   */
+  motion?: PlayheadMotion | null;
   showPlayhead?: boolean;
   fingering?: boolean;
   strings?: boolean;
@@ -49,6 +56,11 @@ export interface NotationViewProps {
   labelSpace?: boolean;
 }
 
+export interface PlayheadMotion {
+  startMs: number;
+  msPerTick: number;
+}
+
 let instanceCounter = 0;
 
 function NotationViewImpl(props: NotationViewProps) {
@@ -56,7 +68,8 @@ function NotationViewImpl(props: NotationViewProps) {
     score,
     states,
     focusId,
-    playheadTick,
+    playheadTick: tickProp,
+    motion,
     showPlayhead = true,
     fingering = false,
     strings = false,
@@ -76,6 +89,8 @@ function NotationViewImpl(props: NotationViewProps) {
   // reserve room under the staff when note names may be shown (so labels are never clipped)
   const labelRoom = labelSpace || noteNames !== 'none' ? 18 : 0;
   const wrapRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const playheadRef = useRef<HTMLDivElement>(null);
   const svgHostRef = useRef<HTMLDivElement>(null);
   const headerHostRef = useRef<HTMLDivElement>(null);
   const [result, setResult] = useState<RenderResult | null>(null);
@@ -164,6 +179,21 @@ function NotationViewImpl(props: NotationViewProps) {
     });
   }, [result, states]);
 
+  // Moving by itself: where the playhead is, a few times a second (for the clef header and
+  // ghost notes; the motion itself is the browser's).
+  const [motionTick, setMotionTick] = useState<number | null>(null);
+  useEffect(() => {
+    if (!motion) {
+      setMotionTick(null);
+      return;
+    }
+    const update = () => setMotionTick((performance.now() - motion.startMs) / motion.msPerTick);
+    update();
+    const timer = setInterval(update, 250);
+    return () => clearInterval(timer);
+  }, [motion]);
+  const playheadTick = motion ? (motionTick ?? 0) : tickProp;
+
   // ---- scaling ----
   const scale = useMemo(() => {
     if (!result || !box.h) return 1;
@@ -183,13 +213,8 @@ function NotationViewImpl(props: NotationViewProps) {
     return result.headerWidth;
   }, [result, focusId, playheadTick, totalTicks]);
 
-  const offset = useMemo(() => {
-    if (!result || layout !== 'scroll') return 0;
-    const anchor = Math.max(result.headerWidth * scale + 70, box.w * 0.32);
-    const contentW = (result.width - 600) * scale;
-    const maxOff = Math.max(0, contentW - box.w + 40);
-    return Math.max(0, Math.min(focusX * scale - anchor, maxOff + 200));
-  }, [result, layout, scale, box.w, focusX]);
+  const view = useMemo(() => (result && layout === 'scroll' ? scrollView(result, scale, box.w) : null), [result, layout, scale, box.w]);
+  const offset = view ? scrollOffset(view, focusX) : 0;
 
   // the fixed header shows the clef, key and time of the music passing under it
   const headerIndex = useMemo(() => {
@@ -243,9 +268,30 @@ function NotationViewImpl(props: NotationViewProps) {
     ? { top: result.staves[0].top - 18, bottom: result.staves[result.staves.length - 1].bottom + 18 }
     : { top: 0, bottom: 0 };
 
+  // Moving by itself: the music and the playhead follow keyframes (linear between the
+  // notes, as xForTick is) on the audio's clock. Re-rendering every frame to move them
+  // kept tablets warmer than the whole band's sound did.
+  useLayoutEffect(() => {
+    const content = contentRef.current;
+    if (!motion || !view || !result || typeof content?.animate !== 'function') return;
+    const from = Math.min(0, result.tickXs[0]?.[0] ?? 0);
+    const to = Math.max(from + 1, totalTicks);
+    const path = scrollPath(result, totalTicks, view, from, to);
+    const at = (tick: number) => (tick - from) / (to - from);
+    const timing: KeyframeAnimationOptions = { duration: (to - from) * motion.msPerTick, easing: 'linear', fill: 'both' };
+    const top = verticalPad + staffSpan.top * scale;
+    const anims = [content.animate(path.map(p => ({ offset: at(p.tick), transform: `translate3d(${centerPad - p.offset}px, ${verticalPad}px, 0)` })), timing)];
+    const head = playheadRef.current;
+    if (head) anims.push(head.animate(path.map(p => ({ offset: at(p.tick), transform: `translate3d(${centerPad - p.offset + (p.x - 14) * scale}px, ${top}px, 0)` })), timing));
+    // the same clock as performance.now(): tick `from` sounds at startMs + from × msPerTick
+    for (const a of anims) a.startTime = motion.startMs + from * motion.msPerTick;
+    return () => anims.forEach(a => a.cancel());
+  }, [motion, view, result, totalTicks, centerPad, verticalPad, scale, staffSpan.top]);
+
   return (
     <div ref={wrapRef} className={`notation ${layout === 'center' ? 'notation-center' : 'notation-scroll'} ${className ?? ''}`}>
       <div
+        ref={contentRef}
         className={`notation-content ${tempoMode ? 'no-ease' : ''}`}
         style={{
           transform: `translate3d(${centerPad - offset}px, ${verticalPad}px, 0)`,
@@ -296,6 +342,7 @@ function NotationViewImpl(props: NotationViewProps) {
         // Its own layer, moved only by transform: in tempo mode it holds still on
         // screen while the music scrolls under it, so nothing is repainted per frame.
         <div
+          ref={playheadRef}
           className={`playhead ${tempoMode ? 'no-ease' : ''}`}
           style={{
             transform: `translate3d(${centerPad - offset + (focusX - 14) * scale}px, ${verticalPad + staffSpan.top * scale}px, 0)`,

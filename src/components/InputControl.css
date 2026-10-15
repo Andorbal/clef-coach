@@ -42,7 +42,10 @@
   height: 100%;
   background: linear-gradient(90deg, var(--good), var(--gold));
   transform-origin: left;
-  transition: transform 0.08s linear;
+  /* Its own layer, so a new level repaints nothing (it sits in frosted headers), and no
+     transition: the level changes ~12 times a second, and easing each step kept the
+     screen redrawing 60 times a second for as long as the mic was on. */
+  will-change: transform;
 }
 
 .input-picker {
