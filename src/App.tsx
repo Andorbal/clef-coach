@@ -33,10 +33,11 @@ const InstrumentsPreview = lazy(() => import('./dev/InstrumentsPreview'));
 const NotationPreview = lazy(() => import('./dev/NotationPreview'));
 const IconPreview = lazy(() => import('./dev/IconPreview'));
 
-function RequireProfile({ children }: { children: React.ReactNode }) {
+/** `screen`: what it guards is a screen (see Screen); the Shell marks its own, inside it. */
+function RequireProfile({ children, screen = true }: { children: React.ReactNode; screen?: boolean }) {
   const has = useApp(s => !!s.data.activeProfileId && !!s.data.profiles[s.data.activeProfileId]);
   if (!has) return <Navigate to="/welcome" replace />;
-  return <>{children}</>;
+  return screen ? <Screen>{children}</Screen> : <>{children}</>;
 }
 
 /** Remount a screen whenever its URL changes (e.g. "next lesson" from a results screen). */
@@ -116,7 +117,33 @@ function AudioSettingsSync() {
   setSynthCacheBudget((cap.low ? 64 : cap.memoryGB !== undefined && cap.memoryGB >= 8 ? 256 : 128) * 1024 * 1024);
 }
 
-const Fallback = () => <div className="route-loading" />;
+/** While a screen's code downloads (the first visit to it): a thin bar along the top. */
+const Fallback = () => <div className="route-loading" role="progressbar" aria-label="Loading" />;
+
+/**
+ * A screen, taking down index.html's loading screen when it first shows. Its marker sits
+ * beside the screen, so it appears only with it: not with a first render that only
+ * redirects (to /welcome, say), nor while the screen's code is still downloading (whether
+ * Suspense shows its fallback or a navigation keeps the old screen up meanwhile).
+ */
+function Screen({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      {children}
+      <BootDone />
+    </>
+  );
+}
+
+function BootDone() {
+  useEffect(() => {
+    const boot = document.getElementById('boot');
+    if (!boot) return;
+    boot.classList.add('boot-done');
+    setTimeout(() => boot.remove(), 300);
+  }, []);
+  return null;
+}
 
 export default function App() {
   return (
@@ -132,7 +159,7 @@ export default function App() {
       <div className="app-root">
         <Suspense fallback={<Fallback />}>
           <Routes>
-            <Route path="/welcome" element={<Onboarding />} />
+            <Route path="/welcome" element={<Screen><Onboarding /></Screen>} />
             <Route path="/lesson/:trackId/:lessonId" element={<RequireProfile><Keyed C={LessonPlayer} /></RequireProfile>} />
             <Route path="/song/:songId" element={<RequireProfile><Keyed C={SongStudio} /></RequireProfile>} />
             <Route path="/studio/free" element={<RequireProfile><FreePlay /></RequireProfile>} />
@@ -141,28 +168,30 @@ export default function App() {
             <Route path="/studio/gym" element={<RequireProfile><Gym /></RequireProfile>} />
             <Route path="/studio/scales" element={<RequireProfile><Scales /></RequireProfile>} />
             <Route path="/studio/metronome" element={<RequireProfile><MetronomeTool /></RequireProfile>} />
-            <Route path="/dev/instruments" element={<InstrumentsPreview />} />
-            <Route path="/dev/notation" element={<NotationPreview />} />
-            <Route path="/dev/icon" element={<IconPreview />} />
+            <Route path="/dev/instruments" element={<Screen><InstrumentsPreview /></Screen>} />
+            <Route path="/dev/notation" element={<Screen><NotationPreview /></Screen>} />
+            <Route path="/dev/icon" element={<Screen><IconPreview /></Screen>} />
             <Route
               path="*"
               element={
-                <RequireProfile>
+                <RequireProfile screen={false}>
                   <Shell>
                     <Suspense fallback={<Fallback />}>
-                      <Routes>
-                        <Route path="/" element={<Home />} />
-                        <Route path="/learn" element={<Learn />} />
-                        <Route path="/track/:trackId" element={<Keyed C={TrackMap} />} />
-                        <Route path="/songs" element={<Songs />} />
-                        <Route path="/songs/import" element={<SongImport />} />
-                        <Route path="/studio" element={<Studio />} />
-                        <Route path="/chords" element={<ChordChart />} />
-                        <Route path="/progress" element={<Progress />} />
-                        <Route path="/settings" element={<Settings />} />
-                        <Route path="/settings/sounds" element={<SoundsSettings />} />
-                        <Route path="*" element={<Navigate to="/" replace />} />
-                      </Routes>
+                      <Screen>
+                        <Routes>
+                          <Route path="/" element={<Home />} />
+                          <Route path="/learn" element={<Learn />} />
+                          <Route path="/track/:trackId" element={<Keyed C={TrackMap} />} />
+                          <Route path="/songs" element={<Songs />} />
+                          <Route path="/songs/import" element={<SongImport />} />
+                          <Route path="/studio" element={<Studio />} />
+                          <Route path="/chords" element={<ChordChart />} />
+                          <Route path="/progress" element={<Progress />} />
+                          <Route path="/settings" element={<Settings />} />
+                          <Route path="/settings/sounds" element={<SoundsSettings />} />
+                          <Route path="*" element={<Navigate to="/" replace />} />
+                        </Routes>
+                      </Screen>
                     </Suspense>
                   </Shell>
                 </RequireProfile>

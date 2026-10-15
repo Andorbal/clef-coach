@@ -12,9 +12,146 @@
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <title>Clef Coach</title>
+    <!--
+      The loading screen, up while the app's code downloads and starts (before any of it
+      runs, so everything it needs is here). The app removes #boot once its first screen is
+      on show (App.tsx, Screen). It appears only after a moment, so a quick start from the
+      offline cache doesn't flash it.
+    -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #06070d;
+      }
+      .boot {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        padding: 24px;
+        background: #06070d;
+        color: #a4aac4;
+        font: 15px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif;
+        text-align: center;
+        opacity: 0;
+        animation: boot-in 0.4s ease-out 0.25s forwards;
+      }
+      .boot.boot-done {
+        pointer-events: none;
+        animation: boot-out 0.25s ease-in forwards;
+      }
+      .boot svg {
+        width: 64px;
+        height: 64px;
+      }
+      .boot p {
+        margin: 0;
+        max-width: 320px;
+      }
+      .boot-bar {
+        position: relative;
+        width: 168px;
+        height: 3px;
+        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.08);
+        overflow: hidden;
+      }
+      .boot-bar::before {
+        content: '';
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 40%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #e5a54b, #ffe2a8);
+        animation: boot-slide 1.3s ease-in-out infinite;
+      }
+      .boot-slow {
+        font-size: 13px;
+        color: #6c7294;
+        opacity: 0;
+        animation: boot-in 0.6s ease-out 12s forwards;
+      }
+      .boot-error {
+        display: none;
+        color: #eef0f8;
+      }
+      .boot-error a {
+        color: #f4c97a;
+      }
+      .boot.boot-failed {
+        opacity: 1;
+        animation: none;
+      }
+      .boot-failed .boot-bar,
+      .boot-failed .boot-label,
+      .boot-failed .boot-slow {
+        display: none;
+      }
+      .boot-failed .boot-error {
+        display: block;
+      }
+      @keyframes boot-in {
+        to {
+          opacity: 1;
+        }
+      }
+      @keyframes boot-out {
+        to {
+          opacity: 0;
+        }
+      }
+      @keyframes boot-slide {
+        from {
+          transform: translateX(-100%);
+        }
+        to {
+          transform: translateX(250%);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-bar::before {
+          animation-duration: 3s;
+        }
+      }
+    </style>
+    <script>
+      // A file that can't be fetched (offline on a first visit, a server hiccup): say so
+      // rather than loading for ever.
+      addEventListener(
+        'error',
+        function (e) {
+          var t = e.target;
+          var boot = document.getElementById('boot');
+          if (boot && t && (t.tagName === 'SCRIPT' || /modulepreload|stylesheet/.test(t.rel || ''))) boot.classList.add('boot-failed');
+        },
+        true,
+      );
+    </script>
   </head>
   <body>
     <div id="root"></div>
+    <div id="boot" class="boot" role="status">
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <defs>
+          <linearGradient id="boot-g" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#ffe2a8" />
+            <stop offset="1" stop-color="#e5a54b" />
+          </linearGradient>
+        </defs>
+        <rect width="64" height="64" rx="16" fill="#0b0e1b" />
+        <path d="M34 10c-6 4-8 10-6 17l6 22c1 4-1 7-5 7-3 0-5-2-5-4 0-3 3-4 5-3" fill="none" stroke="url(#boot-g)" stroke-width="3.5" stroke-linecap="round" />
+        <path d="M28 27c-7 3-11 8-10 14 1 5 6 8 12 7 6-1 9-6 7-11-1-4-5-6-9-4" fill="none" stroke="url(#boot-g)" stroke-width="3.5" stroke-linecap="round" />
+      </svg>
+      <div class="boot-bar"></div>
+      <p class="boot-label">Loading Clef Coach…</p>
+      <p class="boot-slow">Still loading. The first visit downloads the whole app; after that it opens straight away, even offline.</p>
+      <p class="boot-error">Clef Coach couldn’t load. Check your connection, then <a href="">try again</a>.</p>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
