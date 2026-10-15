@@ -5,6 +5,10 @@
  * exponentially decaying noise tail whose high frequencies die faster (a
  * time-varying low-pass), decorrelated between L and R for width. No sample
  * files needed and it renders in ~2 ms.
+ *
+ * A ConvolverNode's cost grows with the response's length, and it runs whenever
+ * anything plays, so the response can stop (`keep`) before the decay reaches
+ * −60 dB: the last stretch is far below the dry sound, and only costs CPU.
  */
 import { mulberry32 } from './util';
 
@@ -13,16 +17,22 @@ export interface ImpulseResponse {
   right: Float32Array<ArrayBuffer>;
 }
 
+/**
+ * `seconds` is the decay time (to −60 dB); `keep` how much of the response to return
+ * (default: all of it), faded out over its last 50 ms.
+ */
 export function generateImpulseResponse(
   sampleRate: number,
   seconds = 1.6,
   seed = 1234,
+  keep = seconds,
 ): ImpulseResponse {
-  const len = Math.max(1, Math.round(seconds * sampleRate));
+  const full = Math.max(1, Math.round(seconds * sampleRate));
+  const len = Math.max(1, Math.min(full, Math.round(keep * sampleRate)));
   const left = new Float32Array(len);
   const right = new Float32Array(len);
   const preDelay = Math.round(0.011 * sampleRate);
-  // −60 dB at the end of the response
+  // −60 dB after `seconds`
   const tau = seconds / Math.log(1000);
   const onset = Math.round(0.018 * sampleRate);
 
@@ -39,7 +49,7 @@ export function generateImpulseResponse(
       const t = (i - preDelay) / sampleRate;
       const env = Math.exp(-t / tau) * Math.min(1, (i - preDelay) / onset);
       // cutoff glides from ~9 kHz down to ~1.2 kHz → darker tail
-      const progress = (i - preDelay) / (len - preDelay);
+      const progress = (i - preDelay) / (full - preDelay);
       const fc = 9000 * Math.pow(1200 / 9000, Math.sqrt(progress));
       const a = Math.exp((-2 * Math.PI * fc) / sampleRate);
       const n = rand() * 2 - 1;

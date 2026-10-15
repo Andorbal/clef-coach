@@ -139,9 +139,11 @@
 }
 
 .activity-progress div {
+  width: 100%;
   height: 100%;
   background: var(--track-accent, var(--gold));
-  transition: width 0.4s var(--ease-out);
+  transform-origin: left;
+  transition: transform 0.4s var(--ease-out);
 }
 
 .stage-paper {
@@ -261,77 +263,95 @@
 }
 
 .beat-dot.on {
-  animation: beat-flash 0.45s ease-out both;
+  position: relative;
+  background: rgba(185, 120, 42, 0.55);
+  animation: beat-pop 0.45s ease-out both;
 }
 
 .beat-dot.down.on {
-  animation-name: beat-flash-down;
+  background: rgba(200, 90, 40, 0.6);
+  animation-name: beat-pop-down;
 }
 
-@keyframes beat-flash {
+/* the flash: a bright dot with its glow, fading out (opacity and scale only, so no repaints) */
+.beat-dot.on::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: #e5a54b;
+  box-shadow: 0 0 0 4px rgba(229, 165, 75, 0.35), 0 0 16px rgba(229, 165, 75, 0.9);
+  animation: beat-glow 0.45s ease-out both;
+}
+
+.beat-dot.down.on::after {
+  background: #e0602a;
+  box-shadow: 0 0 0 5px rgba(224, 96, 42, 0.3), 0 0 20px rgba(224, 96, 42, 0.9);
+}
+
+@keyframes beat-pop {
   0% {
-    background: #e5a54b;
-    box-shadow: 0 0 0 4px rgba(229, 165, 75, 0.35), 0 0 16px rgba(229, 165, 75, 0.9);
     transform: scale(1.35);
   }
   100% {
-    background: rgba(185, 120, 42, 0.55);
-    box-shadow: 0 0 0 0 rgba(229, 165, 75, 0);
     transform: scale(1);
   }
 }
 
-@keyframes beat-flash-down {
+@keyframes beat-pop-down {
   0% {
-    background: #e0602a;
-    box-shadow: 0 0 0 5px rgba(224, 96, 42, 0.3), 0 0 20px rgba(224, 96, 42, 0.9);
     transform: scale(1.4);
   }
   100% {
-    background: rgba(200, 90, 40, 0.6);
-    box-shadow: 0 0 0 0 rgba(224, 96, 42, 0);
     transform: scale(1);
   }
 }
 
-/* the playhead pulses with the beat (two names, so each beat restarts it) */
-.stage-paper[data-beat='a'] .playhead {
+@keyframes beat-glow {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* The playhead pulses with the beat (two names, so each beat restarts it): a brighter fill
+   over it fades out. Only its opacity animates, on a layer of its own, so a beat repaints
+   nothing (the music scrolls under it all the while). */
+.stage-paper .playhead::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: rgba(229, 165, 75, 0.31);
+  opacity: 0;
+  will-change: opacity;
+}
+
+.stage-paper[data-beat='a'] .playhead::after {
   animation: playhead-beat-a 0.4s ease-out;
 }
 
-.stage-paper[data-beat='b'] .playhead {
+.stage-paper[data-beat='b'] .playhead::after {
   animation: playhead-beat-b 0.4s ease-out;
 }
 
-.stage-paper[data-beat='a'][data-downbeat='1'] .playhead {
-  animation: playhead-down-a 0.45s ease-out;
-}
-
-.stage-paper[data-beat='b'][data-downbeat='1'] .playhead {
-  animation: playhead-down-b 0.45s ease-out;
+/* (after the beat rules: same specificity) */
+.stage-paper[data-downbeat='1'] .playhead::after {
+  background: rgba(224, 96, 42, 0.31);
+  animation-duration: 0.45s;
 }
 
 @keyframes playhead-beat-a {
   from {
-    background-color: rgba(229, 165, 75, 0.42);
+    opacity: 1;
   }
 }
 
 @keyframes playhead-beat-b {
   from {
-    background-color: rgba(229, 165, 75, 0.42);
-  }
-}
-
-@keyframes playhead-down-a {
-  from {
-    background-color: rgba(224, 96, 42, 0.42);
-  }
-}
-
-@keyframes playhead-down-b {
-  from {
-    background-color: rgba(224, 96, 42, 0.42);
+    opacity: 1;
   }
 }
 

@@ -122,7 +122,11 @@ npm run sounds             # fetch the sound banks the app hosts itself into pub
 SWEEP=1 npx playwright test sweep --project=ipad   # render every step of every lesson, fail on any error
 SHOTS=shots npx playwright test screens            # screenshot every screen into ./shots
 tools/readme-media.sh                              # re-record the README screenshots and GIFs (needs ffmpeg)
+BENCH=1 npx playwright test audio-bench --project=ipad                    # what the band costs the audio engine
+npm run build && BENCH=1 npx playwright test play-bench --project=ipad   # CPU and repaints while playing along
 ```
+
+How to read the benchmarks, and what has been measured so far: [docs/performance.md](docs/performance.md). Notes for working on the code, with Claude or without, are in `CLAUDE.md` at the root and in the main source folders (`src/audio`, `src/perform`, `src/engine`, `src/songs`, `src/curriculum`, `e2e`).
 
 Microphone and MIDI need a secure context: `localhost` or HTTPS.
 
