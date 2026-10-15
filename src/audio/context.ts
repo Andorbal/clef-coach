@@ -4,11 +4,11 @@
  *   synth ─┐                         ┌──────────────── dry ─────────────────┐
  *   sfx   ─┤                         │                                      │
  *   metro ─┼─ bus gains ─────────────┤                                      ├─ compressor ─ master ─ out
- *   band  ─┘        └─ per-bus send ─┴─ Convolver (procedural 1.6 s room) ─┘
+ *   band  ─┘        └─ per-bus send ─┴─ Convolver (procedural 1.6 s room*) ─┘
  *                                       → high-pass → wet (0.12)
  *
  * The band bus has no send of its own: each band track sends to the reverb at its
- * own level (see getReverbInput).
+ * own level (see getReverbInput). *A quarter-second room on iOS (see room()).
  *
  * Nothing here touches the DOM at import time; the context is created lazily
  * on first use. On iOS/iPadOS the context starts "suspended" and must be
@@ -16,6 +16,7 @@
  * handler (e.g. the app's "Start" button). As a safety net, the first
  * pointer/key gesture after any suspension/interruption also tries to resume.
  */
+import { isIOS } from '../platform';
 import { generateImpulseResponse } from './dsp/reverb';
 
 export type BusName = 'synth' | 'sfx' | 'metronome' | 'band';
@@ -32,8 +33,26 @@ interface Graph {
 
 /** Wet level of the shared reverb return. */
 const REVERB_WET = 0.12;
-/** Seconds of the reverb's response kept (its decay is 1.6 s). */
+/** Decay of the room (s). */
+const ROOM_SECONDS = 1.6;
+/** Seconds of the reverb's response kept (its decay is ROOM_SECONDS). */
 const REVERB_KEEP = 1.1;
+/** Frames of an impulse response that WebKit (and Chromium) convolve on the audio thread itself. */
+const REALTIME_CONVOLVE_FRAMES = 8192 + 4096;
+
+/**
+ * The room's decay and how much of it is kept (s). iPhone and iPad browsers (all WebKit)
+ * play Web Audio through the smallest buffers there are and ignore requests for bigger
+ * ones, so the audio has very little slack. A long convolution does most of its work on a
+ * helper thread, and when that thread falls behind on a busy device everything going
+ * through the room crackles. There the room is short enough to be convolved on the audio
+ * thread alone: smaller, but steady.
+ */
+function room(sampleRate: number): { seconds: number; keep: number } {
+  if (!isIOS()) return { seconds: ROOM_SECONDS, keep: REVERB_KEEP };
+  const seconds = Math.min(0.25, REALTIME_CONVOLVE_FRAMES / sampleRate);
+  return { seconds, keep: seconds };
+}
 /** How much of each bus feeds the reverb (× REVERB_WET). */
 const BUS_SEND: Record<BusName, number> = { synth: 1, sfx: 1.5, metronome: 0.25, band: 0 };
 const BUS_GAIN: Record<BusName, number> = { synth: 0.9, sfx: 0.85, metronome: 0.9, band: 0.9 };
@@ -103,9 +122,11 @@ function ensureGraph(): Graph {
 
   // Procedural reverb: a 1.6 s room, cut where its tail is ~60 dB under the dry sound
   // (wet level and all). A convolver works whenever anything plays; that takes ~15% off it.
+  // A quarter-second room on iOS (see room()).
   const convolver = ctx.createConvolver();
   try {
-    const ir = generateImpulseResponse(ctx.sampleRate, 1.6, 1234, REVERB_KEEP);
+    const { seconds, keep } = room(ctx.sampleRate);
+    const ir = generateImpulseResponse(ctx.sampleRate, seconds, 1234, keep);
     const irBuf = ctx.createBuffer(2, ir.left.length, ctx.sampleRate);
     irBuf.getChannelData(0).set(ir.left);
     irBuf.getChannelData(1).set(ir.right);

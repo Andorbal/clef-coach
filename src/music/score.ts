@@ -54,6 +54,11 @@ export interface NoteEl {
   ties?: boolean[];
   /** Per pitch: continues a tie from the previous note (set from the previous note's `ties`). */
   held?: boolean[];
+  /**
+   * For display: the hand moves to a new position to play this note, 1 up (towards higher
+   * notes) or -1 down. Worked out from the fingering (see markHandShifts), not stored.
+   */
+  shift?: 1 | -1;
 }
 
 /** Does this note tie its pitch at index `i` on (see NoteEl.ties)? */

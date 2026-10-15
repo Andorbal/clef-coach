@@ -28,6 +28,7 @@ There's no account and no server. Progress lives on your device, and you can exp
 - **Fingering and sticking everywhere**
   - Standard scale fingerings, and five-finger positions that grow into thumb-under crossings.
   - Dynamic-programming engines handle everything else: piano fingers; left-hand fingers and circled string numbers for guitar, ukulele (in any tuning) and bass (one finger per fret, or Simandl low on the neck); mallet sticking for two mallets (L/R) or four (1–4), avoiding crossings and double stickings.
+  - A small arrow beside a finger number says the hand moves to a new position for that note (→ up, ← down), so a shift never catches you out.
 - **Hands together.** Accompaniment patterns progress through drone, roots, blocked chords, waltz, broken chords, Alberti bass, parallel and contrary motion, then independent counter-melodies. When you practise one hand of a piece, the app plays the other.
 - **Smart Review** uses spaced repetition on the notes, frets and chords you find hardest.
 - **Songs, and a place to learn them.** A library of public-domain classics and original pieces for every instrument, and a **Song Studio** for learning any song:

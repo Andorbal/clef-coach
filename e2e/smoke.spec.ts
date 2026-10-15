@@ -13,7 +13,9 @@ test('onboarding, first lesson, progress saved', async ({ page }) => {
   await expect(page.locator('.results')).toHaveCount(0);
   await solveLesson(page);
   await expect(page.locator('.results-title')).toBeVisible();
-  await page.goto('/#/');
+  // straight back to the home screen from the results
+  await page.locator('.results-actions').getByRole('button', { name: /Home/ }).click();
+  await expect(page).toHaveURL(/#\/$/);
   await expect(page.getByText(/XP/).first()).toBeVisible();
   const stored = await page.evaluate(() => localStorage.getItem('clefcoach.data.v1'));
   expect(stored).toContain('pt1-2');

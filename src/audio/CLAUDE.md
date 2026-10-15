@@ -14,12 +14,21 @@ band  ─┘      └─ per-bus send ─┴─ Convolver (1.6 s room, 1.1 s kep
                                     → high-pass 180 Hz → wet 0.12
 ```
 
+(On iOS the room is 0.25 s, see below.)
+
 - **Buses:** `getBus('synth' | 'sfx' | 'metronome' | 'band')`. The band bus has no send of its
   own: each band track sends to `getReverbInput()` at its own level (the mixer's reverb
   knob).
 - **The reverb is the biggest fixed audio cost.** A ConvolverNode works whenever anything
   plays. Its impulse is procedural (`dsp/reverb.ts`), cut at 1.1 s where the tail is ~60 dB
   below the dry sound. Its cost has a large fixed part, so shortening it further gains little.
+- **On iOS the room is 0.25 s** (`room()` in context.ts), and that's not for CPU. WebKit
+  plays Web Audio through 128-frame buffers whatever the page asks for. Live, a convolver
+  does the part of its response after the first 12288 frames on a helper thread; when that
+  thread falls behind on a busy iPad, everything through the room crackles (reported on an
+  iPad: the band and the end-of-lesson sounds). A response within 12288 frames is convolved
+  on the audio thread alone. Playwright's `ipad` project identifies as an iPad, so it gets
+  this room too (`audio-bench` included). Don't lengthen it there without a real iPad.
 - **iOS:** `unlockAudio()` must run inside a user gesture. The first pointer/key after any
   suspension also retries. `setRecordingSession()` switches `navigator.audioSession` between
   playback and play-and-record (while the mic is open).

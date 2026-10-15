@@ -267,6 +267,7 @@ export default function LessonPlayer() {
                 summary={summary}
                 onRetry={retry}
                 onBack={quit}
+                onHome={() => navigate('/')}
                 onNext={next => navigate(next, { replace: true })}
                 endlessRound={lessonId === 'endless' ? endlessRound : undefined}
               />

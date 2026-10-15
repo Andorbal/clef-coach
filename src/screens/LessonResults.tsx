@@ -1,5 +1,5 @@
 import { animate, motion } from 'framer-motion';
-import { ArrowRight, Award, Clock, Flame, Music2, RotateCcw, Sparkles, Target, Zap } from 'lucide-react';
+import { ArrowRight, Award, Clock, Flame, Home, Music2, RotateCcw, Sparkles, Target, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { ProgressRing, Sparks, Stars } from '../components/ui';
 import { allLessons } from '../curriculum';
@@ -34,6 +34,7 @@ export function LessonResults({
   summary,
   onRetry,
   onBack,
+  onHome,
   onNext,
   endlessRound,
 }: {
@@ -42,7 +43,9 @@ export function LessonResults({
   lessonRefIndex?: number;
   summary: LessonSummary;
   onRetry: () => void;
+  /** Back to the track's path (or home, for review and endless practice). */
   onBack: () => void;
+  onHome: () => void;
   onNext: (path: string) => void;
   endlessRound?: number;
 }) {
@@ -79,94 +82,102 @@ export function LessonResults({
   void allLessons;
 
   return (
-    <div className="results">
-      <div className="results-hero">
-        <Sparks active={summary.passed} />
-        <motion.div className="results-ring" initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 200, damping: 18 }}>
-          <ProgressRing value={summary.accuracy} size={168} stroke={10} color={summary.passed ? 'var(--gold)' : 'var(--bad)'}>
-            <div className="results-pct">
-              <CountUp to={pct} />
-              <small>%</small>
-              <span className="faint">accuracy</span>
-            </div>
-          </ProgressRing>
-        </motion.div>
-        <Stars value={summary.stars} size={34} animate />
-        <motion.h1 className="display results-title" initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }}>
-          {headline}
-        </motion.h1>
-        <p className="dim results-sub">{sub}</p>
-      </div>
+    <>
+      <div className="results">
+        <div className="results-hero">
+          <Sparks active={summary.passed} />
+          <motion.div className="results-ring" initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 200, damping: 18 }}>
+            <ProgressRing value={summary.accuracy} size={168} stroke={10} color={summary.passed ? 'var(--gold)' : 'var(--bad)'}>
+              <div className="results-pct">
+                <CountUp to={pct} />
+                <small>%</small>
+                <span className="faint">accuracy</span>
+              </div>
+            </ProgressRing>
+          </motion.div>
+          <Stars value={summary.stars} size={34} animate />
+          <motion.h1 className="display results-title" initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }}>
+            {headline}
+          </motion.h1>
+          <p className="dim results-sub">{sub}</p>
+        </div>
 
-      <motion.div className="results-stats" initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.45 }}>
-        <div className="stat card">
-          <Zap size={18} className="stat-icon gold" />
-          <strong>
-            <CountUp to={summary.xp} prefix="+" />
-          </strong>
-          <span className="faint">XP</span>
-        </div>
-        <div className="stat card">
-          <Music2 size={18} className="stat-icon" />
-          <strong className="tabular">{summary.notes}</strong>
-          <span className="faint">notes</span>
-        </div>
-        <div className="stat card">
-          <Clock size={18} className="stat-icon" />
-          <strong className="tabular">{fmtTime(summary.ms)}</strong>
-          <span className="faint">time</span>
-        </div>
-        {summary.avgMs !== undefined && (
+        <motion.div className="results-stats" initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.45 }}>
           <div className="stat card">
-            <Target size={18} className="stat-icon" />
-            <strong className="tabular">{(summary.avgMs / 1000).toFixed(1)}s</strong>
-            <span className="faint">per note</span>
+            <Zap size={18} className="stat-icon gold" />
+            <strong>
+              <CountUp to={summary.xp} prefix="+" />
+            </strong>
+            <span className="faint">XP</span>
           </div>
-        )}
-      </motion.div>
+          <div className="stat card">
+            <Music2 size={18} className="stat-icon" />
+            <strong className="tabular">{summary.notes}</strong>
+            <span className="faint">notes</span>
+          </div>
+          <div className="stat card">
+            <Clock size={18} className="stat-icon" />
+            <strong className="tabular">{fmtTime(summary.ms)}</strong>
+            <span className="faint">time</span>
+          </div>
+          {summary.avgMs !== undefined && (
+            <div className="stat card">
+              <Target size={18} className="stat-icon" />
+              <strong className="tabular">{(summary.avgMs / 1000).toFixed(1)}s</strong>
+              <span className="faint">per note</span>
+            </div>
+          )}
+        </motion.div>
 
-      <div className="results-feed">
-        {report?.streakExtended && (
-          <motion.div className="feed-item card" initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.7 }}>
-            <Flame className="feed-icon flame" />
-            <div>
-              <strong>{report.streak}-day streak</strong>
-              <span className="faint">{report.streak === 1 ? 'A new streak begins. See you tomorrow.' : 'You showed up again. That’s how it’s done.'}</span>
-            </div>
-          </motion.div>
-        )}
-        {report?.goalReached && (
-          <motion.div className="feed-item card" initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.8 }}>
-            <Target className="feed-icon gold" />
-            <div>
-              <strong>Daily goal reached</strong>
-              <span className="faint">{profile?.settings.dailyGoalXp} XP today.</span>
-            </div>
-          </motion.div>
-        )}
-        {report?.levelUp && (
-          <motion.div className="feed-item card levelup" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.9, type: 'spring' }}>
-            <Sparkles className="feed-icon gold" />
-            <div>
-              <strong>Level {report.levelUp}</strong>
-              <span className="faint">
-                {lvl.into}/{lvl.span} XP to level {lvl.level + 1}
-              </span>
-            </div>
-          </motion.div>
-        )}
-        {report?.achievements.map((a, i) => (
-          <motion.div key={a.id} className="feed-item card achievement" initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 1 + i * 0.12 }}>
-            <Award className="feed-icon gold" />
-            <div>
-              <strong>{a.title}</strong>
-              <span className="faint">{a.description}</span>
-            </div>
-          </motion.div>
-        ))}
+        <div className="results-feed">
+          {report?.streakExtended && (
+            <motion.div className="feed-item card" initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.7 }}>
+              <Flame className="feed-icon flame" />
+              <div>
+                <strong>{report.streak}-day streak</strong>
+                <span className="faint">{report.streak === 1 ? 'A new streak begins. See you tomorrow.' : 'You showed up again. That’s how it’s done.'}</span>
+              </div>
+            </motion.div>
+          )}
+          {report?.goalReached && (
+            <motion.div className="feed-item card" initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.8 }}>
+              <Target className="feed-icon gold" />
+              <div>
+                <strong>Daily goal reached</strong>
+                <span className="faint">{profile?.settings.dailyGoalXp} XP today.</span>
+              </div>
+            </motion.div>
+          )}
+          {report?.levelUp && (
+            <motion.div className="feed-item card levelup" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.9, type: 'spring' }}>
+              <Sparkles className="feed-icon gold" />
+              <div>
+                <strong>Level {report.levelUp}</strong>
+                <span className="faint">
+                  {lvl.into}/{lvl.span} XP to level {lvl.level + 1}
+                </span>
+              </div>
+            </motion.div>
+          )}
+          {report?.achievements.map((a, i) => (
+            <motion.div key={a.id} className="feed-item card achievement" initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 1 + i * 0.12 }}>
+              <Award className="feed-icon gold" />
+              <div>
+                <strong>{a.title}</strong>
+                <span className="faint">{a.description}</span>
+              </div>
+            </motion.div>
+          ))}
+        </div>
       </div>
 
       <div className="results-actions">
+        {/* review and endless practice: "Done" goes home already */}
+        {!(isGenerated && !(summary.passed && nextPath)) && (
+          <button className="btn btn-lg" onClick={onHome}>
+            <Home size={18} /> Home
+          </button>
+        )}
         <button className="btn btn-lg" onClick={onRetry}>
           <RotateCcw size={18} /> {summary.passed ? 'Play again' : 'Try again'}
         </button>
@@ -180,6 +191,6 @@ export function LessonResults({
           </button>
         )}
       </div>
-    </div>
+    </>
   );
 }

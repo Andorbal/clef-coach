@@ -107,6 +107,17 @@ practising")
 - **Reverb:** the convolver keeps 1.1 s of its 1.6 s room (the rest is ~60 dB under the dry
   sound). That's ~15% off the reverb, which has a large fixed cost whatever its length.
 
+**iOS room** (commit "Hand-shift arrows, a Home button after lessons, a steadier room on iPad")
+
+- On iPhone and iPad the room is 0.25 s, short enough for the convolver to do all its work
+  on the audio thread (live, the part after 12288 frames runs on a helper thread, which can
+  fall behind on a busy iPad and crackle). That was the reason, not CPU, but it costs less
+  too: `audio-bench`, song band with built-in sounds, median of 5: 3972 → 3549 CPU ms
+  (−11%, same machine; the master chain alone: no change). Loudness fingerprint: −0.03 dB
+  overall, 90% of windows within 0.1 dB.
+- The `ipad` Playwright project identifies as an iPad, so `audio-bench` measures this
+  room from now on. Numbers from before this change aren't comparable for the reverb.
+
 ## Rules of thumb
 
 - A tempo-mode frame should paint nothing. Move things with transforms or Web Animations,
