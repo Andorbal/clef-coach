@@ -1,4 +1,8 @@
+import type { BandStyle } from '../music/band';
 import type { BassStrings, MalletVariant, UkuleleTuning } from '../music/instruments';
+import type { BandSource } from '../perform/arranger';
+import type { BandMix } from '../perform/performer';
+import type { SoundChoice, SoundSettings } from '../perform/sinks';
 import type { NoteNaming } from '../music/pitch';
 import type { SongDef } from '../music/parse';
 
@@ -179,6 +183,22 @@ export interface DeviceSettings {
   /** Extra latency compensation for tempo exercises (ms) */
   latencyMs: number;
   installPromptDismissed: boolean;
+  /** Band settings per song (style, mix): device-specific, like the sounds they use. */
+  bands?: Record<string, SongBandPrefs>;
+  /** Sound banks in use: the band's General MIDI sounds, your instrument's sound, memory. */
+  sounds?: SoundSettings;
+}
+
+/** How a song's band is set up on this device. */
+export interface SongBandPrefs {
+  /** The song's own band parts, the arranger's, or both. */
+  source?: BandSource;
+  style?: BandStyle;
+  mix?: BandMix;
+  /** Play with the band in in-time practice. */
+  on?: boolean;
+  /** Sound per track id, when not the built-in one. */
+  sounds?: Record<string, SoundChoice>;
 }
 
 export const DEFAULT_SETTINGS: ProfileSettings = {

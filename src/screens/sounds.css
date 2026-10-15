@@ -1,0 +1,172 @@
+.sounds-page {
+  position: relative;
+}
+
+.sounds-back {
+  margin-bottom: 8px;
+}
+
+.sounds-head {
+  margin-bottom: 14px;
+}
+
+.sounds-head h1 {
+  font-size: clamp(28px, 4vw, 38px);
+  margin-bottom: 6px;
+}
+
+.sound-notice {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-dim);
+}
+
+.sound-notice svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--teal);
+}
+
+.sound-notice p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.sound-notice.warn {
+  border-color: rgba(244, 201, 122, 0.45);
+  background: rgba(244, 201, 122, 0.08);
+}
+
+.sound-notice.warn svg {
+  color: var(--gold);
+}
+
+.set-title svg {
+  vertical-align: -2px;
+  margin-right: 6px;
+  color: var(--gold);
+}
+
+.set-section.dropping {
+  outline: 2px dashed var(--gold);
+  outline-offset: 4px;
+}
+
+.bank-list,
+.catalog {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bank-item,
+.catalog-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.bank-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: center;
+  font-size: 0.82rem;
+  margin-top: 4px;
+}
+
+.bank-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  color: var(--text-dim);
+  vertical-align: 1px;
+}
+
+.bank-badge.good {
+  border-color: rgba(63, 220, 154, 0.5);
+  color: var(--good);
+}
+
+.bank-badge.warn {
+  border-color: rgba(244, 201, 122, 0.5);
+  color: var(--gold);
+}
+
+.bank-credit {
+  font-size: 0.8rem;
+  margin-top: 4px;
+}
+
+.bank-credit a {
+  color: var(--text-dim);
+}
+
+.catalog-blurb {
+  margin: 6px 0 0;
+  font-size: 0.9rem;
+}
+
+.bank-add {
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.bank-add .faint {
+  font-size: 0.85rem;
+}
+
+.bank-error {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  color: var(--bad);
+}
+
+.dl-progress {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.82rem;
+}
+
+.dl-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.dl-bar > div {
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold-2), var(--gold));
+  transition: width 0.2s;
+}
+
+.bank-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  font-size: 0.82rem;
+}

@@ -32,6 +32,7 @@
  *
  * Example:  E4/q@3 E4 F4@4 G4@5 | G4 F4 E4 D4 | C4/h. r/q |
  */
+import type { BandPartDef, BandStyle } from './band';
 import type { InstrumentId } from './instruments';
 import { type KeySig, keyName, parseKey } from './keys';
 import { parsePitch, type Pitch, pitchToString } from './pitch';
@@ -433,6 +434,10 @@ export interface SongDef {
   sections?: SongSection[];
   /** Lyrics, one string per verse: syllables separated by spaces, "-" joins syllables of a word. */
   lyrics?: string[];
+  /** Accompaniment parts (bass, drums, comp…) for playing with a band; see src/music/band.ts. */
+  band?: BandPartDef[];
+  /** Feel for an automatic accompaniment when the song has no band parts (or not all of them). */
+  style?: BandStyle;
 }
 
 function pickupToTicks(p?: string): number {

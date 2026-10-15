@@ -13,10 +13,13 @@
  *   - piano: two tracks become right / left hand, one track is split around middle C
  *     with smoothing so a melody doesn't jump between staves; other instruments get
  *     one staff in their clef,
- *   - up to two voices per staff; chords from notes that start and end together.
+ *   - up to two voices per staff; chords from notes that start and end together,
+ *   - the tracks not chosen, and the drums (channel 10), become the song's band parts.
  *
  * Fingering, spelling intent, lyrics and chord symbols don't exist in MIDI.
  */
+import { type BandPartDef, bandClef } from '../music/band';
+import { clampProgram, gmFamily, pitchesToDrumWords } from '../music/gm';
 import { type InstrumentId, familyOf, instrumentDef } from '../music/instruments';
 import { type KeySig, keyName } from '../music/keys';
 import type { SongDef, SongStaffDef } from '../music/parse';
@@ -31,16 +34,21 @@ import {
   type TimedNote,
   ImportError,
   Warnings,
+  bandNote,
   buildVoice,
   cleanTempo,
+  drumVoice,
   estimateKey,
   guessInstrument,
+  layoutEnd,
+  limitBand,
   makeLayout,
   makeQuantizer,
   measureAt,
   median,
   pickupToken,
   plural,
+  programFromName,
   spellInKey,
   writeChordLine,
   writeVoice,
@@ -61,6 +69,8 @@ export interface MidiOptions {
   quantize?: 's' | 'e' | 't3';
   /** Title to use when the file has none (e.g. the file name). */
   title?: string;
+  /** Keep the tracks not imported, and the drums, as the song's band parts (default true). */
+  band?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -380,12 +390,20 @@ export function importMidi(bytes: Uint8Array, opts: MidiOptions = {}): ImportRes
   if (file.format === 2) w.add('This is a type 2 MIDI file (independent patterns); its tracks were read as if they play together.');
   if (file.smpte) w.add('This MIDI file counts time in frames; beats were worked out from the opening tempo.');
 
-  // ---- tracks with notes (a type 0 file is split by channel); drums are left out
+  // ---- tracks with notes (a type 0 file is split by channel); drums go to the band
+  const keepBand = opts.band !== false;
   const logical: LogicalTrack[] = [];
+  const drumTracks: LogicalTrack[] = [];
   let drumNotes = 0;
   file.tracks.forEach((t, ti) => {
     const pitched = t.notes.filter(n => n.channel !== 9);
     drumNotes += t.notes.length - pitched.length;
+    if (t.notes.length > pitched.length) {
+      // a type 0 file's only track is named after the song
+      const name = file.format !== 0 && t.name && !GENERIC_NAME.test(t.name) ? t.name : 'Drums';
+      const kit = t.programs.get(9);
+      drumTracks.push({ name, program: kit !== undefined ? kit + 1 : 1, notes: t.notes.filter(n => n.channel === 9) });
+    }
     const channels = [...new Set(pitched.map(n => n.channel))].sort((a, b) => a - b);
     const split = file.format === 0 && channels.length > 1 ? channels.map(ch => pitched.filter(n => n.channel === ch)) : [pitched];
     split.forEach(notes => {
@@ -398,8 +416,8 @@ export function importMidi(bytes: Uint8Array, opts: MidiOptions = {}): ImportRes
       logical.push({ name, program: prog !== undefined ? prog + 1 : undefined, notes });
     });
   });
-  if (drumNotes) w.add(`${plural(drumNotes, 'drum note')} (MIDI channel 10) ${drumNotes > 1 ? 'were' : 'was'} left out.`);
-  if (!logical.length) throw new ImportError('This MIDI file has no notes to import.');
+  if (drumNotes && !keepBand) w.add(`${plural(drumNotes, 'drum note')} (MIDI channel 10) ${drumNotes > 1 ? 'were' : 'was'} left out.`);
+  if (!logical.length) throw new ImportError(drumNotes && keepBand ? 'This MIDI file only has drums; Clef Coach needs pitched notes.' : 'This MIDI file has no notes to import.');
   const parts: ImportPart[] = logical.map((t, i) => ({ id: String(i), name: t.name, staves: 1 }));
 
   // ---- which tracks, which instrument
@@ -419,11 +437,14 @@ export function importMidi(bytes: Uint8Array, opts: MidiOptions = {}): ImportRes
     const target = opts.instrument ?? guessOf(logical[0]);
     const keys = logical.flatMap((t, i) => (pianoish(t) ? [i] : []));
     chosen = (target === null || target === 'piano' || target === 'mallets') && keys.length >= 2 ? keys : [0];
-    if (logical.length > chosen.length) {
+    if (logical.length > chosen.length && !keepBand) {
       const names = chosen.length > 2 ? `${chosen.length} keyboard tracks` : chosen.map(i => `"${logical[i].name}"`).join(' and ');
       w.add(`Imported ${names}; the file has ${plural(logical.length, 'track')} – choose others to import them instead.`);
     }
   }
+  const importedAs = chosen.length > 2 ? `${chosen.length} ${opts.tracks?.length ? '' : 'keyboard '}tracks` : chosen.map(i => `"${logical[i].name}"`).join(' and ');
+  // the note about the band goes here, once the band is known
+  const bandNoteAt = w.list.length;
   const tracks = chosen.map(i => logical[i]);
   const instrument: InstrumentId = opts.instrument ?? guessOf(tracks[0]) ?? 'piano';
 
@@ -469,9 +490,14 @@ export function importMidi(bytes: Uint8Array, opts: MidiOptions = {}): ImportRes
   const spec: GridSpec = opts.quantize === 'e' ? { binary: 24, triplet: 0 } : opts.quantize === 's' ? { binary: 12, triplet: 0 } : { binary: 12, triplet: 16 };
   let layout: Layout = makeLayout(bars.map(b => ({ len: b.len, time: b.time, key: { fifths: 0, mode: 'major' } })));
   const points = allRaw.flatMap(n => [{ t: n.start, w: 1 }, { t: n.end, w: 0.25 }]);
-  let q = makeQuantizer(layout, points, spec);
+  // the bars as the file has them (before empty ones and a lead-in are cut): band notes are quantised on them too
+  const fileBars = layout;
   // triplets only when a fair share of the busy beats clearly sit on triplet positions
-  if (!opts.quantize && q.tripletBeats < Math.max(1, q.busyBeats * 0.1)) q = makeQuantizer(layout, points, { ...spec, triplet: 0 });
+  const quantizerFor = (pts: { t: number; w: number }[]) => {
+    const qz = makeQuantizer(fileBars, pts, spec);
+    return !opts.quantize && qz.tripletBeats < Math.max(1, qz.busyBeats * 0.1) ? makeQuantizer(fileBars, pts, { ...spec, triplet: 0 }) : qz;
+  };
+  const q = quantizerFor(points);
   let graceNotes = 0;
   let notes: QNote[][] = raw.map(list => {
     const snapped = list.map(n => {
@@ -587,6 +613,63 @@ export function importMidi(bytes: Uint8Array, opts: MidiOptions = {}): ImportRes
   });
   if (simplified + shortened) w.add(`${plural(simplified + shortened, 'overlapping note')} didn't fit in two voices and ${simplified + shortened > 1 ? 'were' : 'was'} shortened or joined to a chord.`);
 
+  // ---- the other tracks and the drums play as the band: on the same bars, but quantised
+  // on grids of their own, so the chosen part is written exactly as it would be alone
+  let band: BandPartDef[] = [];
+  if (keepBand) {
+    const end = layoutEnd(layout);
+    let outside = 0;
+    const place = (list: MidiNote[], drums: boolean) => {
+      const timed = list.map(n => ({ start: n.start * scale, end: n.end * scale, midi: n.midi }));
+      // a drum hit is only its onset
+      const bq = quantizerFor(timed.flatMap(n => (drums ? [{ t: n.start, w: 1 }] : [{ t: n.start, w: 1 }, { t: n.end, w: 0.25 }])));
+      const snapped = timed.map(n => {
+        const start = bq.snap(n.start);
+        let e = bq.snap(n.end);
+        if (e <= start) e = start + bq.grid(start);
+        return { start, end: e, midi: n.midi, short: n.end - n.start < bq.grid(start) / 2 };
+      });
+      const longAt = new Set(snapped.filter(n => !n.short).map(n => n.start));
+      const placed: QNote[] = [];
+      for (const n of snapped) {
+        if (!drums && n.short && longAt.has(n.start)) continue; // grace notes, as in the chosen part
+        const start = n.start - shift;
+        if (start < -1e-6 || start >= end - 1e-6) {
+          outside++;
+          continue;
+        }
+        placed.push({ start: Math.max(0, start), end: Math.min(n.end - shift, end), midi: n.midi });
+      }
+      return { notes: placed, grid: (t: number) => bq.grid(t + shift) };
+    };
+    const pitchedPart = (t: LogicalTrack) => {
+      const { notes: list, grid } = place(t.notes, false);
+      const program = clampProgram(t.program ?? programFromName([t.name]));
+      // a wide part playing chords gets two staves, so fewer of its notes are cut to fit two voices
+      const split = gmFamily(program) !== 'Bass' && spread(list) > 24 && !monophonic(list, grid);
+      const groups = split ? splitHands(list).map((notes, k) => ({ notes, hand: k === 0 ? ('R' as const) : ('L' as const) })).filter(g => g.notes.length) : [{ notes: list, hand: undefined }];
+      const staves: SongStaffDef[] = groups.map(g => {
+        const midis = g.notes.map(n => n.midi);
+        const voices = allocateVoices(g.notes, grid).voices.map(v => {
+          legato(v, grid);
+          const timed: TimedNote[] = v.flatMap(c => c.midis.map(m => ({ start: c.start, end: c.end, pitches: [spellInKey(m, layout.keys[measureAt(layout, c.start)])] })));
+          return writeVoice(buildVoice(timed, layout).specs, layout);
+        });
+        return { clef: groups.length > 1 ? clefFor('piano', midis, g.hand) : bandClef(program, false, Math.min(...midis)), voices };
+      });
+      return { part: { name: t.name, program, staves }, notes: list.length };
+    };
+    const drumPart = (t: LogicalTrack) => {
+      const { notes: list } = place(t.notes, true);
+      const voice = buildVoice(drumVoice(list.map(n => ({ start: n.start, key: n.midi })), layout), layout);
+      const part: BandPartDef = { name: t.name, program: clampProgram(t.program ?? 1), drums: true, staves: [{ clef: 'bass', voices: [pitchesToDrumWords(writeVoice(voice.specs, layout))] }] };
+      return { part, notes: list.length };
+    };
+    band = limitBand([...logical.filter((_, i) => !chosen.includes(i)).map(pitchedPart), ...drumTracks.map(drumPart)], w, 'track');
+    if (outside) w.add(`${plural(outside, 'band note')} before the imported part's first bar or after its last ${outside > 1 ? 'were' : 'was'} left out.`);
+    if (band.length) w.list.splice(bandNoteAt, 0, bandNote(importedAs, band.map(p => p.name), 'track'));
+  }
+
   // ---- chord symbols, from a block-chord accompaniment anywhere in the file
   const chordChanges = chordsFromTracks(logical.map(t => t.notes.map(n => ({ start: q.snap(n.start * scale) - shift, end: q.snap(n.end * scale) - shift, midi: n.midi }))), layout);
   const chords = chordChanges.length ? writeChordLine(chordChanges, layout) : undefined;
@@ -617,6 +700,7 @@ export function importMidi(bytes: Uint8Array, opts: MidiOptions = {}): ImportRes
     staves,
     chords,
   };
+  if (band.length) song.band = band;
   return { song, warnings: w.list, parts };
 }
 

@@ -9,7 +9,7 @@
  * goal with a daily plan.
  */
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, CalendarDays, Ear, Flag, Pause, Play, Repeat, Square, Tag, Target, TrendingUp, Trash2, Wand2 } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Drum, Ear, Flag, Pause, Play, Repeat, SlidersHorizontal, Square, Tag, Target, TrendingUp, Trash2, Wand2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { unlockAudio } from '../audio/context';
@@ -18,6 +18,7 @@ import { usePracticeFocus } from '../components/usePracticeFocus';
 import { useListen } from '../components/useListen';
 import { useInstrumentAudio } from '../audio/instrument';
 import { synth } from '../audio/synth';
+import { BandPanel } from '../components/BandPanel';
 import { InputChip } from '../components/InputControl';
 import { InstrumentIcon } from '../components/InstrumentIcon';
 import { TagEditor, useTagSuggestions } from '../components/TagEditor';
@@ -38,6 +39,8 @@ import { chordPlayScore } from '../curriculum/chordScore';
 import { chordContextAt } from '../engine/activities/Chords';
 import { malletHand } from '../music/sticking';
 import { NotationView } from '../notation/NotationView';
+import { BAND_STYLES } from '../music/band';
+import { useBand } from '../perform/useBand';
 import { alignLyrics, songChordSymbols, songSections } from '../songs/format';
 import { dayKey } from '../state/dates';
 import {
@@ -89,6 +92,8 @@ interface RunConfig {
   noteNames: boolean;
   /** strum the song's chords (the app plays the tune) instead of the written part */
   chords: boolean;
+  /** a band plays along (in time only) */
+  band: boolean;
   /** the plan step being worked on (advances when it's done) */
   step?: PlanStep;
 }
@@ -166,6 +171,9 @@ export default function SongStudio() {
   const [noteNames, setNoteNames] = useState(false);
   const [goalOpen, setGoalOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [bandOpen, setBandOpen] = useState(false);
+  const band = useBand(song, score, { player: song?.instrument ?? 'piano', strumming: chordsMode, prefs });
+  const bandOn = !!band.prefs.on && !!band.arrangement?.tracks.length;
 
   // ---- run state ----
   const [run, setRun] = useState<RunConfig | null>(null);
@@ -213,6 +221,11 @@ export default function SongStudio() {
 
   const runScore = useMemo(() => (run && score ? sliceScore(run.chords && strumScore ? strumScore.score : score, run.passage.from - 1, run.passage.to - 1) : null), [run, score, strumScore]);
   const previewScore = useMemo(() => (current && score ? sliceScore(score, current.from - 1, current.to - 1) : null), [current, score]);
+  // the band for this run, loaded once per run (mixer changes apply as it plays)
+  const runBand = useMemo(
+    () => (run?.band && run.mode === 'tempo' ? band.forRun(run.passage) : undefined),
+    [run, runNo], // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   // strings / staves used in the selected passage (for the part pickers)
   const usedStrings = useMemo(() => {
@@ -264,11 +277,24 @@ export default function SongStudio() {
     accomp: accomp / 100,
     fingering: step ? (step.mode === 'wait' ? 'all' : 'first') : fingering,
     noteNames,
+    band: !step && mode === 'tempo' && bandOn,
     step,
+  });
+
+  /** The whole song, in time, with the band: a performance. */
+  const performConfig = (): RunConfig => ({
+    ...configFrom(whole),
+    mode: 'tempo',
+    tempoPct: mode === 'tempo' ? tempoPct : 100,
+    speedBuilder: false,
+    loop: false,
+    band: true,
+    metronome: false,
   });
 
   const begin = async (cfg: RunConfig) => {
     listening.stop();
+    band.stopListening();
     await unlockAudio();
     startSong(song.id);
     setLast(null);
@@ -326,6 +352,7 @@ export default function SongStudio() {
 
   /** Listen ⇄ Stop: one playback at a time, and it stops when you leave the page. */
   const toggleListen = (p: Passage) => {
+    band.stopListening();
     if (listening.playing) {
       listening.stop();
       return;
@@ -334,6 +361,13 @@ export default function SongStudio() {
     const secPerTick = 60 / ((song.tempo * (mode === 'tempo' ? tempoPct : 100)) / 100) / PPQ;
     const events = buildSteps(s).map(st => ({ midi: st.notes.map(n => n.midi), at: 0.15 + st.tick * secPerTick, duration: Math.max(0.12, st.notes[0].ticks * secPerTick * 0.95) }));
     void listening.play(events, voiceFor(song.instrument, prefs));
+  };
+
+  /** Listen ⇄ Stop with the band: the app plays the part too. */
+  const toggleBandListen = (p: Passage) => {
+    listening.stop();
+    if (band.listening) band.stopListening();
+    else void band.listen(p, mode === 'tempo' ? tempoPct : 100);
   };
 
   const passageOf = (from: number, to: number, label: string): Passage => ({ from, to, label });
@@ -366,6 +400,11 @@ export default function SongStudio() {
             {run.loop && (
               <span className="pill">
                 <Repeat size={13} /> Loop
+              </span>
+            )}
+            {runBand && (
+              <span className="pill">
+                <Drum size={13} /> Band
               </span>
             )}
             {last && (
@@ -402,6 +441,8 @@ export default function SongStudio() {
                 countInBars={run.countIn}
                 autoStart={runNo > 1 && run.mode === 'tempo'}
                 accompVolume={run.accomp}
+                band={runBand}
+                bandBeatOffset={band.beatOffset(run.passage)}
                 fingering={run.chords ? 'none' : run.fingering}
                 noteNames={run.noteNames}
                 contextAt={run.chords && strumScore ? chordContextAt(strumScore.segments, song.instrument, prefs, measureStartTick(strumScore.score, run.passage.from - 1)) : undefined}
@@ -520,6 +561,31 @@ export default function SongStudio() {
               <p className="dim">Every phrase is up to tempo. Keep it fresh: play it through once a day, or pick a new song!</p>
             )}
           </section>
+
+          {band.arrangement && band.arrangement.tracks.length > 0 && (
+            <section className="card studio-perform">
+              <div className="studio-section-head">
+                <h2 className="display">
+                  <Drum size={18} /> Perform with the band
+                </h2>
+                <button className="btn btn-sm btn-ghost" onClick={() => setBandOpen(true)}>
+                  <SlidersHorizontal size={14} /> Band & mix
+                </button>
+              </div>
+              <p className="dim perform-blurb">
+                {band.arrangement.tracks.filter(t => t.source !== 'part').map(t => t.name).join(', ')}
+                {band.source === 'song' && band.arrangement.tracks.every(t => t.source === 'song') ? ' — the parts written for this song.' : ` — ${BAND_STYLES.find(x => x.id === band.arrangement!.style)?.name.toLowerCase()} style.`}
+              </p>
+              <div className="perform-actions">
+                <button className="btn" onClick={() => toggleBandListen(whole)}>
+                  {band.listening ? <Square size={15} /> : <Ear size={16} />} {band.listening ? 'Stop' : 'Listen with the band'}
+                </button>
+                <button className="btn btn-primary" onClick={() => begin(performConfig())}>
+                  <Play size={16} /> Perform the whole song
+                </button>
+              </div>
+            </section>
+          )}
 
           <section className="card studio-map-card">
             <div className="studio-section-head">
@@ -674,6 +740,22 @@ export default function SongStudio() {
                   </span>
                   <input type="range" min={30} max={130} step={5} value={tempoPct} onChange={e => setTempoPct(Number(e.target.value))} />
                 </label>
+                {band.arrangement && band.arrangement.tracks.length > 0 && (
+                  <div className="set-row band-row">
+                    <Toggle
+                      checked={bandOn}
+                      onChange={v => {
+                        band.setPrefs({ on: v });
+                        setMetronome(!v);
+                      }}
+                      label="Play with the band"
+                      sub={bandOn ? 'The drums keep time; the metronome rests.' : 'Drums, bass and chords play along.'}
+                    />
+                    <button className="btn btn-sm btn-ghost" onClick={() => setBandOpen(true)} aria-label="Band and mix">
+                      <SlidersHorizontal size={14} /> Mix
+                    </button>
+                  </div>
+                )}
                 <Toggle checked={speedBuilder} onChange={setSpeedBuilder} label="Speed builder" sub="+5% after every clean run, up to full speed." />
                 <Toggle checked={metronome} onChange={setMetronome} label="Metronome" sub="Clicks after the count-in." />
                 <div className="set-row">
@@ -761,6 +843,7 @@ export default function SongStudio() {
         </div>
       </div>
 
+      <BandPanel open={bandOpen} onClose={() => setBandOpen(false)} song={song} score={score} band={band} />
       <GoalModal
         open={goalOpen}
         onClose={() => setGoalOpen(false)}

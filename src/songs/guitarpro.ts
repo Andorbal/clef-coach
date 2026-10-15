@@ -5,7 +5,8 @@
  * rhythm. alphaTab (MPL-2.0, loaded only when such a file is imported) reads every
  * version; each track then becomes the same parts the MusicXML importer reads, so
  * repeats and endings, D.C. / D.S., voices, chord symbols, lyrics, strings and frets
- * all take one path from there (see buildSong in musicxml.ts).
+ * all take one path from there (see buildSong in musicxml.ts). Drum tracks play in the
+ * band, their notes read as General MIDI drum keys.
  */
 import type * as AlphaTabModule from '@coderline/alphatab';
 import type { KeySig } from '../music/keys';
@@ -43,17 +44,20 @@ export async function importGuitarPro(bytes: Uint8Array, opts: MusicXmlOptions =
   }
   const w = new Warnings();
   const counts = { dead: 0, bends: 0, harmonics: 0, swing: false };
+  const keepBand = opts.band !== false;
   const drums = score.tracks.filter(t => t.isPercussion);
   const parts = score.tracks.filter(t => !t.isPercussion).map(t => trackToPart(at, t, score, counts));
   if (!parts.length) throw new ImportError(drums.length ? 'This file only has drum tracks; Clef Coach needs pitched notes.' : 'This Guitar Pro file has no tracks.');
-  if (drums.length) w.add(`${plural(drums.length, 'drum track')} ${drums.length > 1 ? 'were' : 'was'} left out.`);
+  // drum tracks play in the band, after the other tracks; without a band they are left out
+  if (keepBand) parts.push(...drums.map(t => trackToPart(at, t, score, counts)));
+  else if (drums.length) w.add(`${plural(drums.length, 'drum track')} ${drums.length > 1 ? 'were' : 'was'} left out.`);
   const header: Header = {
     title: score.title.trim(),
     composer: (score.music || score.artist).trim(),
     lyricist: score.words.trim() || undefined,
     rights: score.copyright.trim() || undefined,
   };
-  const res = buildSong({ header, parts, source: `Imported from Guitar Pro${score.tab.trim() ? ` (tab by ${score.tab.trim()})` : ''}` }, { ...opts, keepPartInstrument: true, trimLeadingRests: true }, w);
+  const res = buildSong({ header, parts, source: `Imported from Guitar Pro${score.tab.trim() ? ` (tab by ${score.tab.trim()})` : ''}`, unit: 'track' }, { ...opts, keepPartInstrument: true, trimLeadingRests: true }, w);
   if (counts.dead) w.add(`${plural(counts.dead, 'dead (muted) note')} ${counts.dead > 1 ? 'were' : 'was'} left out.`);
   if (counts.bends) w.add('Bends are written as the fret you start on.');
   if (counts.harmonics) w.add('Harmonics are written at the fret where they are played.');
@@ -82,6 +86,7 @@ function trackToPart(at: AlphaTab, track: GpTrack, score: GpScore, counts: { dea
     modeGiven: score.masterBars.some(mb => (mb.keySignatureType as number) === 1),
     counts: { grace: 0, unpitched: 0, microtones: 0, oddTuplets: 0 },
   };
+  if (track.isPercussion) part.drums = true;
   const clefNow = new Map<number, ClefInfo>();
   let prevEndings = 0;
   score.masterBars.forEach((mb, i) => {
@@ -141,7 +146,14 @@ function trackToPart(at: AlphaTab, track: GpTrack, score: GpScore, counts: { dea
           const end = start + beat.displayDuration / GP_TICKS;
           if (beat.tupletNumerator > 0 && beat.tupletNumerator * 2 !== beat.tupletDenominator * 3) part.counts.oddTuplets++;
           const notes: XNote[] = [];
+          const hits: number[] = [];
           for (const note of beat.notes) {
+            if (track.isPercussion) {
+              // a hit tied on from the beat before is still sounding
+              const key = note.isTieDestination ? null : gpDrumKey(note.percussionArticulation, track.percussionArticulations);
+              if (key !== null) hits.push(key);
+              continue;
+            }
             if (note.isDead) {
               counts.dead++;
               continue;
@@ -158,6 +170,10 @@ function trackToPart(at: AlphaTab, track: GpTrack, score: GpScore, counts: { dea
             notes.push(x);
           }
           const g: XGroup = { staff: n, voice: String(si * 4 + vi + 1), start, end, notes, lyrics: new Map(), transpose: null, clef };
+          if (hits.length) {
+            g.drums = hits;
+            part.counts.unpitched += hits.length;
+          }
           beat.lyrics?.forEach((text, k) => {
             const t = text.trim().replace(/\s+/g, '‿');
             if (t) g.lyrics.set(k + 1, t);
@@ -174,6 +190,34 @@ function trackToPart(at: AlphaTab, track: GpTrack, score: GpScore, counts: { dea
     part.measures.push(m);
   });
   return part;
+}
+
+/**
+ * Guitar Pro 7's percussion articulations past the GM keys (ids 27–87 are the key itself)
+ * and the key each sounds: rim shot → snare, half-open hi-hat → open, ride edge → ride,
+ * chokes → their cymbal, cowbell variants → cowbell, hand-drum strokes → their drum…
+ */
+const GP_ARTICULATION_KEYS: Record<number, number> = {
+  91: 38, 92: 46, 93: 51, 94: 51, 95: 55, 96: 52, 97: 49, 98: 57,
+  99: 56, 100: 56, 101: 56, 102: 56, 103: 56, 104: 60, 105: 60, 106: 61, 107: 61,
+  108: 64, 109: 64, 110: 63, 111: 54, 112: 54, 113: 54, 114: 36, 115: 49, 116: 49,
+  117: 69, 118: 70, 119: 70, 120: 70, 122: 82, 123: 84, 124: 62, 125: 62, 126: 59, 127: 59,
+};
+
+/**
+ * The General MIDI drum key a Guitar Pro percussion note plays. alphaTab gives each note an
+ * articulation: an index into the track's own list (Guitar Pro 6 and later, with the key
+ * it sounds) or, past that list, a Guitar Pro 7 articulation id (in GP3–5 files, where the
+ * fret is the key, the key itself). Null when it names nothing.
+ */
+export function gpDrumKey(articulation: number, trackArticulations: readonly { outputMidiNumber: number }[]): number | null {
+  if (!Number.isInteger(articulation) || articulation < 0) return null;
+  if (articulation < trackArticulations.length) {
+    const key = trackArticulations[articulation].outputMidiNumber;
+    return key >= 0 && key <= 127 ? key : null;
+  }
+  if (articulation in GP_ARTICULATION_KEYS) return GP_ARTICULATION_KEYS[articulation];
+  return articulation >= 27 && articulation <= 87 ? articulation : null;
 }
 
 function clefInfo(clef: number, ottava: number, Clef: AlphaTab['model']['Clef'], Ottavia: AlphaTab['model']['Ottavia']): ClefInfo | undefined {

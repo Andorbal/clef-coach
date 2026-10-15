@@ -22,6 +22,7 @@ import { type PlayStep, type Score, type StepNote, buildSteps, clefAt, scoreRang
 import { malletHand, malletLabel } from '../music/sticking';
 import { type GhostNote, NotationView, type NoteState } from '../notation/NotationView';
 import type { ItemResult } from '../state/srs';
+import type { Performer } from '../perform/performer';
 import { type ActivityResult, type LessonCtx, ctxTuning, prefsOf, resolveVisibility } from './context';
 import { BeatLight, createBeatBus } from './BeatLight';
 import { applyFingeringMode } from './fingeringView';
@@ -62,9 +63,16 @@ export interface PlayAlongProps {
   onDone: (r: ActivityResult) => void;
   /** label of the run, e.g. "Passage 2 of 3" */
   badge?: string;
+  /**
+   * A band playing along in tempo mode (loaded with this passage's tracks). With drums
+   * and no metronome, the drummer counts in on the sticks.
+   */
+  band?: Performer;
+  /** Ticks from a beat at tick 0 of the passage (a pickup), for the band's swing. */
+  bandBeatOffset?: number;
 }
 
-type Phase = 'ready' | 'countin' | 'playing' | 'preview' | 'done';
+type Phase = 'ready' | 'loading' | 'countin' | 'playing' | 'preview' | 'done';
 
 interface StepRuntime {
   required: PlayStep['notes'];
@@ -255,14 +263,21 @@ export function PlayAlong(props: PlayAlongProps) {
     return () => inputManager.setExpected(null);
   }, [mode, phase, stepIdx, runtime]);
 
-  useEffect(
-    () => () => {
+  const bandRef = useRef(props.band);
+  bandRef.current = props.band;
+  const unmounted = useRef(false);
+  useEffect(() => {
+    // (React may mount, unmount and mount again in development: start each mount fresh)
+    unmounted.current = false;
+    return () => {
+      unmounted.current = true;
       metroRef.current?.stop();
       seqRef.current?.stop();
       cancelAnimationFrame(rafRef.current);
-    },
-    [],
-  );
+      // a band that has finished rings on; one cut off mid-song stops
+      if (!doneRef.current) bandRef.current?.stop();
+    };
+  }, []);
 
   const addGhost = useCallback(
     (midi: number, near: PlayStep | undefined, tone: GhostNote['tone']) => {
@@ -421,6 +436,14 @@ export function PlayAlong(props: PlayAlongProps) {
   const startTempo = useCallback(async () => {
     await unlockAudio();
     seqRef.current?.stop();
+    const band = props.band;
+    if (band) {
+      band.stop();
+      setPhase('loading');
+      await band.prepare();
+      // left while the band was getting ready
+      if (unmounted.current) return;
+    }
     doneRef.current = false;
     tempoHitsRef.current = {};
     mistakesRef.current = {};
@@ -430,11 +453,16 @@ export function PlayAlong(props: PlayAlongProps) {
     const metro = new Metronome();
     metroRef.current = metro;
     setPhase('countin');
+    const clicks = props.metronome ?? ctx.settings.metronome;
+    // a band with drums and no metronome: the drummer counts in on the sticks
+    const sticks = !!band?.hasDrums && !clicks;
+    const countInBars = props.countInBars ?? 1;
     metro.start({
       bpm,
       beatsPerBar: meterBeats,
-      countIn: props.countInBars ?? 1,
-      muted: !(props.metronome ?? ctx.settings.metronome),
+      countIn: countInBars,
+      volume: sticks ? 0 : undefined,
+      muted: !clicks,
       onBeat: info => {
         beatBus.emit(info);
         // count the bar in as a musician would: 1, 2, 3, 4 in 4/4; 1, 2, 3 in 3/4
@@ -449,6 +477,13 @@ export function PlayAlong(props: PlayAlongProps) {
     const pickupOffset = rawScore.pickup ? -rawScore.pickup * secPerTick : 0;
     t0Ref.current = ctxTimeToPerfNow(metro.startTime + pickupOffset);
     // other hand / accompaniment, scheduled on the audio clock
+    if (band) {
+      const beats = countInBars * meterBeats;
+      band.start(metro.startTime + pickupOffset, secPerTick, {
+        countIn: sticks ? Array.from({ length: beats }, (_, i) => metro.beatTime(i - beats)) : [],
+        beatOffset: props.bandBeatOffset,
+      });
+    }
     const ctxNow = getAudioContext().currentTime;
     const autoEvents = runtime.flatMap((rt, i) =>
       rt.auto.length
@@ -458,7 +493,7 @@ export function PlayAlong(props: PlayAlongProps) {
     if (autoEvents.length) seqRef.current = synth.playSequence(autoEvents, voice);
     cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(tick);
-  }, [rawScore, secPerTick, meterBeats, beatBus, ctx.settings.metronome, props.metronome, props.countInBars, runtime, steps, tick, voice, accompVel]);
+  }, [rawScore, secPerTick, meterBeats, beatBus, ctx.settings.metronome, props.metronome, props.countInBars, props.band, props.bandBeatOffset, runtime, steps, tick, voice, accompVel]);
 
   // looping practice: start straight away
   const autoStarted = useRef(false);
@@ -560,7 +595,7 @@ export function PlayAlong(props: PlayAlongProps) {
 
   return (
     <div className="activity playalong" data-expected={currentRt?.required.map(n => n.midi).join(',')} data-phase={phase}>
-      <ActivityHeader title={props.title} prompt={props.prompt ?? defaultPrompt(mode, props.hands)} badge={props.badge} progress={progress} />
+      <ActivityHeader title={props.title} prompt={props.prompt ?? defaultPrompt(mode, props.hands, !!props.band)} badge={props.badge} progress={progress} />
       <div className="stage-paper paper">
         <LiveNotation
           playhead={playhead}
@@ -583,19 +618,24 @@ export function PlayAlong(props: PlayAlongProps) {
           )}
         </AnimatePresence>
         {mode === 'tempo' && <BeatLight bus={beatBus} beats={meterBeats} active={phase === 'countin' || phase === 'playing'} />}
+        {phase === 'loading' && (
+          <div className="paper-overlay">
+            <span className="faint">Getting the band ready…</span>
+          </div>
+        )}
         {mode === 'tempo' && phase === 'ready' && (
           <div className="paper-overlay">
             <button className="btn btn-primary btn-lg" onClick={startTempo}>
               <Play size={18} /> Start — {Math.round(tempo)} bpm
             </button>
             <span className="faint">
-              {countInText(props.countInBars ?? 1, meterBeats)}
+              {countInText(props.countInBars ?? 1, meterBeats, !!props.band)}
             </span>
           </div>
         )}
       </div>
       <div className="stage-controls">
-        <button className="btn btn-sm" onClick={preview} disabled={phase === 'countin' || (mode === 'tempo' && phase === 'playing')}>
+        <button className="btn btn-sm" onClick={preview} disabled={phase === 'countin' || phase === 'loading' || (mode === 'tempo' && phase === 'playing')}>
           {phase === 'preview' ? <Square size={14} /> : <Ear size={15} />} {phase === 'preview' ? 'Stop' : 'Listen'}
         </button>
         {mode === 'wait' && !props.alwaysHint && (
@@ -609,6 +649,7 @@ export function PlayAlong(props: PlayAlongProps) {
             onClick={() => {
               metroRef.current?.stop();
               seqRef.current?.stop();
+              props.band?.stop();
               cancelAnimationFrame(rafRef.current);
               setPlayheadTick(null);
               setCountIn(null);
@@ -633,15 +674,15 @@ export function PlayAlong(props: PlayAlongProps) {
   );
 }
 
-function countInText(bars: number, beats: number): string {
+function countInText(bars: number, beats: number, band: boolean): string {
   const count = Array.from({ length: beats }, (_, i) => i + 1).join(' ');
-  return `${bars === 1 ? 'A one-bar' : bars === 2 ? 'A two-bar' : `A ${bars}-bar`} count-in plays first: ${count}.`;
+  return `${bars === 1 ? 'A one-bar' : bars === 2 ? 'A two-bar' : `A ${bars}-bar`} count-in plays first: ${count}${band ? ', then the band comes in with you' : ''}.`;
 }
 
-function defaultPrompt(mode: 'wait' | 'tempo', hands?: 'R' | 'L' | 'both') {
+function defaultPrompt(mode: 'wait' | 'tempo', hands?: 'R' | 'L' | 'both', band = false) {
   const who = hands === 'R' ? 'with your right hand — the app plays the left' : hands === 'L' ? 'with your left hand — the app plays the right' : '';
   if (mode === 'wait') return `Play each note when it lights up${who ? ` ${who}` : ''}. Take your time.`;
-  return `Play in time with the metronome${who ? ` ${who}` : ''}.`;
+  return `Play in time with the ${band ? 'band' : 'metronome'}${who ? ` ${who}` : ''}.`;
 }
 
 export function ActivityHeader({ title, prompt, badge, progress }: { title?: string; prompt?: string; badge?: string; progress?: number }) {

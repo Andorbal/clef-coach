@@ -191,3 +191,20 @@ test('README media', async ({ page }, info) => {
   await page.screenshot({ path: join(out!, 'tempo-mode.png') });
   await again;
 });
+
+test('README media: the band', async ({ page }, info) => {
+  test.skip(info.project.name !== 'ipad', 'tablet shots only');
+  test.setTimeout(120_000);
+  await onboard(page, 'Maya');
+  // Ode to Joy brings its own band: brushes, acoustic bass, nylon guitar and strings
+  await page.goto('/#/song/prh-ode-to-joy');
+  await page.locator('.studio-perform').getByRole('button', { name: /Band & mix/ }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await shot(page, 'band-mixer');
+  await page.keyboard.press('Escape');
+  await page.goto('/#/settings/sounds');
+  await expect(page.getByRole('heading', { name: 'Instrument sounds' })).toBeVisible();
+  await page.getByRole('heading', { name: /Free sounds/ }).evaluate(h => h.scrollIntoView({ block: 'start' }));
+  await page.evaluate(() => window.scrollBy(0, -24));
+  await shot(page, 'sounds');
+});

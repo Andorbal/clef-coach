@@ -31,6 +31,11 @@ export interface ImportOptions {
   parts?: string[];
   /** Text tab: the time signature its rhythm is read in (the tab doesn't say). */
   time?: [number, number];
+  /**
+   * MusicXML, MIDI and Guitar Pro: keep the parts / tracks not imported (drums too) as the
+   * song's band parts (default true); false leaves them out.
+   */
+  band?: boolean;
 }
 
 /**
@@ -107,13 +112,13 @@ export async function importBytes(name: string, bytes: Uint8Array, opts: ImportO
   if (kind === 'musicxml') {
     const mx = await import('./musicxml');
     // importMxl reads zipped .mxl as well as plain (UTF-8 or UTF-16) MusicXML
-    const res = await mx.importMxl(bytes, { instrument: opts.instrument, partIds: opts.parts, title });
+    const res = await mx.importMxl(bytes, { instrument: opts.instrument, partIds: opts.parts, title, band: opts.band });
     const { song, warnings } = checked(res.song, res.warnings);
     return { song, warnings, parts: res.parts, kind };
   }
   if (kind === 'guitarpro') {
     const gp = await import('./guitarpro');
-    const res = await gp.importGuitarPro(bytes, { instrument: opts.instrument, partIds: opts.parts, title });
+    const res = await gp.importGuitarPro(bytes, { instrument: opts.instrument, partIds: opts.parts, title, band: opts.band });
     const { song, warnings } = checked(res.song, res.warnings);
     return { song, warnings, parts: res.parts, kind };
   }
@@ -127,7 +132,7 @@ export async function importBytes(name: string, bytes: Uint8Array, opts: ImportO
     return importTabText(text, { ...opts, title });
   }
   const md = await import('./midi');
-  const res = md.importMidi(bytes, { instrument: opts.instrument, tracks: opts.parts?.map(Number), title });
+  const res = md.importMidi(bytes, { instrument: opts.instrument, tracks: opts.parts?.map(Number), title, band: opts.band });
   const { song, warnings } = checked(res.song, res.warnings);
   return { song, warnings, parts: res.parts, kind };
 }

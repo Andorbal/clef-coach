@@ -36,6 +36,10 @@ There's no account and no server. Progress lives on your device, and you can exp
   - **split the music**: one hand on piano, chosen strings on guitar, ukulele or bass, one staff of a marimba part — the app plays the rest at the volume you choose;
   - **trouble spots** found from your mistakes, **lyrics** under each phrase, the song's **chords** drawn for your instrument;
   - a **goal date** (“Silent Night by Christmas Eve”) that paces how much to practise each day.
+- **Perform with a band.** Play any song with drums, bass, chords and strings behind you — the parts written for the song, the other parts of a full score you imported, or an **automatic band** the app arranges from the chords (or works the chords out from the music) in the style you choose: pop, rock, ballad, waltz, swing, bossa nova, country, march, 6/8 or gentle. The drummer counts you in, fills at the end of each phrase and the last chord rings out.
+  - A **mixer** for each part — volume, pan, mute, solo, reverb and sound — that you never have to touch.
+  - **Built-in sounds always work**, offline, on every device: every General MIDI instrument has one, from synthesised drum kits to strings and brass. Or send the band to a **MIDI device** (a sound module, a synth, a DAW), each part on its own channel.
+  - **Sound banks** for real recorded instruments: SoundFonts (`.sf2`, `.sf3`) and SFZ instruments (a folder or a `.zip`), for the band or for your own instrument, instead of the built-in sounds or layered with them. Download free ones in the app — GeneralUser GS, MuseScore General, a Steinway, a Yamaha grand, a recorded drum kit — or add your own. Samples load only when a song needs them, within a memory limit you set: modest on a phone, as much as you like on a 64 GB workstation, with a warning on devices that may struggle.
 - **Import your own songs**: MusicXML (from MuseScore, Finale, Sibelius, Dorico, Flat, Noteflight or any sheet-music scanner), MIDI, **Guitar Pro** files, **text tab** pasted from a website, or Clef Coach song files. **Scan sheet music or tab with Claude** using your own Anthropic API key — photos, a PDF, or text tab whose rhythm Claude works out — or use the prompt with any AI assistant. Every file is checked bar by bar with errors that say exactly what to fix. See [docs/song-format.md](docs/song-format.md).
   - **Import a whole collection at once**: pick several files, a `.zip`, or (on a computer) a folder or files dropped on the page; untick the ones you don't want, tag them all in one go, and duplicates of songs you already have are spotted.
   - Imports keep clef changes, cross-staff notes on the right hand's staff, two voices with their stems the right way up, held notes inside chords, 64th notes, cadenza bars and repeats; MIDI files spread over several tracks become one grand staff, and chord symbols are worked out from a chord track.
@@ -65,6 +69,10 @@ There's no account and no server. Progress lives on your device, and you can exp
 <tr>
 <td width="50%" valign="top"><img src="docs/media/song-studio.jpg" alt="Song Studio. A practice plan phrase by phrase, from “wait for me” to full speed."><br><sub><b>Song Studio.</b> A practice plan phrase by phrase, from “wait for me” to full speed.</sub></td>
 <td width="50%" valign="top"><img src="docs/media/songs.jpg" alt="Songs. A library for every instrument, plus anything you import or scan."><br><sub><b>Songs.</b> A library for every instrument, plus anything you import or scan.</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><img src="docs/media/band-mixer.jpg" alt="Band and mix. The parts written for Ode to Joy — brushes, acoustic bass, nylon guitar and strings — each with mute, solo, volume, pan and reverb."><br><sub><b>Perform with a band.</b> The song’s own parts or an automatic band, in any style, with a mixer you never have to touch.</sub></td>
+<td width="50%" valign="top"><img src="docs/media/sounds.jpg" alt="Instrument sounds. Free sound banks to download: GeneralUser GS, MuseScore General, Splendid Grand Piano, Virtuosity Drums and more, each with its licence."><br><sub><b>Instrument sounds.</b> Built-in sounds always work; add SoundFonts or SFZ instruments, or download free ones.</sub></td>
 </tr>
 <tr>
 <td width="50%" valign="top"><img src="docs/media/chord-chart.jpg" alt="Chord chart. Any chord on every instrument, side by side."><br><sub><b>Chord chart.</b> Any chord on every instrument, side by side.</sub></td>
@@ -107,6 +115,7 @@ npm run typecheck
 npm run build      # production build in dist/ (static, PWA)
 npm run e2e        # Playwright smoke tests on iPad mini + phone viewports
 npm run clefsong -- help   # song file tools: validate, convert MusicXML/MIDI/Guitar Pro/tab, scan with Claude, AI prompt
+npm run sounds             # fetch the sound banks the app hosts itself into public/sounds (the deploy does this)
 
 # Slower, opt-in browser runs
 SWEEP=1 npx playwright test sweep --project=ipad   # render every step of every lesson, fail on any error
@@ -133,9 +142,14 @@ src/
                 grand staff, fingering, note states, ghost notes, playhead
   instruments/  SVG piano keyboard (true key geometry), fretboard (real fret spacing, any tuning),
                 mallet bars, chord diagrams
-  audio/        Web Audio context, synthesised piano (additive), guitar / ukulele / bass
-                (Karplus–Strong) and mallets (modal synthesis), metronome, UI sounds, MIDI input,
-                microphone pitch detection, input manager
+  audio/        Web Audio context, synthesised piano (additive), electric piano, guitar / ukulele /
+                bass (Karplus–Strong), mallets (modal synthesis), drum kits, live synth voices for
+                held sounds, metronome, UI sounds, MIDI input, microphone pitch detection, input
+                manager; samples/: SoundFont 2/3 and SFZ readers, the sampler, sound-bank storage
+                (IndexedDB) and the free-sounds catalogue
+  perform/      the band: arranger (styles, voice-led chords, walking bass, fills), chords from the
+                music, General MIDI → built-in sounds, the performer (look-ahead scheduling,
+                per-part mixer) and the Song Studio hook
   curriculum/   lesson data model, builders, procedural generator, chord practice, the tracks
   content/      public-domain + original song library for every instrument
   songs/        the Clef Coach song format, MusicXML / MIDI / Guitar Pro / text tab importers, scanning with Claude
@@ -152,4 +166,6 @@ All music is either public domain (traditional melodies, or composers who died l
 
 ## License
 
-MIT. VexFlow is MIT; the Bravura font is SIL OFL 1.1; alphaTab (which reads Guitar Pro files, loaded only when one is imported) is MPL-2.0.
+MIT. VexFlow is MIT; the Bravura font is SIL OFL 1.1; alphaTab (which reads Guitar Pro files, loaded only when one is imported) is MPL-2.0; the WebAssembly Ogg Vorbis decoder (for SoundFont 3 banks on browsers that can't decode them) is MIT.
+
+The free sound banks the app offers aren't part of this repository: the deploy fetches GeneralUser GS (S. Christian Collins, [GeneralUser GS License v2.0](https://github.com/mrbumpy409/GeneralUser-GS/blob/main/documentation/LICENSE.txt)) next to the app (`npm run sounds`), as its author asks, and the others download from their own repositories: MuseScore General (MIT), Splendid Grand Piano (public domain), Salamander Grand Piano (CC BY 3.0, Alexander Holm) and Virtuosity Drums (CC0).

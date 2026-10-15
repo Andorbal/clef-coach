@@ -24,6 +24,7 @@
  * See docs/song-format.md for the full reference. MusicXML and MIDI files are
  * converted into this format on import (src/songs/musicxml.ts, src/songs/midi.ts).
  */
+import { BAND_ROLES, type BandPartDef, type BandRole, bandClef, bandPartScore, isBandStyle } from '../music/band';
 import { parseChordSymbol } from '../music/chords';
 import { INSTRUMENT_IDS, type InstrumentId, familyOf, instrumentDef } from '../music/instruments';
 import { parseKey } from '../music/keys';
@@ -62,6 +63,26 @@ export interface SongDoc {
   chords?: string;
   sections?: SongSection[];
   lyrics?: string[];
+  /** Accompaniment parts; see BandPartDoc. */
+  band?: BandPartDoc[];
+  /** Feel of the automatic accompaniment (src/music/band.ts BAND_STYLES). */
+  style?: string;
+}
+
+/**
+ * A band part on disk. One staff can be written short, with `clef` and `voices` on the
+ * part itself; parts with several staves list `staves` like the song does.
+ */
+export interface BandPartDoc {
+  name: string;
+  program?: number;
+  drums?: boolean;
+  role?: BandRole;
+  volume?: number;
+  pan?: number;
+  clef?: Clef;
+  voices?: string[];
+  staves?: { clef: Clef; name?: string; voices: string[] }[];
 }
 
 export class SongFormatError extends Error {
@@ -195,6 +216,9 @@ export function parseSongDoc(input: string | unknown, opts: { id?: string } = {}
     staves[0].hand ??= 'R';
     staves[1].hand ??= 'L';
   }
+  const guessClef = new Set<BandPartDef>();
+  const band = readBand(raw.band, issues, warnings, guessClef);
+  if (raw.style !== undefined && !isBandStyle(raw.style)) warnings.push(`"style" "${String(raw.style)}" isn't a style Clef Coach knows; the band picks one itself.`);
   const level = typeof raw.level === 'number' ? Math.max(1, Math.min(10, Math.round(raw.level))) : 3;
   const mallets = raw.mallets === 4 ? 4 : raw.mallets === 2 ? 2 : undefined;
   if (issues.length) throw new SongFormatError(issues);
@@ -220,6 +244,8 @@ export function parseSongDoc(input: string | unknown, opts: { id?: string } = {}
     chords: typeof raw.chords === 'string' && raw.chords.trim() ? raw.chords : undefined,
     sections: Array.isArray(raw.sections) ? raw.sections.filter(isObj).map(s => ({ name: String(s.name ?? ''), from: Number(s.from), to: Number(s.to) })) : undefined,
     lyrics: Array.isArray(raw.lyrics) ? raw.lyrics.filter((l): l is string => typeof l === 'string') : typeof raw.lyrics === 'string' ? [raw.lyrics] : undefined,
+    band: band?.length ? band : undefined,
+    style: isBandStyle(raw.style) ? raw.style : undefined,
   };
 
   let score: Score;
@@ -229,8 +255,89 @@ export function parseSongDoc(input: string | unknown, opts: { id?: string } = {}
     if (e instanceof NotationError) throw new SongFormatError([e.message.replace(`${song.id} `, '')]);
     throw new SongFormatError([(e as Error).message]);
   }
+  warnings.push(...checkBand(song, score, guessClef));
   warnings.push(...checkSong(song, score));
   return { song, score, warnings };
+}
+
+const CLEF_OF = (x: unknown): Clef | undefined => (CLEFS.includes(x as Clef) ? (x as Clef) : undefined);
+
+/** Read the "band" list (shape only; the music is checked once the song is built). */
+function readBand(raw: unknown, issues: string[], warnings: string[], guessClef: Set<BandPartDef>): BandPartDef[] | undefined {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw)) {
+    issues.push('"band" must be a list of parts.');
+    return undefined;
+  }
+  const out: BandPartDef[] = [];
+  raw.forEach((p, i) => {
+    const label = `band part ${i + 1}`;
+    if (!isObj(p)) {
+      issues.push(`${label} must be an object.`);
+      return;
+    }
+    const name = typeof p.name === 'string' && p.name.trim() ? p.name.trim() : `Part ${i + 1}`;
+    const drums = p.drums === true;
+    let program = 1;
+    if (p.program !== undefined) {
+      if (typeof p.program === 'number' && Number.isInteger(p.program) && p.program >= 1 && p.program <= 128) program = p.program;
+      else issues.push(`${label} ("${name}"): "program" must be a General MIDI program number from 1 to 128.`);
+    } else if (!drums) warnings.push(`${label} ("${name}") has no "program"; it plays with a piano sound.`);
+    const role = p.role === undefined ? undefined : BAND_ROLES.includes(p.role as BandRole) ? (p.role as BandRole) : undefined;
+    if (p.role !== undefined && !role) issues.push(`${label} ("${name}"): "role" must be one of ${BAND_ROLES.join(', ')}.`);
+    const num = (x: unknown, lo: number, hi: number, field: string) => {
+      if (x === undefined) return undefined;
+      if (typeof x === 'number' && x >= lo && x <= hi) return x;
+      issues.push(`${label} ("${name}"): "${field}" must be a number from ${lo} to ${hi}.`);
+      return undefined;
+    };
+    const volume = num(p.volume, 0, 1, 'volume');
+    const pan = num(p.pan, -1, 1, 'pan');
+    const voicesOf = (x: unknown) => (Array.isArray(x) ? x.filter((v): v is string => typeof v === 'string') : typeof x === 'string' ? [x] : []);
+    let staves: BandPartDef['staves'] = [];
+    if (Array.isArray(p.staves)) {
+      staves = p.staves.filter(isObj).map(st => ({ clef: CLEF_OF(st.clef) ?? 'treble', name: typeof st.name === 'string' ? st.name : undefined, voices: voicesOf(st.voices) }));
+    } else if (p.voices !== undefined) {
+      staves = [{ clef: CLEF_OF(p.clef) ?? 'treble', voices: voicesOf(p.voices) }];
+    }
+    staves = staves.filter(st => st.voices.length);
+    if (!staves.length) {
+      issues.push(`${label} ("${name}") has no music: give it "voices" (one string of notes per voice).`);
+      return;
+    }
+    // the clef only matters if the part is ever drawn: fill one in when the file leaves it out
+    const clefGiven = Array.isArray(p.staves) ? p.staves.every(st => isObj(st) && CLEF_OF(st.clef)) : !!CLEF_OF(p.clef);
+    const part: BandPartDef = { name, program, staves };
+    if (drums) part.drums = true;
+    if (role) part.role = role;
+    if (volume !== undefined) part.volume = volume;
+    if (pan !== undefined) part.pan = pan;
+    if (!clefGiven) guessClef.add(part);
+    out.push(part);
+  });
+  return out;
+}
+
+/** Check each band part's music bar by bar (errors) and against the song's length (warnings). */
+function checkBand(song: SongDef, score: Score, guessClef: Set<BandPartDef>): string[] {
+  const w: string[] = [];
+  const errors: string[] = [];
+  song.band?.forEach((part, i) => {
+    const label = `band part ${i + 1} ("${part.name}")`;
+    try {
+      const sc = bandPartScore(song, part, i);
+      if (guessClef.has(part)) {
+        const lowest = Math.min(...sc.staves.flatMap(st => st.voices.flatMap(v => v.notes.flatMap(n => n.pitches.map(midiOf)))));
+        for (const st of part.staves) st.clef = bandClef(part.program, part.drums, Number.isFinite(lowest) ? lowest : 60);
+      }
+      if (sc.measures !== score.measures) w.push(`${label} has ${sc.measures} bar${sc.measures === 1 ? '' : 's'}; the music has ${score.measures}.`);
+    } catch (e) {
+      const msg = (e as Error).message.replace(`${song.id}-band${i} `, '');
+      errors.push(`${label}: ${msg}`);
+    }
+  });
+  if (errors.length) throw new SongFormatError(errors);
+  return w;
 }
 
 /** Soft checks: things that load but probably aren't what the author meant. */
@@ -425,8 +532,19 @@ export function songToDoc(song: SongDef): SongDoc {
     chords: song.chords,
     sections: song.sections,
     lyrics: song.lyrics,
+    band: song.band?.map(bandPartToDoc),
+    style: song.style,
   };
   return JSON.parse(JSON.stringify(doc)) as SongDoc;
+}
+
+function bandPartToDoc(p: BandPartDef): BandPartDoc {
+  const doc: BandPartDoc = { name: p.name, program: p.program, drums: p.drums || undefined, role: p.role, volume: p.volume, pan: p.pan };
+  if (p.staves.length === 1 && !p.staves[0].name) {
+    doc.clef = p.staves[0].clef;
+    doc.voices = p.staves[0].voices;
+  } else doc.staves = p.staves.map(st => ({ clef: st.clef, name: st.name, voices: st.voices }));
+  return doc;
 }
 
 export function songToJson(song: SongDef): string {

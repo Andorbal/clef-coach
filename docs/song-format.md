@@ -32,7 +32,8 @@ splitting hands, finding pickups), but it can't be the main format.
 ### Tab
 
 **Guitar Pro** files hold everything tab needs, so they import like MusicXML: each track becomes a
-part you can choose (drum tracks are left out), and the track for your instrument opens first.
+part you can choose, the track for your instrument opens first, and the other tracks — drums
+included — play as the band.
 
 **Text tab** — the kind posted on websites — is read like this:
 
@@ -123,6 +124,8 @@ A song is one JSON object. File extension: `.json` (we suggest `name.clefsong.js
 | `chords` | no | Chord symbols in time (see below). Shown with diagrams for every instrument. |
 | `sections` | no | Practice phrases: `{ "name", "from", "to" }`, 1-based bar numbers, inclusive. If absent, the app makes 4-bar phrases. |
 | `lyrics` | no | One string per verse (see below). |
+| `band` | no | Accompaniment parts — drums, bass, chords, strings… — for playing with a band (see [Band parts](#band-parts)). |
+| `style` | no | The feel of the automatic band when the song has no `band` (or not all of it): `pop`, `rock`, `ballad`, `waltz`, `swing`, `bossa`, `country`, `march`, `compound` (6/8 feel), `gentle` (no drums). Default: chosen from the meter and tempo. |
 
 ### Clefs and pitch
 
@@ -206,6 +209,83 @@ with `-`; `_` holds the previous syllable over an extra note:
 "lyrics": ["Si- lent night, ho- ly night, all is calm, all is bright"]
 ```
 
+## Band parts
+
+A song can bring its own band. In the Song Studio, **Perform with the band** plays them with you
+(and *Play with the band* does in any in-time practice), through a mixer where each part has a
+volume, pan, mute, solo, reverb and sound. Songs without band parts get an **automatic band**
+written from their chord symbols — or, when there are none, from chords the app works out from
+the music — in the style you pick.
+
+```json
+"band": [
+  { "name": "Bass", "program": 33, "clef": "bass8vb",
+    "voices": ["C2/q G2 C2 G2 | G1 D2 G1 D2 | C2 G2 C2 E2 | C2 G1 G1/h |"] },
+  { "name": "Drums", "drums": true, "program": 41,
+    "voices": ["kick/q [snare pedal-hat] kick [snare pedal-hat] | … | kick [snare pedal-hat] [kick crash]/h |"] },
+  { "name": "Strings", "program": 49, "volume": 0.5, "pan": 0.25,
+    "voices": ["[G3 C4 E4]/w | [G3 B3 D4] | [G3 C4 E4] | [G3 C4 E4]/h [G3 B3 D4] |"] }
+]
+```
+
+| Field | Meaning |
+|---|---|
+| `name` | Shown in the mixer. |
+| `program` | The sound, as a **General MIDI program number** 1–128 (1 piano, 5 electric piano, 25 nylon guitar, 26 steel guitar, 33 acoustic bass, 34 electric bass, 49 strings, 57 trumpet, 66 alto sax, 74 flute…). For a drum part: the kit — 1 standard, 9 room, 17 power, 25 electronic, 33 jazz, 41 brushes. |
+| `drums` | `true` for a drum part. |
+| `voices` (and `clef`) | The music, exactly like a staff of the song: same bars, pickup, key and time changes and repeat marks. Any number of voices. A part with several staves (a piano) uses `"staves": [{ "clef", "voices" }, …]` instead. |
+| `role` | Optional: `drums`, `percussion`, `bass`, `chords`, `pad`, `melody` or `counter`. Worked out from the sound and the music when absent; it tells the automatic band what is already covered. |
+| `volume`, `pan` | Optional starting mix: 0–1 and −1 (left) … 1 (right). |
+
+Every bar of a band part is checked like the music, with errors that name the part and the bar.
+
+### Drum names
+
+Drum parts are General MIDI percussion keys. Write them by name — or as pitches if you prefer
+(`C2` is the kick, `D2` the snare, `F#2` the closed hi-hat). Names work anywhere a pitch does,
+in chords too: `[kick hat]/e hat [snare hat] hat`.
+
+| Name | Key | Name | Key | Name | Key |
+|---|---|---|---|---|---|
+| `kick` | 36 | `hat` | 42 | `crash` | 49 |
+| `kick2` | 35 | `pedal-hat` | 44 | `crash2` | 57 |
+| `snare` | 38 | `open-hat` | 46 | `ride` | 51 |
+| `snare2` | 40 | `tom-hi` | 50 | `ride-bell` | 53 |
+| `rim` (side stick) | 37 | `tom-himid` | 48 | `splash` | 55 |
+| `clap` | 39 | `tom-lomid` | 47 | `china` | 52 |
+| `sticks` | 31 | `tom-lo` | 45 | `tambourine` | 54 |
+| `cowbell` | 56 | `floor-hi` | 43 | `shaker` | 82 |
+| `claves` | 75 | `floor-lo` | 41 | `triangle` | 81 |
+
+The rest of the GM set has names too: `bongo-hi`, `bongo-lo`, `conga-mute`, `conga-hi`,
+`conga-lo`, `timbale-hi`, `timbale-lo`, `agogo-hi`, `agogo-lo`, `cabasa`, `maracas`,
+`whistle-short`, `whistle-long`, `guiro-short`, `guiro-long`, `block-hi`, `block-lo`,
+`cuica-mute`, `cuica-open`, `triangle-mute`, `vibraslap`, `ride2`, `jingle-bell`, `bell-tree`,
+`castanets`, `surdo-mute`, `surdo`. Shorthands: `bd`, `sd`, `hh`, `oh`, `ph`, `cr`, `rd`,
+`tom1`…`tom6` (high to low).
+
+### Where band parts come from
+
+- **Imported files keep their ensemble**: the parts of a MusicXML score, the tracks of a MIDI or
+  Guitar Pro file that you don't choose to play become the band — drum tracks and percussion
+  parts included (MIDI channel 10, MusicXML unpitched notes, Guitar Pro drum tracks), with each
+  part's General MIDI sound. A song keeps up to 16 band parts; bars where only the band plays,
+  before your part starts or after it ends, are left out.
+- **By hand**, in this format.
+- **The automatic band**, when there are none.
+
+### Sounds
+
+Band parts always play with the app's built-in sounds: synthesised piano, electric piano, guitars,
+basses, mallets and drum kits, and live synth voices for strings, organs, brass, reeds, flutes,
+pads and choir — every General MIDI program has one. In *Settings → Instrument sounds* you can
+add **sound banks** — SoundFont 2 (`.sf2`), SoundFont 3 (`.sf3`) and SFZ instruments (a folder or
+a `.zip`) — or download free ones, and the band (or your own instrument) plays recorded samples
+instead of, or layered over, the built-in sounds. Or play the band through a **MIDI device** — a
+digital piano's sounds, a sound module, a synth or a DAW: each part goes out on a channel of its
+own (drums on 10) with its General MIDI program, and the mixer's volume and pan as controllers
+7 and 10.
+
 ## Tools
 
 ### In the app
@@ -226,7 +306,8 @@ suggested) before saving.
 npm run clefsong -- validate my-song.json            # check one or more files
 npm run clefsong -- convert score.mxl -o song.json   # MusicXML, MIDI, Guitar Pro or text tab → Clef Coach song
 npm run clefsong -- convert tune.mid --instrument guitar
-npm run clefsong -- convert band.gp5 --parts 2       # the third track of a Guitar Pro file
+npm run clefsong -- convert band.gp5 --parts 2       # the third track of a Guitar Pro file (the others play as the band)
+npm run clefsong -- convert band.gp5 --no-band       # just the part, no band
 npm run clefsong -- convert riff.txt                 # text tab (rhythm guessed from the spacing)
 npm run clefsong -- scan page1.jpg page2.jpg --instrument piano --title "Silent Night"
 npm run clefsong -- scan lesson.pdf -o lesson.clefsong.json

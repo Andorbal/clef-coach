@@ -1,0 +1,20 @@
+.sound-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.sound-picker select {
+  max-width: min(320px, 100%);
+}
+
+.sound-layer {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}

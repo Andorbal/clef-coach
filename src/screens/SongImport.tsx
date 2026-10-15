@@ -22,6 +22,7 @@ import { buildSteps, sliceScore } from '../music/score';
 import { NotationView } from '../notation/NotationView';
 import { type BulkFile, expandArchives, isSongArchive } from '../songs/bulk';
 import { SongFormatError, newSongId, parseSongDoc, songToJson } from '../songs/format';
+import { gmKitName, gmProgramName } from '../music/gm';
 import { IMPORT_ACCEPT, type ImportOutcome, KIND_LABELS, importBytes, importTabText } from '../songs/importers';
 import { manualPrompt } from '../songs/llmPrompt';
 import type { ScanFile } from '../songs/transcribe';
@@ -585,7 +586,7 @@ export default function SongImport() {
                 <div className="set-row">
                   <span>
                     Parts in the file
-                    <span className="faint toggle-sub">Tap to choose which to learn.</span>
+                    <span className="faint toggle-sub">Tap to choose which to learn; the others play as the band.</span>
                   </span>
                   <div className="chip-row">
                     {result.parts.map(p => (
@@ -597,6 +598,19 @@ export default function SongImport() {
                   </div>
                 </div>
               )}
+              {result.song.band?.length ? (
+                <div className="set-row">
+                  <span>
+                    The band
+                    <span className="faint toggle-sub">
+                      {result.song.band.map(p => `${p.name} (${p.drums ? gmKitName(p.program) : gmProgramName(p.program)})`).join(', ')} — they play along when you perform the song.
+                    </span>
+                  </span>
+                  <button className="btn btn-sm btn-ghost" onClick={() => updateSong({ band: undefined })}>
+                    Leave them out
+                  </button>
+                </div>
+              ) : null}
             </div>
             {result.warnings.length > 0 && (
               <ul className="import-warnings">
@@ -622,6 +636,7 @@ export default function SongImport() {
                   {preview.score.measures} bars{preview.score.measures > 8 ? ' (showing the first 8)' : ''} · {result.song.staves.length} {result.song.staves.length > 1 ? 'staves' : 'staff'}
                   {result.song.chords ? ' · chords' : ''}
                   {result.song.lyrics?.length ? ' · lyrics' : ''}
+                  {result.song.band?.length ? ` · a band of ${result.song.band.length}` : ''}
                 </p>
               </>
             )}

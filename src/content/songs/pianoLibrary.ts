@@ -3,6 +3,7 @@
  * Pitches are sounding pitches; fingering not written here is filled in by the
  * fingering engine when a song is loaded.
  */
+import type { BandPartDef } from '../../music/band';
 import type { SongDef } from '../../music/parse';
 
 type Time = [number, number];
@@ -44,6 +45,29 @@ function both(id: string, title: string, composer: string, year: string | undefi
 const HOT_CROSS = 'E4/q@3 D4@2 C4/h@1 | E4/q@3 D4@2 C4/h@1 | C4/q@1 C4@1 D4@2 D4@2 | E4/q@3 D4@2 C4/h@1 |';
 const MARY = 'E4/q@3 D4@2 C4@1 D4@2 | E4@3 E4@3 E4/h@3 | D4/q@2 D4@2 D4/h@2 | E4/q@3 G4@5 G4/h@5 | E4/q@3 D4@2 C4@1 D4@2 | E4@3 E4@3 E4@3 E4@3 | D4@2 D4@2 E4@3 D4@2 | C4/w@1 |';
 const ODE = 'E4/q@3 E4@3 F4@4 G4@5 | G4@5 F4@4 E4@3 D4@2 | C4@1 C4@1 D4@2 E4@3 | E4@3 D4@2 D4/h@2 | E4/q@3 E4@3 F4@4 G4@5 | G4@5 F4@4 E4@3 D4@2 | C4@1 C4@1 D4@2 E4@3 | D4@2 C4@1 C4/h@1 |';
+/** A band written for Ode to Joy: brushes, a walking acoustic bass, a picked guitar and soft strings. */
+const ODE_BAND: BandPartDef[] = [
+  {
+    name: 'Drums',
+    program: 41,
+    drums: true,
+    staves: [{ clef: 'bass', voices: ['kick/q [snare pedal-hat] kick [snare pedal-hat] | kick [snare pedal-hat] kick [snare pedal-hat] | kick [snare pedal-hat] kick [snare pedal-hat] | kick [snare pedal-hat] snare/e snare tom-hi tom-lo | [kick crash]/q [snare pedal-hat] kick [snare pedal-hat] | kick [snare pedal-hat] kick [snare pedal-hat] | kick [snare pedal-hat] kick [snare pedal-hat] | kick [snare pedal-hat] [kick crash]/h |'] }],
+  },
+  { name: 'Bass', program: 33, staves: [{ clef: 'bass8vb', voices: ['C2/q G2 C2 G2 | G1 D2 G1 D2 | C2 G2 C2 E2 | C2 G1 G1/h | C2/q G2 C2 G2 | G1 D2 G1 D2 | C2 G2 C2 E2 | G1/h C2 |'] }] },
+  {
+    name: 'Guitar',
+    program: 25,
+    pan: -0.3,
+    staves: [{ clef: 'treble8vb', voices: ['r/q [E3 G3 C4] r [E3 G3 C4] | r [D3 G3 B3] r [D3 G3 B3] | r [E3 G3 C4] r [E3 G3 C4] | r [E3 G3 C4] r [D3 G3 B3] | r [E3 G3 C4] r [E3 G3 C4] | r [D3 G3 B3] r [D3 G3 B3] | r [E3 G3 C4] r [E3 G3 C4] | r [D3 G3 B3] [E3 G3 C4]/h |'] }],
+  },
+  {
+    name: 'Strings',
+    program: 49,
+    volume: 0.5,
+    pan: 0.25,
+    staves: [{ clef: 'treble', voices: ['[G3 C4 E4]/w | [G3 B3 D4] | [G3 C4 E4] | [G3 C4 E4]/h [G3 B3 D4] | [G3 C4 E4]/w | [G3 B3 D4] | [G3 C4 E4] | [G3 B3 D4]/h [G3 C4 E4] |'] }],
+  },
+];
 const ODE_DOTTED = 'E4/q@3 E4@3 F4@4 G4@5 | G4@5 F4@4 E4@3 D4@2 | C4@1 C4@1 D4@2 E4@3 | E4/q.@3 D4/e@2 D4/h@2 | E4/q@3 E4@3 F4@4 G4@5 | G4@5 F4@4 E4@3 D4@2 | C4@1 C4@1 D4@2 E4@3 | D4/q.@2 C4/e@1 C4/h@1 |';
 const LIGHTLY = 'G4/q@5 E4@3 E4/h@3 | F4/q@4 D4@2 D4/h@2 | C4/q@1 D4@2 E4@3 F4@4 | G4@5 G4@5 G4/h@5 | G4/q@5 E4@3 E4/h@3 | F4/q@4 D4@2 D4/h@2 | C4/q@1 E4@3 G4@5 G4@5 | E4/w@3 | D4/q@2 D4@2 D4@2 D4@2 | D4@2 E4@3 F4/h@4 | E4/q@3 E4@3 E4@3 E4@3 | E4@3 F4@4 G4/h@5 | G4/q@5 E4@3 E4/h@3 | F4/q@4 D4@2 D4/h@2 | C4/q@1 E4@3 G4@5 G4@5 | C4/w@1 |';
 const AU_CLAIR = 'C4/q@1 C4@1 C4@1 D4@2 | E4/h@3 D4@2 | C4/q@1 E4@3 D4@2 D4@2 | C4/w@1 | C4/q@1 C4@1 C4@1 D4@2 | E4/h@3 D4@2 | C4/q@1 E4@3 D4@2 D4@2 | C4/w@1 |';
@@ -70,7 +94,7 @@ const KLEINE = nf('G4/q@1 r/e D4/e@1 G4/q@3 r/e D4/e@1 | G4/e@3 D4@1 G4@3 B4@4 D
 export const PIANO_RH: SongDef[] = [
   rh('prh-hot-cross-buns', 'Hot Cross Buns', TRAD, TRAD, 1, 'C', [4, 4], 84, HOT_CROSS, 'Three notes, three fingers — an old English street cry.'),
   rh('prh-mary-had-a-little-lamb', 'Mary Had a Little Lamb', 'Lowell Mason (arr.)', '1830', 1, 'C', [4, 4], 88, MARY, 'Steps and repeated notes in C position, with one jump up to G.'),
-  rh('prh-ode-to-joy', 'Ode to Joy', 'Ludwig van Beethoven', '1824', 1, 'C', [4, 4], 84, ODE, 'From the Ninth Symphony, in C position with a simplified rhythm.'),
+  { ...rh('prh-ode-to-joy', 'Ode to Joy', 'Ludwig van Beethoven', '1824', 1, 'C', [4, 4], 84, ODE, 'From the Ninth Symphony, in C position with a simplified rhythm.'), band: ODE_BAND },
   rh('prh-ode-to-joy-original', 'Ode to Joy (original rhythm)', 'Ludwig van Beethoven', '1824', 4, 'C', [4, 4], 92, ODE_DOTTED, 'Beethoven’s real rhythm: the dotted quarter and eighth that end each phrase.'),
   rh('prh-lightly-row', 'Lightly Row', TRAD, 'German folk song', 1, 'C', [4, 4], 92, LIGHTLY, 'A German children’s song (“Hänschen klein”) that walks through all five fingers.'),
   rh('prh-au-clair-de-la-lune', 'Au Clair de la Lune', TRAD, '18th century', 1, 'C', [4, 4], 84, AU_CLAIR, 'A French lullaby by moonlight — just C, D and E.'),
