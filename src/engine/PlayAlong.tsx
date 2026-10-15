@@ -7,7 +7,7 @@
  */
 import { AnimatePresence, motion } from 'framer-motion';
 import { Ear, Lightbulb, Play, RotateCcw, Square } from 'lucide-react';
-import { type ComponentProps, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { inputManager } from '../audio/input/manager';
 import type { NoteInputEvent } from '../audio/input/types';
 import { Metronome, ctxTimeToPerfNow } from '../audio/metronome';
@@ -20,7 +20,7 @@ import { type Pitch, pitchToString, spellMidi } from '../music/pitch';
 import { PPQ, beatTicks, beatsPerBar } from '../music/rhythm';
 import { type PlayStep, type Score, type StepNote, buildSteps, clefAt, scoreRange, scoreTotalTicks } from '../music/score';
 import { malletHand, malletLabel } from '../music/sticking';
-import { type GhostNote, NotationView, type NoteState } from '../notation/NotationView';
+import { type GhostNote, NotationView, type NoteState, type PlayheadMotion } from '../notation/NotationView';
 import type { ItemResult } from '../state/srs';
 import type { Performer } from '../perform/performer';
 import { type ActivityResult, type LessonCtx, ctxTuning, prefsOf, resolveVisibility } from './context';
@@ -83,37 +83,6 @@ const staffClef = (score: Score, staff: number, tick: number) => (score.staves[s
 
 type ContextMarks = { frets?: FretMark[]; keys?: KeyMark[] };
 
-/**
- * The moving playhead, outside React state: it changes every animation frame,
- * and only the notation needs it that often. Re-rendering the whole activity
- * (fretboard or keyboard included) 60 times a second kept tablets busy and warm.
- */
-function createPlayhead() {
-  let tick: number | null = null;
-  const subs = new Set<() => void>();
-  return {
-    get: (): number | null => tick,
-    set(t: number | null): void {
-      if (t === tick) return;
-      tick = t;
-      for (const cb of subs) cb();
-    },
-    subscribe(cb: () => void): () => void {
-      subs.add(cb);
-      return () => {
-        subs.delete(cb);
-      };
-    },
-  };
-}
-type Playhead = ReturnType<typeof createPlayhead>;
-
-/** NotationView following the playhead (the only part re-rendered on each frame). */
-function LiveNotation({ playhead, follow, ...props }: Omit<ComponentProps<typeof NotationView>, 'playheadTick'> & { playhead: Playhead; follow: boolean }) {
-  const tick = useSyncExternalStore(playhead.subscribe, playhead.get);
-  return <NotationView {...props} playheadTick={follow ? tick ?? 0 : null} />;
-}
-
 export function PlayAlong(props: PlayAlongProps) {
   const { ctx, score: rawScore, mode, onDone } = props;
   const tempo = props.tempo ?? rawScore.tempo ?? 80;
@@ -152,7 +121,11 @@ export function PlayAlong(props: PlayAlongProps) {
   const [stepStates, setStepStates] = useState<Record<number, NoteState>>({});
   const [ghosts, setGhosts] = useState<GhostNote[]>([]);
   const [hint, setHint] = useState(false);
-  const playhead = useMemo(createPlayhead, []);
+  /**
+   * The moving playhead (tempo mode, Listen): set once when it starts, then the notation
+   * animates it by itself. Re-rendering every frame to move it kept tablets busy and warm.
+   */
+  const [playheadMotion, setMotion] = useState<PlayheadMotion | null>(null);
   /** Tempo mode: contextAt(playhead), updated only when the marks actually change. */
   const [tempoContext, setTempoContext] = useState<ContextMarks | null>(null);
   const contextKeyRef = useRef('');
@@ -172,15 +145,15 @@ export function PlayAlong(props: PlayAlongProps) {
   const responseRef = useRef<number[]>([]);
   const metroRef = useRef<Metronome | null>(null);
   const t0Ref = useRef(0);
-  const rafRef = useRef(0);
+  /** Follows the playhead while it moves: judging misses (tempo mode), the end of Listen. */
+  const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const tempoHitsRef = useRef<Record<number, Set<number>>>({});
   const doneRef = useRef(false);
   const seqRef = useRef<{ stop(): void } | null>(null);
   const ghostSeq = useRef(0);
 
-  const setPlayheadTick = useCallback(
+  const updateContext = useCallback(
     (t: number | null) => {
-      playhead.set(t);
       if (mode !== 'tempo') return;
       const at = contextAtRef.current;
       const c = at && t !== null ? at(t) : null;
@@ -190,7 +163,7 @@ export function PlayAlong(props: PlayAlongProps) {
         setTempoContext(c);
       }
     },
-    [playhead, mode],
+    [mode],
   );
 
   // skip leading steps that have nothing to play (other hand only) in wait mode
@@ -212,7 +185,8 @@ export function PlayAlong(props: PlayAlongProps) {
     doneRef.current = true;
     setPhase('done');
     metroRef.current?.stop();
-    cancelAnimationFrame(rafRef.current);
+    clearInterval(timerRef.current);
+    setMotion(null);
     inputManager.setExpected(null);
     const total = gradedSteps.length;
     let correct = 0;
@@ -273,7 +247,7 @@ export function PlayAlong(props: PlayAlongProps) {
       unmounted.current = true;
       metroRef.current?.stop();
       seqRef.current?.stop();
-      cancelAnimationFrame(rafRef.current);
+      clearInterval(timerRef.current);
       // a band that has finished rings on; one cut off mid-song stops
       if (!doneRef.current) bandRef.current?.stop();
     };
@@ -410,7 +384,7 @@ export function PlayAlong(props: PlayAlongProps) {
   const tick = useCallback(() => {
     const now = performance.now();
     const cur = (now - t0Ref.current) / (secPerTick * 1000);
-    setPlayheadTick(Math.max(-PPQ, cur));
+    updateContext(Math.max(-PPQ, cur));
     // misses
     const updates: Record<number, NoteState> = {};
     for (const i of gradedSteps) {
@@ -426,12 +400,8 @@ export function PlayAlong(props: PlayAlongProps) {
     if (Object.keys(updates).length) markSteps(updates);
     const lastStep = gradedSteps[gradedSteps.length - 1];
     const lastDue = lastStep === undefined ? 0 : stepTimeMs(lastStep) + tolerance + latency + 120;
-    if (cur > totalTicks + PPQ * 0.5 && now > lastDue) {
-      finish();
-      return;
-    }
-    rafRef.current = requestAnimationFrame(tick);
-  }, [secPerTick, gradedSteps, latency, stepTimeMs, tolerance, totalTicks, finish, runtime, rawScore, steps, setPlayheadTick]);
+    if (cur > totalTicks + PPQ * 0.5 && now > lastDue) finish();
+  }, [secPerTick, gradedSteps, latency, stepTimeMs, tolerance, totalTicks, finish, runtime, rawScore, steps, updateContext]);
 
   const startTempo = useCallback(async () => {
     await unlockAudio();
@@ -476,6 +446,7 @@ export function PlayAlong(props: PlayAlongProps) {
     // pickup: the first full bar starts after the count-in; a pickup overlaps the count-in's last beat(s)
     const pickupOffset = rawScore.pickup ? -rawScore.pickup * secPerTick : 0;
     t0Ref.current = ctxTimeToPerfNow(metro.startTime + pickupOffset);
+    setMotion({ startMs: t0Ref.current, msPerTick: secPerTick * 1000 });
     // other hand / accompaniment, scheduled on the audio clock
     if (band) {
       const beats = countInBars * meterBeats;
@@ -491,8 +462,9 @@ export function PlayAlong(props: PlayAlongProps) {
         : [],
     );
     if (autoEvents.length) seqRef.current = synth.playSequence(autoEvents, voice);
-    cancelAnimationFrame(rafRef.current);
-    rafRef.current = requestAnimationFrame(tick);
+    // misses are judged a few dozen times a second: the playhead moves without us
+    clearInterval(timerRef.current);
+    timerRef.current = setInterval(tick, 50);
   }, [rawScore, secPerTick, meterBeats, beatBus, ctx.settings.metronome, props.metronome, props.countInBars, props.band, props.bandBeatOffset, runtime, steps, tick, voice, accompVel]);
 
   // looping practice: start straight away
@@ -509,8 +481,8 @@ export function PlayAlong(props: PlayAlongProps) {
     await unlockAudio();
     if (phase === 'preview') {
       seqRef.current?.stop();
-      cancelAnimationFrame(rafRef.current);
-      setPlayheadTick(null);
+      clearInterval(timerRef.current);
+      setMotion(null);
       setPhase(mode === 'wait' ? 'playing' : 'ready');
       return;
     }
@@ -520,18 +492,15 @@ export function PlayAlong(props: PlayAlongProps) {
     const events = steps.map(s => ({ midi: s.notes.map(n => n.midi), at: lead + s.tick * secPerTick, duration: Math.max(0.15, s.notes[0].ticks * secPerTick * 0.95) }));
     seqRef.current = synth.playSequence(events, voice);
     const start = performance.now() + lead * 1000;
-    const loop = () => {
-      const cur = (performance.now() - start) / (secPerTick * 1000);
-      setPlayheadTick(Math.max(0, cur));
-      if (cur > totalTicks) {
-        setPlayheadTick(null);
-        setPhase(prevPhase);
-        return;
-      }
-      rafRef.current = requestAnimationFrame(loop);
-    };
-    rafRef.current = requestAnimationFrame(loop);
-  }, [phase, steps, secPerTick, voice, totalTicks, mode, setPlayheadTick]);
+    setMotion({ startMs: start, msPerTick: secPerTick * 1000 });
+    clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      if ((performance.now() - start) / (secPerTick * 1000) <= totalTicks) return;
+      clearInterval(timerRef.current);
+      setMotion(null);
+      setPhase(prevPhase);
+    }, 100);
+  }, [phase, steps, secPerTick, voice, totalTicks, mode]);
 
   // ----- view model -----
   const states = useMemo(() => {
@@ -597,9 +566,8 @@ export function PlayAlong(props: PlayAlongProps) {
     <div className="activity playalong" data-expected={currentRt?.required.map(n => n.midi).join(',')} data-phase={phase}>
       <ActivityHeader title={props.title} prompt={props.prompt ?? defaultPrompt(mode, props.hands, !!props.band)} badge={props.badge} progress={progress} />
       <div className="stage-paper paper">
-        <LiveNotation
-          playhead={playhead}
-          follow={phase === 'preview' || (mode === 'tempo' && (phase === 'playing' || phase === 'countin'))}
+        <NotationView
+          motion={playheadMotion}
           score={score}
           states={states}
           focusId={phase === 'playing' && mode === 'wait' ? focusId : undefined}
@@ -650,8 +618,9 @@ export function PlayAlong(props: PlayAlongProps) {
               metroRef.current?.stop();
               seqRef.current?.stop();
               props.band?.stop();
-              cancelAnimationFrame(rafRef.current);
-              setPlayheadTick(null);
+              clearInterval(timerRef.current);
+              setMotion(null);
+              updateContext(null);
               setCountIn(null);
               setPhase('ready');
               resetSteps();
@@ -695,7 +664,8 @@ export function ActivityHeader({ title, prompt, badge, progress }: { title?: str
       {badge && <span className="pill">{badge}</span>}
       {progress !== undefined && (
         <div className="activity-progress" aria-hidden>
-          <div style={{ width: `${Math.round(progress * 100)}%` }} />
+          {/* scaled, not sized: a width transition would lay out and repaint the header on every frame */}
+          <div style={{ transform: `scaleX(${Math.round(Math.min(1, Math.max(0, progress)) * 100) / 100})` }} />
         </div>
       )}
     </div>

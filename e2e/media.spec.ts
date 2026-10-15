@@ -4,7 +4,7 @@
  *   MEDIA=docs/media npx playwright test media --project=ipad
  *   MEDIA=docs/media npx playwright test media --project=phone
  *
- * Animations are recorded as frames (Chrome screencast); tools/make-gifs.sh turns them into GIFs.
+ * Animations are recorded as frames (Chrome screencast); tools/readme-media.sh turns them into GIFs.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

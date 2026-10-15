@@ -32,6 +32,8 @@ interface Graph {
 
 /** Wet level of the shared reverb return. */
 const REVERB_WET = 0.12;
+/** Seconds of the reverb's response kept (its decay is 1.6 s). */
+const REVERB_KEEP = 1.1;
 /** How much of each bus feeds the reverb (× REVERB_WET). */
 const BUS_SEND: Record<BusName, number> = { synth: 1, sfx: 1.5, metronome: 0.25, band: 0 };
 const BUS_GAIN: Record<BusName, number> = { synth: 0.9, sfx: 0.85, metronome: 0.9, band: 0.9 };
@@ -99,10 +101,11 @@ function ensureGraph(): Graph {
   compressor.connect(master);
   master.connect(ctx.destination);
 
-  // Procedural reverb
+  // Procedural reverb: a 1.6 s room, cut where its tail is ~60 dB under the dry sound
+  // (wet level and all). A convolver works whenever anything plays; that takes ~15% off it.
   const convolver = ctx.createConvolver();
   try {
-    const ir = generateImpulseResponse(ctx.sampleRate, 1.6);
+    const ir = generateImpulseResponse(ctx.sampleRate, 1.6, 1234, REVERB_KEEP);
     const irBuf = ctx.createBuffer(2, ir.left.length, ctx.sampleRate);
     irBuf.getChannelData(0).set(ir.left);
     irBuf.getChannelData(1).set(ir.right);

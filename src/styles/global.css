@@ -278,6 +278,45 @@ p {
   min-height: 100%;
 }
 
+/* A screen's code downloading (the first visit to it): a bar sliding along the top, shown
+   only if it takes a moment. (The app's first load has index.html's loading screen.) */
+.route-loading {
+  position: fixed;
+  top: var(--safe-top);
+  left: 0;
+  right: 0;
+  z-index: 200;
+  height: 3px;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  animation: route-loading-in 0.3s ease-out 0.3s forwards;
+}
+
+.route-loading::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 30%;
+  background: linear-gradient(90deg, transparent, var(--gold-2), var(--gold), transparent);
+  animation: route-loading-slide 1.2s ease-in-out infinite;
+}
+
+@keyframes route-loading-in {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes route-loading-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+
 .page {
   position: relative;
   max-width: 1180px;

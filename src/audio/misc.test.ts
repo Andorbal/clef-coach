@@ -119,6 +119,17 @@ describe('sound design renders', () => {
     const norm = Math.sqrt(rmsRange(ir.left) ** 2 * rmsRange(ir.right) ** 2) * ir.left.length;
     expect(Math.abs(dot / norm)).toBeLessThan(0.2);
   });
+
+  it('can stop short of the full decay without changing what it keeps', () => {
+    const full = generateImpulseResponse(48000, 1.6);
+    const cut = generateImpulseResponse(48000, 1.6, 1234, 1.1);
+    expect(cut.left.length).toBe(Math.round(1.1 * 48000));
+    // the same response up to the fade at the end
+    for (const i of [600, 5000, 20000, 48000]) expect(cut.left[i]).toBe(full.left[i]);
+    expect(Math.abs(cut.left[cut.left.length - 1])).toBeLessThan(1e-4);
+    // what's cut is ~40 dB under the start of the tail
+    expect(rmsRange(full.left, 52800, 55200)).toBeLessThan(rmsRange(full.left, 1000, 5000) * 0.02);
+  });
 });
 
 describe('FFT', () => {
