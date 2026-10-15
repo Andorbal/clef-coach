@@ -12,7 +12,7 @@
  *
  * Parsers (./sf2.ts, ./sfz.ts) are pure and never decode audio: they turn a file into
  * presets made of regions, and say where each sample's data lives. The player
- * (./bank.ts) decodes samples lazily, only those a song needs, within a memory budget.
+ * (./sampler.ts) decodes samples lazily, only those a song needs, within a memory budget.
  *
  * Units are chosen for the player, not the file: seconds, dB, cents, frames relative
  * to the start of the sample's own data, pan −1..1.
