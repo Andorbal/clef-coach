@@ -93,3 +93,11 @@ test('import a MusicXML file', async ({ page }) => {
   await expect(page.getByText('Chords in this song')).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test('hand shifts are marked beside the finger numbers', async ({ page }) => {
+  await onboard(page, 'Shifter');
+  // Twinkle's first phrase: the hand moves up a key for G and A, and back down for the last C
+  await page.goto('/#/song/prh-twinkle-twinkle');
+  await expect(page.locator('.notation .vf-shift')).toHaveCount(2);
+  await expect(page.locator('.notation .vf-shift title')).toHaveText(['Move your hand up', 'Move your hand down']);
+});

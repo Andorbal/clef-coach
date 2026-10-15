@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { keyboardOctaveDelta, keyboardToMidi } from './input/keyboard';
 import { parseMidiMessage } from './input/midi';
 import { audibleDuration, renderClickSamples, renderSfx, SFX_NAMES, SFX_PITCHES } from './sounds';
@@ -118,6 +118,50 @@ describe('sound design renders', () => {
     for (let i = 0; i < ir.left.length; i++) dot += ir.left[i] * ir.right[i];
     const norm = Math.sqrt(rmsRange(ir.left) ** 2 * rmsRange(ir.right) ** 2) * ir.left.length;
     expect(Math.abs(dot / norm)).toBeLessThan(0.2);
+  });
+});
+
+describe('room reverb', () => {
+  /** The convolver's impulse response length when the shared context is made on this device. */
+  async function roomFrames(userAgent: string): Promise<number> {
+    vi.resetModules();
+    let frames = 0;
+    const node = () => ({ connect: () => undefined, gain: { value: 1 }, frequency: { value: 0 }, threshold: { value: 0 }, knee: { value: 0 }, ratio: { value: 0 }, attack: { value: 0 }, release: { value: 0 } });
+    class Ctx {
+      sampleRate = 48000;
+      destination = node();
+      addEventListener() {}
+      createGain = node;
+      createBiquadFilter = node;
+      createDynamicsCompressor = node;
+      createBuffer(ch: number, len: number) {
+        return { getChannelData: () => new Float32Array(len), numberOfChannels: ch };
+      }
+      createConvolver() {
+        return {
+          connect: () => undefined,
+          set buffer(b: { getChannelData(i: number): Float32Array }) {
+            frames = b.getChannelData(0).length;
+          },
+        };
+      }
+    }
+    vi.stubGlobal('window', { AudioContext: Ctx });
+    vi.stubGlobal('navigator', { userAgent, platform: '', maxTouchPoints: 0 });
+    try {
+      const { getAudioContext } = await import('./context');
+      getAudioContext();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    return frames;
+  }
+
+  it('is a 1.6 s room, and on iPhone and iPad short enough to stay on the audio thread', async () => {
+    expect(await roomFrames('Mozilla/5.0 (Windows NT 10.0; Win64; x64)')).toBe(Math.round(1.6 * 48000));
+    const ios = await roomFrames('Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X)');
+    expect(ios).toBeGreaterThan(0.2 * 48000);
+    expect(ios).toBeLessThanOrEqual(8192 + 4096);
   });
 });
 

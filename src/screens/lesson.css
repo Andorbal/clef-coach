@@ -785,12 +785,18 @@
   background: linear-gradient(90deg, rgba(244, 201, 122, 0.12), rgba(244, 201, 122, 0.02));
 }
 
+/* pinned to the bottom of the screen, however long the cards above get */
 .results-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
   justify-content: center;
-  margin-top: 6px;
+  margin-top: -24px;
+  padding: 26px 18px 18px;
+  background: linear-gradient(180deg, rgba(6, 7, 13, 0), rgba(6, 7, 13, 0.97) 26px);
 }
 
 .lesson-empty {

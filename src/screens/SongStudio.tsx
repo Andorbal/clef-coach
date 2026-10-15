@@ -28,6 +28,7 @@ import { TRACKS, getTrack } from '../curriculum';
 import { makeRng } from '../curriculum/generate';
 import type { FingeringMode } from '../curriculum/types';
 import { type ActivityResult, type LessonCtx, prefsOf } from '../engine/context';
+import { markHandShifts } from '../engine/fingeringView';
 import { PlayAlong } from '../engine/PlayAlong';
 import { autoFinger } from '../music/autofinger';
 import { familyOf, instrumentName, voiceFor } from '../music/instruments';
@@ -220,7 +221,7 @@ export default function SongStudio() {
   );
 
   const runScore = useMemo(() => (run && score ? sliceScore(run.chords && strumScore ? strumScore.score : score, run.passage.from - 1, run.passage.to - 1) : null), [run, score, strumScore]);
-  const previewScore = useMemo(() => (current && score ? sliceScore(score, current.from - 1, current.to - 1) : null), [current, score]);
+  const previewScore = useMemo(() => (current && score ? markHandShifts(sliceScore(score, current.from - 1, current.to - 1)) : null), [current, score]);
   // the band for this run, loaded once per run (mixer changes apply as it plays)
   const runBand = useMemo(
     () => (run?.band && run.mode === 'tempo' ? band.forRun(run.passage) : undefined),

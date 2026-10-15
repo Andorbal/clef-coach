@@ -192,7 +192,60 @@ interface BuiltNote {
   vf: StaveNote;
 }
 
-function buildStaveNote(el: NoteEl, clef: Clef, score: Score, opts: RenderOptions, stemDir: number | undefined, hand: 'R' | 'L' | undefined): StaveNote {
+/** Hand-shift arrows: blue, apart from the ink and the note-state colours. */
+const SHIFT_COLOR = '#2a6fdb';
+
+/** A finger number whose note moves the hand (NoteEl.shift): where its text was drawn. */
+interface ShiftMark {
+  dir: 1 | -1;
+  /** Left edge and baseline of the finger number. */
+  x: number;
+  y: number;
+}
+
+/** Note where `m` draws its text, for an arrow beside it once the notes are drawn. */
+function markShift(m: Annotation | FretHandFinger, dir: 1 | -1, out: ShiftMark[]): void {
+  const render = m.renderText.bind(m);
+  m.renderText = (ctx, x, y) => {
+    render(ctx, x, y);
+    out.push({ dir, x: x + m.getX() + m.getXShift(), y: y + m.getY() + m.getYShift() });
+  };
+}
+
+/**
+ * A small arrow just left of a finger number: the hand moves up (→, towards higher notes)
+ * or down (←) to play it. Horizontal, as the hand moves along the keys or up the neck.
+ */
+function drawShiftArrows(ctx: RenderContext, marks: ShiftMark[]): void {
+  for (const m of marks) {
+    const g = ctx.openGroup('shift') as unknown as SVGGElement | undefined;
+    const right = m.x - 2.5;
+    const left = right - 8;
+    const y = m.y - 4; // middle of an 11 px digit
+    const tip = m.dir > 0 ? right : left;
+    const back = m.dir > 0 ? tip - 3 : tip + 3;
+    ctx.save();
+    ctx.setStrokeStyle(SHIFT_COLOR);
+    ctx.setLineWidth(1.5);
+    ctx.setLineCap('round');
+    ctx.beginPath();
+    ctx.moveTo(left, y);
+    ctx.lineTo(right, y);
+    ctx.moveTo(back, y - 3);
+    ctx.lineTo(tip, y);
+    ctx.lineTo(back, y + 3);
+    ctx.stroke();
+    ctx.restore();
+    ctx.closeGroup();
+    if (g?.ownerDocument) {
+      const title = g.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'title');
+      title.textContent = m.dir > 0 ? 'Move your hand up' : 'Move your hand down';
+      g.prepend(title);
+    }
+  }
+}
+
+function buildStaveNote(el: NoteEl, clef: Clef, score: Score, opts: RenderOptions, stemDir: number | undefined, hand: 'R' | 'L' | undefined, shifts: ShiftMark[]): StaveNote {
   const keys = el.rest ? [restKey(clef)] : el.pitches.map(p => vexKey(writtenPitch(p, clef)));
   const duration = VEX_DURATION[el.base] + (el.rest ? 'r' : '');
   const note = new StaveNote({
@@ -230,6 +283,8 @@ function buildStaveNote(el: NoteEl, clef: Clef, score: Score, opts: RenderOption
         const a = new Annotation(String(f));
         a.setFont('Inter Variable, Inter, sans-serif', 11, 600);
         a.setVerticalJustification(below ? Annotation.VerticalJustify.BOTTOM : Annotation.VerticalJustify.TOP);
+        // the hand position is the top note's (see markHandShifts)
+        if (el.shift && i === el.pitches.length - 1) markShift(a, el.shift, shifts);
         note.addModifier(a, 0);
       }
     } else {
@@ -238,6 +293,7 @@ function buildStaveNote(el: NoteEl, clef: Clef, score: Score, opts: RenderOption
         if (f === undefined || el.tiePrev) return;
         const fh = new FretHandFinger(String(f));
         fh.setPosition(Modifier.Position.LEFT);
+        if (el.shift && i === el.pitches.length - 1) markShift(fh, el.shift, shifts);
         note.addModifier(fh, i);
       });
     }
@@ -383,6 +439,7 @@ export function renderScore(container: HTMLElement, score: Score, opts: RenderOp
   const allBuilt = new Map<string, StaveNote>();
   const clefNext = score.staves.map(() => 0);
   const clefMarks: { tick: number; vf: StaveNote }[] = [];
+  const shiftMarks: ShiftMark[] = [];
 
   for (let m = 0; m < score.measures; m++) {
     const mTime = timeAt(score, m);
@@ -403,7 +460,7 @@ export function renderScore(container: HTMLElement, score: Score, opts: RenderOp
         if (!els.length || stems[vi] === null) return;
         const stem = stems[vi] ?? undefined;
         const multi = stem !== undefined;
-        const built = els.map(el => ({ el, vf: buildStaveNote(el, clefAt(staff, el.tick), score, opts, stem, staff.hand) }));
+        const built = els.map(el => ({ el, vf: buildStaveNote(el, clefAt(staff, el.tick), score, opts, stem, staff.hand, shiftMarks) }));
         if (multi) {
           // offset rests so voices don't collide
           built.forEach(b => {
@@ -581,6 +638,7 @@ export function renderScore(container: HTMLElement, score: Score, opts: RenderOp
     });
   }));
   ties.forEach(t => t.setContext(ctx).draw());
+  drawShiftArrows(ctx, shiftMarks);
 
   tickXs.sort((a, b) => a[0] - b[0]);
   // de-duplicate ticks (keep the leftmost x)
