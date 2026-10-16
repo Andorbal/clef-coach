@@ -38,7 +38,7 @@ Two oscillators playing the same note just sound louder. The magic is in tuning 
 - **An octave apart** (−1 or +1): fuller, a solid bass or a bright organ.
 - **A fifth apart** (+7 semitones): a "power chord" on every key you press, the trick behind many trance and house leads.
 
-3x Osc in FL Studio is exactly this: three oscillators with their own shapes, tuning and levels.`,
+A classic three-oscillator synth is exactly this: three oscillators with their own shapes, tuning and levels.`,
           { visual: 'signal-flow' },
         ),
         explore('Layer it', 'Bring in oscillator 2 with the Osc 2 level in the mixer.', [

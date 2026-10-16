@@ -79,7 +79,10 @@ value and the one that helps most is suggested, so an inaudible knob is never po
 - Every unit ends with a `checkpoint` (80% to pass; it's also the test-out). Units unlock by
   `requires` (default: the unit before). `PARTS` in `course/index.ts` groups units on the map.
 - Prose is Markdown-lite (`ui/Prose.tsx`): paragraphs, `- ` lists, `**bold**`. Name the
-  control as real synths do (FL Studio's names in `ui/controls.ts` `aka`, and `course/guide.ts`).
+  control as real synths do (the common names in `ui/controls.ts` `aka`, and `course/guide.ts`).
+  Don't tie the course to one DAW or vendor: Clef Coach isn't affiliated with any, so the
+  field guide describes kinds of synth, not products. Famous instruments as history (the
+  DX7, the TB-303) are fine.
 - **Ids are persistence keys:** unit ids (`sy-…`), lesson ids (`sy1-1`…) and `SavedPatch`
   ids are saved in profiles. Never rename one. New params must keep old saved patches
   working (`makePatch` fills missing keys from the init patch).

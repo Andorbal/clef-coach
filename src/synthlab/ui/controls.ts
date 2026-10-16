@@ -217,12 +217,12 @@ export const CONTROLS = {
     label: 'Cutoff',
     about: 'Where the filter starts to cut. On a low-pass, lower is darker and more muffled, higher is brighter. The most-used knob on any synth.',
     tip: 'Hold a saw chord and sweep the cutoff from bottom to top: that\'s the sound of a hundred dance records.',
-    aka: ['Cutoff', 'Freq', 'Frequency', 'Fc', 'Cut', 'Mod X (FL Studio)'],
+    aka: ['Cutoff', 'Freq', 'Frequency', 'Fc', 'Cut'],
   },
   filterRes: {
     label: 'Resonance',
     about: 'Boosts the frequencies right at the cutoff, so the filter "sings". A little adds bite; a lot makes a squelchy, whistling peak, and sweeping it makes the classic acid squelch.',
-    aka: ['Res', 'Q', 'Emphasis', 'Peak', 'Mod Y (FL Studio)'],
+    aka: ['Res', 'Q', 'Emphasis', 'Peak'],
   },
   filterDrive: {
     label: 'Drive',

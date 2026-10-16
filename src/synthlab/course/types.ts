@@ -77,7 +77,7 @@ export interface MatchStep extends StepBase {
 export type StepDef = ExplainStep | ExploreStep | ListenStep | MatchStep;
 
 /** Pictures an explain step can show. */
-export type VisualId = 'signal-flow' | 'waveforms' | 'harmonics' | 'adsr' | 'filter-types' | 'lfo' | 'fm' | 'additive' | 'wavetable' | 'fl-studio';
+export type VisualId = 'signal-flow' | 'waveforms' | 'harmonics' | 'adsr' | 'filter-types' | 'lfo' | 'fm' | 'additive' | 'wavetable';
 
 export type LessonKind = 'learn' | 'quiz' | 'checkpoint' | 'project';
 
