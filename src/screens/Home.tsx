@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { ArrowRight, AudioWaveform, Brain, Dumbbell, Flame, Plus, Snowflake, Target } from 'lucide-react';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { MobileSettingsButton } from '../components/Shell';
 import { TrackBadge } from '../components/TrackBadge';
@@ -13,10 +13,9 @@ import { dayKey, lastNDays, parseDayKey } from '../state/dates';
 import { effectiveStreak } from '../state/logic';
 import { mastery } from '../state/srs';
 import { useApp, useDevice, useProfile } from '../state/store';
-import type { TrackId } from '../state/types';
+import type { SynthProgress, TrackId } from '../state/types';
 import './home.css';
 import { isIOS } from '../platform';
-import { nextLesson as nextSynthLesson } from '../synthlab/course/progress';
 
 function greeting() {
   const h = new Date().getHours();
@@ -28,6 +27,27 @@ function greeting() {
 
 const fade = (i: number) => ({ initial: { opacity: 0, y: 18 }, animate: { opacity: 1, y: 0 }, transition: { delay: 0.05 + i * 0.07, duration: 0.5, ease: [0.16, 1, 0.3, 1] as const } });
 
+/**
+ * Synth School's next lesson, for its card. The course is loaded on demand: Home is in the
+ * first download, and the course text would make that ~23 kB (gzipped) heavier for everyone.
+ * undefined while loading, null when the course is complete.
+ */
+function useSynthNext(sp: SynthProgress | undefined) {
+  const [next, setNext] = useState<{ id: string; title: string } | null | undefined>(undefined);
+  useEffect(() => {
+    if (!sp) return;
+    let live = true;
+    import('../synthlab/course/progress').then(m => {
+      const n = m.nextLesson(sp);
+      if (live) setNext(n ? { id: n.lesson.id, title: n.lesson.title } : null);
+    });
+    return () => {
+      live = false;
+    };
+  }, [sp]);
+  return next;
+}
+
 export default function Home() {
   const profile = useProfile();
   const device = useDevice();
@@ -37,6 +57,7 @@ export default function Home() {
   const showInstall = isIOS() && !standalone && !device.installPromptDismissed;
   const today = dayKey();
   const tracks = useMemo(() => (profile?.trackOrder ?? []).map(id => getTrack(id)).filter(Boolean) as NonNullable<ReturnType<typeof getTrack>>[], [profile?.trackOrder]);
+  const synthNext = useSynthNext(profile?.synth);
   if (!profile) return null;
 
   const active = getTrack(profile.activeTrackId ?? tracks[0]?.id ?? '') ?? tracks[0];
@@ -49,7 +70,6 @@ export default function Home() {
   const lvl = levelFromXp(profile.xp);
   const review = active ? buildReviewLesson(active, activeTp) : null;
   const dueCount = activeTp ? Object.values(activeTp.items).filter(s => s.due <= Date.now()).length : 0;
-  const synthNext = nextSynthLesson(profile.synth);
   const recent = Object.entries(profile.achievements)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3)
@@ -230,13 +250,15 @@ export default function Home() {
           </span>
           <ArrowRight size={18} className="quick-arrow" />
         </button>
-        <button className="quick-card card" onClick={() => navigate(profile.synth && synthNext ? `/synth/lesson/${synthNext.lesson.id}` : '/synth')}>
+        <button className="quick-card card" onClick={() => navigate(profile.synth && synthNext ? `/synth/lesson/${synthNext.id}` : '/synth')}>
           <span className="quick-icon pink">
             <AudioWaveform size={22} />
           </span>
           <span className="quick-text">
             <strong>Synth School</strong>
-            <span className="dim">{profile.synth && synthNext ? `Next: ${synthNext.lesson.title}.` : profile.synth ? 'Course complete. The Synth Lab is yours.' : 'Learn to use synthesizers, one knob at a time.'}</span>
+            <span className="dim">
+              {!profile.synth ? 'Learn to use synthesizers, one knob at a time.' : synthNext ? `Next: ${synthNext.title}.` : synthNext === null ? 'Course complete. The Synth Lab is yours.' : 'Pick up where you left off.'}
+            </span>
           </span>
           <ArrowRight size={18} className="quick-arrow" />
         </button>

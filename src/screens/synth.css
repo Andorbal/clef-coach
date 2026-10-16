@@ -142,8 +142,12 @@
     order: 5;
     flex-basis: 100%;
   }
-  .synth-top-actions .btn-ghost:not(.btn-icon) {
+  /* icons only on a phone: the labels would push the header off the screen */
+  .synth-act-label {
     display: none;
+  }
+  .synth-top-actions .btn-sm {
+    padding-inline: 9px;
   }
   .synth-lesson-name {
     display: none;

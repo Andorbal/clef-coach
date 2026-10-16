@@ -3,13 +3,14 @@
 A React 19 + Vite + TypeScript PWA that teaches reading music on piano, guitar, ukulele, bass
 and mallets. It listens to a real instrument (Web MIDI or the microphone), draws notation with
 VexFlow, synthesises every sound itself (plus optional SoundFont/SFZ banks), and can play a
-band along with the player. No server: state lives in localStorage and IndexedDB. The main
+band along with the player. Synth School (`/synth`) teaches synthesizers on a synth the app
+runs itself, judging quizzes by ear. No server: state lives in localStorage and IndexedDB. The main
 target is an **iPad in Safari** (as a home-screen PWA). Treat CPU, GPU and battery use
 there as features.
 
 More detailed notes sit next to the code (each loads when you work in that folder):
 `src/audio/CLAUDE.md`, `src/perform/CLAUDE.md`, `src/engine/CLAUDE.md`,
-`src/songs/CLAUDE.md`, `src/curriculum/CLAUDE.md`, `e2e/CLAUDE.md`. Performance
+`src/songs/CLAUDE.md`, `src/curriculum/CLAUDE.md`, `src/synthlab/CLAUDE.md`, `e2e/CLAUDE.md`. Performance
 measurements and history are in `docs/performance.md`. The song file format is in
 `docs/song-format.md`.
 
@@ -18,7 +19,7 @@ measurements and history are in `docs/performance.md`. The song file format is i
 | What | Command | Notes |
 |---|---|---|
 | Dev server | `npm run dev` | http://localhost:5173. `npm run dev:lan` serves HTTPS on the LAN for a real iPad (the mic needs a secure context). |
-| Unit tests | `npm test` | Vitest, Node environment, `src/**/*.test.ts`. About 770 tests in ~15 s. One file: `npx vitest run src/notation/scroll.test.ts`. |
+| Unit tests | `npm test` | Vitest, Node environment, `src/**/*.test.ts`. About 1060 tests in ~16 s. One file: `npx vitest run src/notation/scroll.test.ts`. |
 | Typecheck | `npm run typecheck` | `tsc -b` over `src` (app), `vite.config.ts` (node) and `tools/**` (tools). **`e2e/` and `playwright.config.ts` are not typechecked.** |
 | Build | `npm run build` | `tsc -b && vite build` → `dist/`. About 2 s for the Vite part. |
 | E2E | `npm run e2e` | Playwright with the `ipad` (iPad Mini landscape) and `phone` (Pixel 7) projects, both Chromium. It starts its own dev server on **5188**. About 3.5 min for the whole suite; to run one spec: `npx playwright test band --project=ipad`. |
@@ -30,7 +31,7 @@ run e2e. Pushing to `main` deploys to GitHub Pages (`deploy.yml`).
 
 Opt-in Playwright runs (skipped unless their env var is set):
 
-- `SWEEP=1 npx playwright test sweep --project=ipad`: renders every step of every lesson.
+- `SWEEP=1 npx playwright test sweep --project=ipad`: renders every step of every lesson (`-g "Synth School"` for the synth course alone, about a minute).
 - `SHOTS=dir npx playwright test screens`: screenshots of every screen.
 - `MEDIA=dir …` via `tools/readme-media.sh`: the README media.
 - `BENCH=1 npx playwright test audio-bench --project=ipad`: audio render cost (see `docs/performance.md`).
@@ -56,6 +57,8 @@ src/
   perform/            the band: arranger, harmony inference, performer, sinks → src/perform/CLAUDE.md
   engine/             lesson runtime: PlayAlong (wait/tempo), activities → src/engine/CLAUDE.md
   curriculum/         13 tracks of units/lessons, builders, generator → src/curriculum/CLAUDE.md
+  synthlab/           Synth School: the synth (pure-TS DSP in an AudioWorklet), the sound judge,
+                      the panel UI and the course → src/synthlab/CLAUDE.md
   content/songs/      the built-in song library (TS), one file per instrument
   songs/              song file format, importers (MusicXML, MIDI, Guitar Pro, tab), Claude scan
   state/              zustand store, persistence, SRS, achievements, export/import
@@ -106,7 +109,8 @@ parts.
   optional and read with `?? default`. A new top-level `PersistedData` field also needs
   `makeExport`, `parseImport` and `mergeData` in `state/logic.ts`.
 - **Ids are persistence keys:** lesson ids, song ids, track ids and SRS item keys
-  (`note:treble:C4`, `chord:…`). Renaming one orphans users' progress.
+  (`note:treble:C4`, `chord:…`), and Synth School's unit and lesson ids (`sy-osc`, `sy1-1`).
+  Renaming one orphans users' progress.
 
 ## Keep in sync by hand
 

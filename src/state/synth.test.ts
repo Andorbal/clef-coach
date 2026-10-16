@@ -13,6 +13,11 @@ describe('Synth School progress', () => {
     expect(r.profile.totals.lessons).toBe(1);
     expect(r.streakExtended).toBe(true);
     expect(r.achievements.map(a => a.id)).toContain('synth-first');
+    // a perfect match score isn't a perfect performance
+    const top = applySynthOutcome(p, outcome({ score: 1, stars: 3 }));
+    expect(top.achievements.map(a => a.id)).toEqual(expect.arrayContaining(['synth-ears']));
+    expect(top.achievements.map(a => a.id)).not.toContain('perfect');
+    expect(top.profile.totals.perfect).toBe(0);
     // the original is untouched
     expect(p.synth).toBeUndefined();
   });

@@ -168,7 +168,8 @@ function applyCommon(p: Profile, o: CommonOutcome, now: number): OutcomeReport {
   p.totals.notes += o.notes;
   p.totals.ms += o.ms;
   p.totals.lessons += 1;
-  if (o.accuracy >= 0.999 && o.notes >= 5) p.totals.perfect += 1;
+  // a synth score is how close a sound came, not how many notes were right: Golden Ears counts those
+  if (!o.synth && o.accuracy >= 0.999 && o.notes >= 5) p.totals.perfect += 1;
 
   const unlocked = newAchievements(p, {
     trackId: o.trackId,
@@ -381,7 +382,7 @@ export function parseImport(text: string): PersistedData {
 function parseSynth(x: unknown): SynthProgress | undefined {
   if (!isObj(x)) return undefined;
   const patches = Array.isArray(x.patches)
-    ? (x.patches as unknown[]).filter((q): q is SavedPatch => isObj(q) && typeof q.id === 'string' && typeof q.name === 'string' && isObj(q.patch)).slice(0, 60)
+    ? (x.patches as unknown[]).filter((q): q is SavedPatch => isObj(q) && typeof q.id === 'string' && typeof q.name === 'string' && isObj(q.patch) && typeof q.at === 'number').slice(0, 60)
     : undefined;
   return {
     startedAt: num(x.startedAt, Date.now()),

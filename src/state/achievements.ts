@@ -30,7 +30,7 @@ const synthCount = (p: Profile) => Object.values(p.synth?.lessons ?? {}).filter(
 
 export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'first-lesson', title: 'Opening Bars', description: 'Finish your first lesson.', icon: 'Music', check: p => p.totals.lessons >= 1 },
-  { id: 'perfect', title: 'Clean Take', description: 'Finish a lesson with 100% accuracy.', icon: 'Sparkles', check: (_, c) => (c.accuracy ?? 0) >= 0.999 },
+  { id: 'perfect', title: 'Clean Take', description: 'Finish a lesson with 100% accuracy.', icon: 'Sparkles', check: (_, c) => !c.synth && (c.accuracy ?? 0) >= 0.999 },
   { id: 'perfect-10', title: 'Studio Quality', description: 'Ten flawless lessons.', icon: 'Gem', check: p => p.totals.perfect >= 10 },
   { id: 'streak-3', title: 'Warming Up', description: 'Practise three days in a row.', icon: 'Flame', check: p => p.streak.current >= 3 },
   { id: 'streak-7', title: 'Seven Nights', description: 'A full week of daily practice.', icon: 'Flame', check: p => p.streak.current >= 7 },

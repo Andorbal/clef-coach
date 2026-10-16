@@ -129,18 +129,24 @@ export default function SynthLab() {
               setSaveOpen(true);
             }}
             title="Save this patch"
+            aria-label="Save"
           >
-            <Save size={16} /> Save
+            <Save size={16} /> <span className="synth-act-label">Save</span>
           </button>
           {canFilter && (
-            <button className={`btn btn-sm ${onlyLearned ? '' : 'btn-ghost'}`} onClick={() => setOnlyLearned(v => !v)} title="Show only the controls you've met in lessons">
-              {onlyLearned ? <EyeOff size={16} /> : <Eye size={16} />} {onlyLearned ? 'Learned only' : 'Everything'}
+            <button
+              className={`btn btn-sm ${onlyLearned ? '' : 'btn-ghost'}`}
+              onClick={() => setOnlyLearned(v => !v)}
+              title="Show only the controls you've met in lessons"
+              aria-label={onlyLearned ? 'Learned only' : 'Everything'}
+            >
+              {onlyLearned ? <EyeOff size={16} /> : <Eye size={16} />} <span className="synth-act-label">{onlyLearned ? 'Learned only' : 'Everything'}</span>
             </button>
           )}
-          <button className="btn btn-sm btn-ghost" onClick={() => (lab.setPatch(initPatch(lab.patch.engine)), setPresetName(null))} title="Start this engine from scratch">
-            <RotateCcw size={16} /> Init
+          <button className="btn btn-sm btn-ghost" onClick={() => (lab.setPatch(initPatch(lab.patch.engine)), setPresetName(null))} title="Start this engine from scratch" aria-label="Init">
+            <RotateCcw size={16} /> <span className="synth-act-label">Init</span>
           </button>
-          <button className="btn btn-sm btn-ghost" onClick={() => navigate('/synth')} title="Synth School">
+          <button className="btn btn-sm btn-ghost" onClick={() => navigate('/synth')} title="Synth School" aria-label="Synth School">
             <BookOpen size={16} />
           </button>
         </div>
