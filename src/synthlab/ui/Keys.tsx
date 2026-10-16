@@ -10,6 +10,7 @@ import type { Lab } from './useLab';
 import { spellMidi, pitchLabel } from '../../music/pitch';
 
 export function Keys({ lab, compact, loops = true }: { lab: Lab; compact?: boolean; loops?: boolean }) {
+  const narrow = typeof window !== 'undefined' && window.matchMedia?.('(max-width: 640px)').matches;
   const octaveName = pitchLabel(spellMidi(lab.root), 'letter', true);
   return (
     <div className={`sl-keys ${compact ? 'compact' : ''}`}>
@@ -64,7 +65,7 @@ export function Keys({ lab, compact, loops = true }: { lab: Lab; compact?: boole
         pressed={lab.held}
         onKeyDown={(m, v) => lab.noteOn(m, Math.max(0.5, v))}
         onKeyUp={m => lab.noteOff(m)}
-        height={compact ? 110 : 132}
+        height={compact ? (narrow ? 92 : 110) : narrow ? 104 : 132}
         showLabels="c-only"
         focus={lab.root + 12}
         ariaLabel="Synth keyboard"

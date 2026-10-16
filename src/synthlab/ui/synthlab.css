@@ -912,3 +912,25 @@ button.sl-ctl-label:hover {
 .sl-mod.hinted {
   border-color: rgba(255, 255, 255, 0.4);
 }
+
+@media (max-width: 640px) {
+  .sl-transport {
+    gap: 6px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .sl-transport .chip-btn {
+    min-height: 32px;
+    padding: 0 10px;
+    font-size: 13px;
+  }
+  .sl-loop-select {
+    height: 32px;
+    max-width: 110px;
+  }
+  .sl-octave-name {
+    min-width: 26px;
+    font-size: 13px;
+  }
+}

@@ -6,6 +6,21 @@
 /* ---------- full-screen shell (lab and lessons) ---------- */
 .synth-shell {
   grid-template-rows: auto 1fr;
+  /* never wider than the screen, whatever a child would like */
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.engine-short {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .engine-long {
+    display: none;
+  }
+  .engine-short {
+    display: inline;
+  }
 }
 
 .synth-top {
@@ -55,7 +70,9 @@
 .synth-main {
   grid-row: 2;
   min-height: 0;
+  min-width: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto 1fr auto;
   gap: 8px;
   padding: 0 12px calc(8px + var(--safe-bottom));
@@ -114,7 +131,7 @@
 
 @media (max-width: 760px) {
   .synth-lesson-body {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, auto) 1fr;
   }
   .sl-coach {
@@ -906,4 +923,25 @@ div.synth-preset {
   background: var(--surface-2);
   border: 1px solid var(--border-strong);
   font-size: 17px;
+}
+
+/* phones: every pixel for the knobs */
+@media (max-width: 640px) {
+  .synth-main {
+    gap: 6px;
+    padding: 0 8px calc(6px + var(--safe-bottom));
+  }
+  .synth-main .sl-flow {
+    display: none;
+  }
+  .synth-locked {
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+  .sl-coach {
+    max-height: 36vh;
+  }
+  .synth-dock {
+    padding: 6px 6px 2px;
+  }
 }

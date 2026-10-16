@@ -24,6 +24,7 @@ import './lesson.css';
 import './synth.css';
 
 const LAST_KEY = 'clefcoach.synthlab.patch';
+const SHORT_ENGINE: Record<EngineKind, string> = { subtractive: 'Analog', fm: 'FM', additive: 'Additive', wavetable: 'Table' };
 
 function loadLast(): Patch {
   try {
@@ -106,7 +107,15 @@ export default function SynthLab() {
             size="sm"
             value={lab.patch.engine}
             onChange={setEngine}
-            options={(['subtractive', 'fm', 'additive', 'wavetable'] as const).map(e => ({ value: e, label: optionLabel(e) }))}
+            options={(['subtractive', 'fm', 'additive', 'wavetable'] as const).map(e => ({
+              value: e,
+              label: (
+                <>
+                  <span className="engine-long">{optionLabel(e)}</span>
+                  <span className="engine-short">{SHORT_ENGINE[e]}</span>
+                </>
+              ),
+            }))}
           />
         </div>
         <div className="synth-top-actions">
