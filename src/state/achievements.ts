@@ -23,6 +23,11 @@ const passedCount = (p: Profile, t?: TrackId) =>
     .filter(([id]) => !t || id === t)
     .reduce((s, [, tp]) => s + Object.values(tp?.lessons ?? {}).filter(l => l.passed && !l.skipped).length, 0);
 
+/** Synth School checkpoints (lesson ids, saved in profiles). */
+const SYNTH_PART_ONE = ['sy1-4', 'sy2-4', 'sy3-6', 'sy4-5', 'sy5-5', 'sy6-6'];
+const synthPassed = (p: Profile, ids: string[]) => ids.every(id => p.synth?.lessons[id]?.passed);
+const synthCount = (p: Profile) => Object.values(p.synth?.lessons ?? {}).filter(l => l.passed && !l.skipped).length;
+
 export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'first-lesson', title: 'Opening Bars', description: 'Finish your first lesson.', icon: 'Music', check: p => p.totals.lessons >= 1 },
   { id: 'perfect', title: 'Clean Take', description: 'Finish a lesson with 100% accuracy.', icon: 'Sparkles', check: (_, c) => (c.accuracy ?? 0) >= 0.999 },
@@ -42,6 +47,11 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'checkpoint', title: 'Gatekeeper', description: 'Pass a unit checkpoint.', icon: 'ShieldCheck', check: (_, c) => c.lessonKind === 'checkpoint' && (c.accuracy ?? 0) >= 0.8 },
   { id: 'speed', title: 'Sight Reader', description: 'Average under one second per note in a lesson.', icon: 'Zap', check: (_, c) => (c.avgResponseMs ?? 99999) < 1000 && (c.accuracy ?? 0) >= 0.9 },
   { id: 'lessons-50', title: 'Fifty Lessons', description: 'Fifty lessons completed.', icon: 'Award', check: p => p.totals.lessons >= 50 },
+  { id: 'synth-first', title: 'First Patch', description: 'Pass your first Synth School lesson.', icon: 'AudioWaveform', check: p => synthCount(p) >= 1 },
+  { id: 'synth-ears', title: 'Golden Ears', description: 'Finish a Synth School lesson with a score of 95% or more.', icon: 'Ear', check: (_, c) => !!c.synth && (c.accuracy ?? 0) >= 0.95 },
+  { id: 'synth-subtractive', title: 'Subtractive Thinker', description: 'Pass every checkpoint of Synth School’s first part.', icon: 'Filter', check: p => synthPassed(p, SYNTH_PART_ONE) },
+  { id: 'synth-engines', title: 'Four Engines', description: 'Pass the FM, additive and wavetable checkpoints.', icon: 'Cpu', check: p => synthPassed(p, ['sy7-5', 'sy8-5', 'sy9-4']) },
+  { id: 'synth-graduate', title: 'Sound Designer', description: 'Pass the Synth School final exam.', icon: 'GraduationCap', check: p => synthPassed(p, ['sy11-7']) },
 ];
 
 export function newAchievements(p: Profile, ctx: AchievementContext): AchievementDef[] {

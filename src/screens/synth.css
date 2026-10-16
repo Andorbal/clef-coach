@@ -876,3 +876,34 @@
   margin-top: -12px;
   scroll-margin-bottom: 90px;
 }
+
+.synth-preset-load {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  flex: 1;
+}
+
+div.synth-preset {
+  flex-direction: row;
+  align-items: flex-start;
+}
+
+.synth-preset-delete {
+  flex: none;
+}
+
+.synth-save {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.synth-save-input {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  font-size: 17px;
+}

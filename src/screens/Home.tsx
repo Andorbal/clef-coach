@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { ArrowRight, Brain, Dumbbell, Flame, Plus, Snowflake, Target } from 'lucide-react';
+import { ArrowRight, AudioWaveform, Brain, Dumbbell, Flame, Plus, Snowflake, Target } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { MobileSettingsButton } from '../components/Shell';
@@ -16,6 +16,7 @@ import { useApp, useDevice, useProfile } from '../state/store';
 import type { TrackId } from '../state/types';
 import './home.css';
 import { isIOS } from '../platform';
+import { nextLesson as nextSynthLesson } from '../synthlab/course/progress';
 
 function greeting() {
   const h = new Date().getHours();
@@ -48,6 +49,7 @@ export default function Home() {
   const lvl = levelFromXp(profile.xp);
   const review = active ? buildReviewLesson(active, activeTp) : null;
   const dueCount = activeTp ? Object.values(activeTp.items).filter(s => s.due <= Date.now()).length : 0;
+  const synthNext = nextSynthLesson(profile.synth);
   const recent = Object.entries(profile.achievements)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3)
@@ -225,6 +227,16 @@ export default function Home() {
           <span className="quick-text">
             <strong>Sight-reading Gym</strong>
             <span className="dim">Endless fresh music at exactly your level.</span>
+          </span>
+          <ArrowRight size={18} className="quick-arrow" />
+        </button>
+        <button className="quick-card card" onClick={() => navigate(profile.synth && synthNext ? `/synth/lesson/${synthNext.lesson.id}` : '/synth')}>
+          <span className="quick-icon pink">
+            <AudioWaveform size={22} />
+          </span>
+          <span className="quick-text">
+            <strong>Synth School</strong>
+            <span className="dim">{profile.synth && synthNext ? `Next: ${synthNext.lesson.title}.` : profile.synth ? 'Course complete. The Synth Lab is yours.' : 'Learn to use synthesizers, one knob at a time.'}</span>
           </span>
           <ArrowRight size={18} className="quick-arrow" />
         </button>

@@ -4,12 +4,14 @@
  * choice to show only the controls you've met so far.
  */
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, BookOpen, Eye, EyeOff, Library, RotateCcw } from 'lucide-react';
+import { ArrowLeft, BookOpen, Eye, EyeOff, Library, RotateCcw, Save, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Modal, Segmented } from '../components/ui';
 import { usePracticeFocus } from '../components/usePracticeFocus';
-import { useProfile } from '../state/store';
+import { uid } from '../state/logic';
+import { useApp, useProfile } from '../state/store';
+import type { SavedPatch } from '../state/types';
 import { type EngineKind, type Patch, makePatch } from '../synthlab/dsp/params';
 import { initPatch, PRESETS, type Preset, presetPatch } from '../synthlab/presets';
 import { Keys } from '../synthlab/ui/Keys';
@@ -39,6 +41,11 @@ export default function SynthLab() {
   usePracticeFocus();
   const lab = useLab(useMemo(loadLast, []));
   const [presetsOpen, setPresetsOpen] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveName, setSaveName] = useState('');
+  const savePatch = useApp(s => s.saveSynthPatch);
+  const deletePatch = useApp(s => s.deleteSynthPatch);
+  const mine = profile?.synth?.patches ?? [];
   const [presetName, setPresetName] = useState<string | null>(null);
   const learned = useMemo(() => learnedControls(profile?.synth), [profile?.synth]);
   const [onlyLearned, setOnlyLearned] = useState(false);
@@ -69,6 +76,21 @@ export default function SynthLab() {
     setPresetsOpen(false);
   };
 
+  const loadMine = (p: SavedPatch) => {
+    lab.setPatch(makePatch(p.patch));
+    setPresetName(p.name);
+    setPresetsOpen(false);
+  };
+
+  const save = () => {
+    const name = saveName.trim() || 'My patch';
+    // saving under an existing name replaces that patch
+    const same = mine.find(x => x.name.toLowerCase() === name.toLowerCase());
+    savePatch({ id: same?.id ?? uid(), name, patch: { ...lab.patch }, at: Date.now() });
+    setPresetName(name);
+    setSaveOpen(false);
+  };
+
   return (
     <div className="lesson-shell synth-shell">
       <header className="lesson-top synth-top">
@@ -90,6 +112,16 @@ export default function SynthLab() {
         <div className="synth-top-actions">
           <button className="btn btn-sm" onClick={() => setPresetsOpen(true)}>
             <Library size={16} /> Presets
+          </button>
+          <button
+            className="btn btn-sm btn-ghost"
+            onClick={() => {
+              setSaveName(presetName ?? '');
+              setSaveOpen(true);
+            }}
+            title="Save this patch"
+          >
+            <Save size={16} /> Save
           </button>
           {canFilter && (
             <button className={`btn btn-sm ${onlyLearned ? '' : 'btn-ghost'}`} onClick={() => setOnlyLearned(v => !v)} title="Show only the controls you've met in lessons">
@@ -113,14 +145,46 @@ export default function SynthLab() {
         </div>
       </main>
       <Modal open={presetsOpen} onClose={() => setPresetsOpen(false)} title="Presets" wide>
-        <PresetBrowser onPick={load} current={presetName} />
+        <PresetBrowser onPick={load} current={presetName} mine={mine} onPickMine={loadMine} onDeleteMine={deletePatch} />
+      </Modal>
+      <Modal open={saveOpen} onClose={() => setSaveOpen(false)} title="Save this patch">
+        <form
+          className="synth-save"
+          onSubmit={e => {
+            e.preventDefault();
+            save();
+          }}
+        >
+          <input className="synth-save-input" autoFocus value={saveName} onChange={e => setSaveName(e.target.value)} placeholder="Name your sound" maxLength={40} aria-label="Patch name" />
+          <p className="faint">Saved patches live in your profile (and in its backups). Find them under Presets → Mine.</p>
+          <div className="row" style={{ justifyContent: 'flex-end' }}>
+            <button type="button" className="btn" onClick={() => setSaveOpen(false)}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary">
+              <Save size={16} /> Save
+            </button>
+          </div>
+        </form>
       </Modal>
     </div>
   );
 }
 
-function PresetBrowser({ onPick, current }: { onPick: (p: Preset) => void; current: string | null }) {
-  const cats = [...new Set(PRESETS.map(p => p.category))];
+function PresetBrowser({
+  onPick,
+  current,
+  mine,
+  onPickMine,
+  onDeleteMine,
+}: {
+  onPick: (p: Preset) => void;
+  current: string | null;
+  mine: SavedPatch[];
+  onPickMine: (p: SavedPatch) => void;
+  onDeleteMine: (id: string) => void;
+}) {
+  const cats: string[] = [...(mine.length ? ['Mine'] : []), ...new Set(PRESETS.map(p => p.category))];
   const [cat, setCat] = useState(cats[0]);
   return (
     <div className="synth-presets">
@@ -133,6 +197,21 @@ function PresetBrowser({ onPick, current }: { onPick: (p: Preset) => void; curre
       </div>
       <AnimatePresence mode="popLayout">
         <motion.div key={cat} className="synth-preset-list" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+          {cat === 'Mine' &&
+            mine.map(p => (
+              <div key={p.id} className={`synth-preset card ${current === p.name ? 'on' : ''}`}>
+                <button className="synth-preset-load" onClick={() => onPickMine(p)}>
+                  <span className="synth-preset-top">
+                    <strong>{p.name}</strong>
+                    <span className="pill">{optionLabel(String(p.patch.engine ?? 'subtractive'))}</span>
+                  </span>
+                  <span className="dim">Saved {new Date(p.at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</span>
+                </button>
+                <button className="btn btn-icon btn-ghost btn-sm synth-preset-delete" onClick={() => onDeleteMine(p.id)} aria-label={`Delete ${p.name}`}>
+                  <Trash2 size={15} />
+                </button>
+              </div>
+            ))}
           {PRESETS.filter(p => p.category === cat).map(p => (
             <button key={p.id} className={`synth-preset card ${current === p.name ? 'on' : ''}`} onClick={() => onPick(p)}>
               <span className="synth-preset-top">

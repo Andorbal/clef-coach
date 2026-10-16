@@ -50,6 +50,7 @@ export function SynthPanel({ lab, visible = null, fresh, ghost, hint = null, bar
   );
   const set = lab.set;
   const onSet = useCallback((k: ParamKey, v: Patch[ParamKey]) => set(k, v as never), [set]);
+  const onInfo = useCallback((module: ModuleDef, key?: ParamKey) => setInfo({ key, module }), []);
 
   return (
     <div className="sl-panel">
@@ -68,7 +69,7 @@ export function SynthPanel({ lab, visible = null, fresh, ghost, hint = null, bar
             focus={focus}
             setFocus={setFocus}
             active={lab.active}
-            onInfo={(key?: ParamKey) => setInfo({ key, module: def })}
+            onInfo={onInfo}
           />
         ))}
       </div>
@@ -130,10 +131,40 @@ interface ModuleProps {
   focus: ParamKey | null;
   setFocus: (k: ParamKey | null) => void;
   active: boolean;
-  onInfo: (key?: ParamKey) => void;
+  onInfo: (module: ModuleDef, key?: ParamKey) => void;
+}
+
+/** Settings a module's picture depends on besides its own controls. */
+const SOURCE_KEYS: ParamKey[] = ['engine', 'osc1Wave', 'osc1Table', 'osc1Pos', 'osc1Octave', 'osc1Semi', 'osc1Level', 'osc1Pw', 'osc2Wave', 'osc2Table', 'osc2Pos', 'osc2Octave', 'osc2Semi', 'osc2Level', 'osc2Pw', 'osc2Sync', 'subLevel', 'subWave', 'noiseLevel', 'ringLevel', 'fmAlgo', 'fmFeedback', 'op1Ratio', 'op2Ratio', 'op3Ratio', 'op4Ratio', 'op1Level', 'op2Level', 'op3Level', 'op4Level', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8', 'h9', 'h10', 'h11', 'h12', 'h13', 'h14', 'h15', 'h16', 'addOpen', 'addStretch'];
+const DISPLAY_DEPS: Partial<Record<ModuleDef['id'], ParamKey[]>> = {
+  osc1: SOURCE_KEYS,
+  osc2: SOURCE_KEYS,
+  wt1: SOURCE_KEYS,
+  wt2: SOURCE_KEYS,
+  mixer: SOURCE_KEYS,
+  algo: SOURCE_KEYS,
+  harmonics: SOURCE_KEYS,
+  hfilter: SOURCE_KEYS,
+  filter: SOURCE_KEYS,
+  lfo: ['lfoSync', 'lfoDiv', 'lfoRate', 'lfoShape'],
+};
+
+/**
+ * Re-render a module only when something it shows changes. A knob drag sends a new patch
+ * many times a second; without this every module redrew its picture each time.
+ */
+function sameModule(a: ModuleProps, b: ModuleProps): boolean {
+  if (a.def !== b.def || a.keys !== b.keys || a.fresh !== b.fresh || a.ghost !== b.ghost || a.hint !== b.hint || a.active !== b.active || a.onSet !== b.onSet || a.onInfo !== b.onInfo) return false;
+  const inModule = (k: ParamKey | null) => k !== null && a.def.keys.includes(k);
+  if (a.focus !== b.focus && (inModule(a.focus) || inModule(b.focus))) return false;
+  if (a.patch === b.patch) return true;
+  for (const k of a.def.keys) if (a.patch[k] !== b.patch[k]) return false;
+  for (const k of DISPLAY_DEPS[a.def.id] ?? []) if (a.patch[k] !== b.patch[k]) return false;
+  return true;
 }
 
 const Module = memo(function Module({ def, keys, patch, onSet, fresh, ghost, hint, focus, setFocus, active, onInfo }: ModuleProps) {
+  const info = useCallback((k?: ParamKey) => onInfo(def, k), [onInfo, def]);
   const color = def.color;
   const off = def.id === 'filter' && !patch.filterOn;
   const showPower = def.id === 'filter' && keys.includes('filterOn');
@@ -148,7 +179,7 @@ const Module = memo(function Module({ def, keys, patch, onSet, fresh, ghost, hin
         <span className="sl-mod-dot" />
         <h3 className="sl-mod-title">{def.title}</h3>
         <span className="sl-mod-role">{def.moves ? `→ ${def.moves}` : def.role}</span>
-        <button type="button" className="sl-mod-info" onClick={() => onInfo()} aria-label={`About the ${def.title.toLowerCase()}`}>
+        <button type="button" className="sl-mod-info" onClick={() => info()} aria-label={`About the ${def.title.toLowerCase()}`}>
           <Info size={15} />
         </button>
         {showPower && (
@@ -169,13 +200,13 @@ const Module = memo(function Module({ def, keys, patch, onSet, fresh, ghost, hin
       {controls.length > 0 && (
         <div className="sl-ctls">
           {controls.map(k => (
-            <Control key={k} k={k} patch={patch} onSet={onSet} color={color} isNew={!!fresh?.has(k)} isHint={hint === k} ghost={ghost} onInfo={() => onInfo(k)} onFocus={on => setFocus(on ? k : null)} />
+            <Control key={k} k={k} value={patch[k]} onSet={onSet} color={color} isNew={!!fresh?.has(k)} isHint={hint === k} ghostValue={ghost ? ghost[k] : null} onInfo={info} setFocus={setFocus} />
           ))}
         </div>
       )}
     </section>
   );
-});
+}, sameModule);
 
 /** The wave a module draws, if it draws one. */
 function cycleFor(id: ModuleDef['id'], patch: Patch): Float32Array | null {
@@ -248,32 +279,34 @@ function waveOptions(lfo: boolean) {
   return shapes.map(s => ({ value: s, label: optionLabel(s), icon: <WaveIcon shape={s as Wave | LfoShape} lfo={lfo} w={24} h={14} /> }));
 }
 
+/** One control, re-rendered only when its own value (or marking) changes. */
 const Control = memo(function Control({
   k,
-  patch,
+  value,
   onSet,
   color,
   isNew,
   isHint,
-  ghost,
+  ghostValue,
   onInfo,
-  onFocus,
+  setFocus,
 }: {
   k: ParamKey;
-  patch: Patch;
+  value: Patch[ParamKey];
   onSet: (k: ParamKey, v: Patch[ParamKey]) => void;
   color: string;
   isNew: boolean;
   isHint: boolean;
-  ghost: Patch | null;
-  onInfo: () => void;
-  onFocus: (on: boolean) => void;
+  ghostValue: Patch[ParamKey] | null;
+  onInfo: (k: ParamKey) => void;
+  setFocus: (k: ParamKey | null) => void;
 }) {
   const spec = PARAMS[k];
   const info = CONTROLS[k];
-  const value = patch[k];
-  const g = ghost && ghost[k] !== value ? ghost[k] : null;
-  const common = { k, label: info.label, color, isNew, isHint, onInfo, onFocus };
+  const g = ghostValue !== null && ghostValue !== value ? ghostValue : null;
+  const showInfo = useCallback(() => onInfo(k), [onInfo, k]);
+  const onFocus = useCallback((on: boolean) => setFocus(on ? k : null), [setFocus, k]);
+  const common = { k, label: info.label, color, isNew, isHint, onInfo: showInfo, onFocus };
   if (spec.kind === 'bool') return <Switch {...common} value={value as boolean} onChange={v => onSet(k, v)} ghost={g as boolean | null} />;
   if (spec.kind === 'enum') {
     const e = spec as EnumSpec;

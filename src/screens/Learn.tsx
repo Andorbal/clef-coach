@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Check, Minus, Plus } from 'lucide-react';
+import { AudioWaveform, Check, FlaskConical, Minus, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { MobileSettingsButton, PageHeader } from '../components/Shell';
 import { TrackBadge } from '../components/TrackBadge';
@@ -10,6 +10,8 @@ import { useApp, useProfile } from '../state/store';
 import type { TrackId } from '../state/types';
 import { InstrumentIcon } from '../components/InstrumentIcon';
 import { INSTRUMENT_IDS, type InstrumentId, instrumentDef, instrumentFromId } from '../music/instruments';
+import { COURSE } from '../synthlab/course';
+import { courseCompletion, nextLesson as nextSynthLesson } from '../synthlab/course/progress';
 import './learn.css';
 
 const GROUP_SUBS: Record<InstrumentId, string> = {
@@ -95,6 +97,69 @@ export default function Learn() {
           </div>
         </section>
       ))}
+      <SynthGroup delay={groups.length * 0.15} />
     </div>
+  );
+}
+
+/** Synth School sits beside the instruments: a course of its own, any instrument or none. */
+function SynthGroup({ delay }: { delay: number }) {
+  const profile = useProfile();
+  const sp = profile?.synth;
+  const done = courseCompletion(sp);
+  const next = nextSynthLesson(sp);
+  const lessons = COURSE.reduce((n, u) => n + u.lessons.length, 0);
+  return (
+    <section className="learn-group">
+      <div className="learn-group-head">
+        <h2 className="display learn-group-title">
+          <AudioWaveform size={22} /> Synthesizers
+        </h2>
+        <span className="dim">Sound design from the first oscillator to FM, additive and wavetable synths.</span>
+      </div>
+      <div className="learn-grid">
+        <motion.div className={`learn-card card synth-learn-card ${sp ? 'mine' : ''}`} style={{ ['--accent' as string]: '#ff7eb6' }} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay }}>
+          <div className="learn-card-top">
+            <span className="synth-learn-badge">
+              <AudioWaveform size={30} />
+            </span>
+            {sp && (
+              <ProgressRing value={done} size={50} stroke={4} color="#ff7eb6">
+                <span className="ring-pct small">{Math.round(done * 100)}%</span>
+              </ProgressRing>
+            )}
+          </div>
+          <div className="eyebrow">Any synth, any DAW</div>
+          <h3 className="display learn-card-title">Synth School</h3>
+          <p className="dim learn-card-desc">Meet one knob at a time, hear what it does, then rebuild sounds by ear. Ends with FL Studio’s synths feeling familiar.</p>
+          <div className="learn-card-meta faint">
+            {COURSE.length} units · {lessons} lessons
+          </div>
+          <div className="learn-card-actions">
+            <Link to={next && sp ? `/synth/lesson/${next.lesson.id}` : '/synth'} className="btn btn-primary">
+              {sp ? 'Continue' : 'Start'}
+            </Link>
+            <Link to="/synth" className="btn btn-ghost btn-sm">
+              Course map
+            </Link>
+          </div>
+        </motion.div>
+        <motion.div className="learn-card card" style={{ ['--accent' as string]: '#3cc8c8' }} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: delay + 0.06 }}>
+          <div className="learn-card-top">
+            <span className="synth-learn-badge teal">
+              <FlaskConical size={28} />
+            </span>
+          </div>
+          <div className="eyebrow">Play freely</div>
+          <h3 className="display learn-card-title">Synth Lab</h3>
+          <p className="dim learn-card-desc">The whole synth, every module showing, with a library of classic presets to take apart.</p>
+          <div className="learn-card-actions">
+            <Link to="/synth/lab" className="btn">
+              Open the lab
+            </Link>
+          </div>
+        </motion.div>
+      </div>
+    </section>
   );
 }
