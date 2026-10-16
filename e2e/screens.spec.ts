@@ -11,7 +11,7 @@ test('screens', async ({ page }) => {
   await page.goto('/#/lesson/piano-treble/pt1-1');
   await solveLesson(page);
   await page.waitForTimeout(1500);
-  for (const [name, path] of [['home', '/'], ['progress', '/progress'], ['songs', '/songs'], ['studio', '/studio'], ['settings', '/settings'], ['track-guitar', '/track/guitar-treble'], ['free', '/studio/free'], ['fretboard', '/studio/fretboard'], ['tuner', '/studio/tuner'], ['scales', '/studio/scales'], ['gym', '/studio/gym'], ['metronome', '/studio/metronome'], ['import', '/songs/import'], ['song-studio', '/song/p2-fur-elise']] as const) {
+  for (const [name, path] of [['home', '/'], ['progress', '/progress'], ['songs', '/songs'], ['studio', '/studio'], ['settings', '/settings'], ['track-guitar', '/track/guitar-treble'], ['free', '/studio/free'], ['fretboard', '/studio/fretboard'], ['tuner', '/studio/tuner'], ['scales', '/studio/scales'], ['gym', '/studio/gym'], ['metronome', '/studio/metronome'], ['import', '/songs/import'], ['song-studio', '/song/p2-fur-elise'], ['synth', '/synth'], ['synth-lab', '/synth/lab'], ['synth-lesson', '/synth/lesson/sy3-2']] as const) {
     await page.goto(`/#${path}`);
     await page.waitForTimeout(1300);
     await page.screenshot({ path: `${out}/S-${name}.png`, fullPage: name === 'progress' || name === 'songs' || name === 'settings' });

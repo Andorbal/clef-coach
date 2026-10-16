@@ -1,4 +1,4 @@
-import { BarChart3, Compass, Grid2x2, Home, Library, Settings, Sparkles } from 'lucide-react';
+import { AudioWaveform, BarChart3, Compass, Grid2x2, Home, Library, Settings, Sparkles } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useProfile } from '../state/store';
@@ -10,6 +10,7 @@ const NAV = [
   { to: '/learn', label: 'Learn', icon: Compass },
   { to: '/songs', label: 'Songs', icon: Library },
   { to: '/chords', label: 'Chords', icon: Grid2x2, railOnly: true },
+  { to: '/synth', label: 'Synths', icon: AudioWaveform, railOnly: true },
   { to: '/studio', label: 'Studio', icon: Sparkles },
   { to: '/progress', label: 'Progress', icon: BarChart3 },
 ];

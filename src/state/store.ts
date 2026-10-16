@@ -2,8 +2,13 @@ import { create } from 'zustand';
 import {
   type LessonOutcome,
   type OutcomeReport,
+  type SynthOutcome,
   addTrack,
   applyOutcome,
+  applySynthOutcome,
+  deleteSynthPatch,
+  saveSynthPatch,
+  synthTestOut,
   emptyData,
   makeExport,
   mergeData,
@@ -21,6 +26,7 @@ import {
   type PersistedData,
   type Profile,
   type ProfileSettings,
+  type SavedPatch,
   type TrackId,
 } from './types';
 
@@ -86,6 +92,12 @@ interface AppState {
   archiveSong: (id: string, archived: boolean) => void;
   setSongGoal: (id: string, goal: { date: string; tempoPct: number } | null) => void;
   recordSongRun: (id: string, run: SongRun, twoParts: boolean, totalMeasures: number) => void;
+  /** Record a finished Synth School lesson. */
+  recordSynthOutcome: (o: SynthOutcome) => OutcomeReport | null;
+  /** Mark Synth School lessons done (a checkpoint passed early). */
+  synthTestOut: (lessonIds: string[]) => void;
+  saveSynthPatch: (p: SavedPatch) => void;
+  deleteSynthPatch: (id: string) => void;
 }
 
 function initialData(): PersistedData {
@@ -214,6 +226,16 @@ export const useApp = create<AppState>((set, get) => {
         return { ...p, songs: { ...p.songs, [id]: { ...sp, goal: goal ?? undefined } } };
       }),
     recordSongRun: (id, run, twoParts, total) => mutateProfile(p => recordSongRunLogic(p, id, run, twoParts, total)),
+    recordSynthOutcome: o => {
+      const p = get().profile();
+      if (!p) return null;
+      const report = applySynthOutcome(p, o);
+      mutateProfile(() => report.profile);
+      return report;
+    },
+    synthTestOut: ids => mutateProfile(p => synthTestOut(p, ids)),
+    saveSynthPatch: patch => mutateProfile(p => saveSynthPatch(p, patch)),
+    deleteSynthPatch: id => mutateProfile(p => deleteSynthPatch(p, id)),
   };
 });
 

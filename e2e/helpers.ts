@@ -46,8 +46,9 @@ export async function solveLesson(page: Page) {
       await page.waitForTimeout(150);
       continue;
     }
-    const cls = (await act.getAttribute('class')) ?? '';
-    const expected = await act.getAttribute('data-expected');
+    // the activity can finish between the check above and these reads: don't wait for it forever
+    const cls = (await act.getAttribute('class', { timeout: 1000 }).catch(() => null)) ?? '';
+    const expected = await act.getAttribute('data-expected', { timeout: 1000 }).catch(() => null);
     if (!expected) {
       await page.waitForTimeout(150);
       continue;

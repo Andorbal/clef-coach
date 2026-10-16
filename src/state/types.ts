@@ -140,6 +140,23 @@ export interface SongProgress {
   archived?: boolean;
 }
 
+/** A patch saved from the Synth Lab (stored loosely; read back through the lab's makePatch). */
+export interface SavedPatch {
+  id: string;
+  name: string;
+  patch: Record<string, unknown>;
+  at: number;
+}
+
+/** Synth School: lesson results and saved patches. */
+export interface SynthProgress {
+  startedAt: number;
+  lastAt: number;
+  /** By lesson id (src/synthlab/course). */
+  lessons: Record<string, LessonProgress>;
+  patches?: SavedPatch[];
+}
+
 export interface Profile {
   id: string;
   name: string;
@@ -158,6 +175,8 @@ export interface Profile {
   totals: { notes: number; ms: number; lessons: number; perfect: number };
   /** Songs being learned (by song id). */
   songs?: Record<string, SongProgress>;
+  /** Synth School progress (absent until the first synth lesson). */
+  synth?: SynthProgress;
 }
 
 export interface PersistedData {

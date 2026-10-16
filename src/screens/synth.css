@@ -1,0 +1,951 @@
+/* ==========================================================================
+   Synth School screens: the lab and lesson layout, the coach card, the course
+   map and the field guide. (The synth panel itself: synthlab/ui/synthlab.css.)
+   ========================================================================== */
+
+/* ---------- full-screen shell (lab and lessons) ---------- */
+.synth-shell {
+  grid-template-rows: auto 1fr;
+  /* never wider than the screen, whatever a child would like */
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.engine-short {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .engine-long {
+    display: none;
+  }
+  .engine-short {
+    display: inline;
+  }
+}
+
+.synth-top {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+.synth-top-title {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  min-width: 0;
+}
+
+.synth-top-title strong {
+  font-size: 20px;
+}
+
+.synth-top-title span {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.synth-top-engine {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.synth-top-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.synth-lesson-name {
+  font-size: 13px;
+  white-space: nowrap;
+  max-width: 30vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.synth-main {
+  grid-row: 2;
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto 1fr auto;
+  gap: 8px;
+  padding: 0 12px calc(8px + var(--safe-bottom));
+}
+
+.synth-main > .synth-scroll {
+  grid-row: 2;
+}
+
+.synth-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px 2px 12px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.synth-dock {
+  padding: 8px 10px 4px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--border);
+}
+
+.synth-locked {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+/* lesson: coach beside the panel */
+.synth-lesson-body {
+  grid-row: 2;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(290px, 360px) 1fr;
+  gap: 12px;
+}
+
+.synth-lesson-body .synth-scroll {
+  grid-row: auto;
+}
+
+.sl-coach {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 18px 18px 16px;
+  background:
+    radial-gradient(130% 70% at 0% 0%, rgba(244, 201, 122, 0.08), transparent 60%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.025));
+}
+
+@media (max-width: 760px) {
+  .synth-lesson-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, auto) 1fr;
+  }
+  .sl-coach {
+    max-height: 42vh;
+    padding: 14px;
+  }
+  .synth-top-engine {
+    order: 5;
+    flex-basis: 100%;
+  }
+  /* icons only on a phone: the labels would push the header off the screen */
+  .synth-act-label {
+    display: none;
+  }
+  .synth-top-actions .btn-sm {
+    padding-inline: 9px;
+  }
+  .synth-lesson-name {
+    display: none;
+  }
+}
+
+/* ---------- coach ---------- */
+.sl-coach-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sl-coach-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sl-coach-title {
+  font-size: clamp(21px, 2.4vw, 26px);
+  line-height: 1.15;
+}
+
+.sl-prose {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.sl-prose p {
+  margin: 0;
+}
+
+.sl-prose strong {
+  color: var(--gold);
+  font-weight: 650;
+}
+
+.sl-prose ul {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sl-coach-actions {
+  position: sticky;
+  bottom: -16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px -18px -16px;
+  padding: 12px 18px 16px;
+  background: linear-gradient(180deg, transparent, #141729 22%);
+  z-index: 2;
+}
+
+@media (max-width: 760px) {
+  .sl-coach-actions {
+    bottom: -14px;
+    margin: 4px -14px -14px;
+    padding: 10px 14px 14px;
+  }
+}
+
+.sl-coach-loop {
+  align-self: flex-start;
+}
+
+.sl-ill {
+  margin: 0;
+  padding: 8px;
+  border-radius: 14px;
+  background: #07090f;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sl-ill svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.sl-ill-label {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.sl-ill-sub {
+  font-size: 9.5px;
+  fill: var(--text-faint);
+}
+
+/* explore tasks */
+.sl-tasks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sl-tasks li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 14px;
+  line-height: 1.4;
+  transition: background 0.25s, border-color 0.25s;
+}
+
+.sl-tasks li.done {
+  background: rgba(63, 220, 154, 0.08);
+  border-color: rgba(63, 220, 154, 0.35);
+  color: var(--text-dim);
+}
+
+.sl-task-box {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-faint);
+  border: 1px solid var(--border-strong);
+}
+
+.sl-tasks li.done .sl-task-box {
+  background: var(--good);
+  border-color: var(--good);
+  color: #062016;
+}
+
+/* listen */
+.sl-listen-play {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  text-align: left;
+  background: linear-gradient(180deg, rgba(244, 201, 122, 0.16), rgba(244, 201, 122, 0.05));
+  border: 1px solid rgba(244, 201, 122, 0.4);
+}
+
+.sl-listen-play span {
+  display: flex;
+  flex-direction: column;
+}
+
+.sl-listen-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: grid !important;
+  place-items: center;
+  background: var(--gold);
+  color: #1d1306;
+  flex: none;
+}
+
+.sl-listen-play.playing .sl-listen-icon {
+  animation: sl-listen-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes sl-listen-pulse {
+  50% {
+    transform: scale(0.92);
+  }
+}
+
+.sl-listen-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.sl-listen-option.right {
+  background: rgba(63, 220, 154, 0.18);
+  border-color: var(--good);
+}
+
+.sl-listen-option.wrong {
+  background: rgba(255, 95, 120, 0.15);
+  border-color: var(--bad);
+}
+
+.sl-feedback {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  font-weight: 600;
+}
+
+.sl-feedback span {
+  flex: 1;
+}
+
+.sl-feedback.good {
+  background: rgba(63, 220, 154, 0.1);
+  color: var(--good);
+}
+
+.sl-feedback.bad {
+  background: rgba(255, 95, 120, 0.1);
+  color: #ffb3c0;
+}
+
+/* match */
+.sl-ab {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.sl-ab-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  text-align: left;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+}
+
+.sl-ab-btn span {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.sl-ab-btn small {
+  font-size: 11px;
+}
+
+.sl-ab-btn.target {
+  border-color: rgba(244, 201, 122, 0.55);
+  background: linear-gradient(180deg, rgba(244, 201, 122, 0.16), rgba(244, 201, 122, 0.05));
+}
+
+.sl-ab-btn.target svg {
+  color: var(--gold);
+}
+
+.sl-ab-btn.mine svg {
+  color: var(--lh);
+}
+
+.sl-ab-btn.playing {
+  box-shadow: 0 0 0 2px currentColor inset;
+}
+
+.sl-score {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.sl-score.pass {
+  background: rgba(63, 220, 154, 0.08);
+  border-color: rgba(63, 220, 154, 0.4);
+}
+
+.sl-score-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.sl-score-top strong {
+  font-size: 20px;
+}
+
+.sl-score-pct {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--gold);
+}
+
+.sl-score.pass .sl-score-pct {
+  color: var(--good);
+}
+
+.sl-meter {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.sl-meter span {
+  position: absolute;
+  inset: 0;
+  transform-origin: left;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--gold-2), var(--gold));
+  transition: transform 0.6s var(--ease-out);
+}
+
+.sl-score.pass .sl-meter span {
+  background: linear-gradient(90deg, #2bbf83, var(--good));
+}
+
+.sl-meter i {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: #fff;
+  opacity: 0.6;
+}
+
+.sl-aspects {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 12px;
+}
+
+.sl-aspect {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.sl-aspect-bar {
+  position: relative;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.sl-aspect-bar span {
+  position: absolute;
+  inset: 0;
+  transform-origin: left;
+  border-radius: inherit;
+  transition: transform 0.5s var(--ease-out);
+}
+
+.sl-aspect.good .sl-aspect-bar span {
+  background: var(--good);
+}
+
+.sl-aspect.ok .sl-aspect-bar span {
+  background: var(--gold);
+}
+
+.sl-aspect.low .sl-aspect-bar span {
+  background: var(--bad);
+}
+
+.sl-trend {
+  margin: 0;
+  font-size: 13px;
+}
+
+.sl-hint {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px dashed rgba(255, 255, 255, 0.25);
+}
+
+.sl-hint > svg {
+  flex: none;
+  margin-top: 3px;
+  color: var(--gold);
+}
+
+.sl-hint .sl-prose {
+  font-size: 14px;
+}
+
+/* ---------- presets ---------- */
+.synth-presets {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.synth-preset-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.synth-preset-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.synth-preset {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.synth-preset.on {
+  border-color: rgba(244, 201, 122, 0.6);
+}
+
+.synth-preset-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 15px;
+}
+
+/* ---------- Synth School (course map) ---------- */
+.synth-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 28px;
+  background:
+    radial-gradient(120% 120% at 100% 0%, rgba(255, 126, 182, 0.12), transparent 55%),
+    radial-gradient(120% 120% at 0% 100%, rgba(60, 200, 200, 0.12), transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+}
+
+.synth-hero-wave {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 55%;
+  height: 58%;
+  pointer-events: none;
+  opacity: 0.8;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 45%);
+  mask-image: linear-gradient(90deg, transparent, #000 45%);
+}
+
+.synth-hero-body {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.synth-hero-title {
+  font-size: clamp(26px, 3.4vw, 36px);
+  line-height: 1.1;
+}
+
+.synth-hero-actions {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.synth-hero-meta {
+  position: relative;
+  font-size: 13px;
+}
+
+.synth-part {
+  margin-bottom: 30px;
+}
+
+.synth-part-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 14px;
+}
+
+.synth-part-head h2 {
+  font-size: 26px;
+}
+
+.synth-part-num {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.synth-units {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.synth-unit {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.synth-unit.locked {
+  opacity: 0.75;
+}
+
+.synth-unit.complete {
+  border-color: rgba(63, 220, 154, 0.35);
+}
+
+.synth-unit-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.synth-unit-num {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--gold);
+  background: rgba(244, 201, 122, 0.12);
+  border: 1px solid rgba(244, 201, 122, 0.3);
+  flex: none;
+}
+
+.synth-unit.complete .synth-unit-num {
+  color: var(--good);
+  background: rgba(63, 220, 154, 0.12);
+  border-color: rgba(63, 220, 154, 0.35);
+}
+
+.synth-unit.locked .synth-unit-num {
+  color: var(--text-faint);
+  background: var(--surface-2);
+  border-color: var(--border);
+}
+
+.synth-unit-title {
+  font-size: 22px;
+}
+
+.synth-unit-desc {
+  font-size: 14px;
+}
+
+.synth-unit-bar {
+  position: relative;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.synth-unit-bar span {
+  position: absolute;
+  inset: 0;
+  transform-origin: left;
+  background: linear-gradient(90deg, var(--gold-2), var(--gold));
+}
+
+.synth-lessons {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.synth-lesson {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 11px;
+  text-align: left;
+  font-size: 14px;
+  color: var(--text);
+  transition: background 0.15s;
+}
+
+.synth-lesson:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.synth-lesson:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+
+.synth-lesson.next {
+  background: rgba(244, 201, 122, 0.1);
+  box-shadow: 0 0 0 1px rgba(244, 201, 122, 0.4) inset;
+}
+
+.synth-lesson-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--text-faint);
+  background: var(--surface-2);
+}
+
+.synth-lesson.passed .synth-lesson-icon {
+  color: #062016;
+  background: var(--good);
+}
+
+.synth-lesson.next .synth-lesson-icon {
+  color: #1d1306;
+  background: var(--gold);
+}
+
+.synth-lesson-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.synth-lesson.checkpoint .synth-lesson-title {
+  font-weight: 650;
+}
+
+.synth-lesson-stars {
+  color: var(--gold);
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+
+.synth-unit-locked {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+/* ---------- field guide ---------- */
+.synth-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.synth-guide-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr));
+  gap: 10px;
+}
+
+.synth-guide-item {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.synth-guide-item header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.synth-guide-item header strong {
+  font-size: 18px;
+}
+
+.synth-guide-item dl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.synth-guide-item dl > div {
+  display: grid;
+  grid-template-columns: 42% 1fr;
+  gap: 8px;
+}
+
+.synth-guide-item dt {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.synth-guide-item dd {
+  margin: 0;
+  color: var(--text-dim);
+}
+
+.synth-guide-units {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.synth-main > .synth-dock {
+  grid-row: 3;
+}
+
+.synth-main > .synth-locked {
+  grid-row: 1;
+}
+
+.sl-feedback-anchor {
+  height: 1px;
+  margin-top: -12px;
+  scroll-margin-bottom: 90px;
+}
+
+.synth-preset-load {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  flex: 1;
+}
+
+div.synth-preset {
+  flex-direction: row;
+  align-items: flex-start;
+}
+
+.synth-preset-delete {
+  flex: none;
+}
+
+.synth-save {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.synth-save-input {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  font-size: 17px;
+}
+
+/* phones: every pixel for the knobs */
+@media (max-width: 640px) {
+  .synth-main {
+    gap: 6px;
+    padding: 0 8px calc(6px + var(--safe-bottom));
+  }
+  .synth-main .sl-flow {
+    display: none;
+  }
+  .synth-locked {
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+  .sl-coach {
+    max-height: 36vh;
+  }
+  .synth-dock {
+    padding: 6px 6px 2px;
+  }
+}

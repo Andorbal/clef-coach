@@ -52,3 +52,33 @@ for (const trackId of TRACK_IDS) {
     expect(errors, errors.join('\n')).toEqual([]);
   });
 }
+
+test('every step renders: Synth School', async ({ page }) => {
+  test.setTimeout(30 * 60_000);
+  const errors: string[] = [];
+  let where = '';
+  page.on('pageerror', e => errors.push(`${where}: ${e.message}`));
+  page.on('console', m => {
+    if (m.type() === 'error') errors.push(`${where}: console: ${m.text()}`);
+  });
+  await onboard(page, 'Sweep');
+  const lessons = await page.evaluate(async () => {
+    const mod = await import(/* @vite-ignore */ '/src/synthlab/course/progress.ts');
+    return mod.allLessons().map((r: { lesson: { id: string; steps: { type: string }[] } }) => ({ id: r.lesson.id, steps: r.lesson.steps.map(s => s.type) }));
+  });
+  expect(lessons.length).toBeGreaterThan(40);
+  let count = 0;
+  for (const l of lessons) {
+    for (let i = 0; i < l.steps.length; i++) {
+      where = `${l.id}#${i}(${l.steps[i]})`;
+      await page.goto(`/#/synth/lesson/${l.id}?step=${i}`);
+      await expect(page.locator(`.sl-coach[data-step="${l.steps[i]}"]`), where).toBeVisible({ timeout: 8000 });
+      // a quiz is ready once its target has been rendered and analysed
+      if (l.steps[i] === 'match') await expect(page.getByRole('button', { name: /^Check/ }), where).toBeEnabled({ timeout: 8000 });
+      await page.waitForTimeout(150);
+      count++;
+    }
+  }
+  console.log(`Synth School: ${lessons.length} lessons, ${count} steps`);
+  expect(errors, errors.join('\n')).toEqual([]);
+});

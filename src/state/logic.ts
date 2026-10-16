@@ -13,6 +13,8 @@ import {
   type LessonProgress,
   type PersistedData,
   type Profile,
+  type SavedPatch,
+  type SynthProgress,
   type TrackId,
   type TrackProgress,
   TRACK_IDS,
@@ -97,7 +99,6 @@ export interface OutcomeReport {
 }
 
 export function applyOutcome(p0: Profile, o: LessonOutcome, now = Date.now()): OutcomeReport {
-  const today = dayKey(new Date(now));
   const p: Profile = structuredClone(p0);
   const tp = p.tracks[o.trackId] ?? newTrackProgress();
   p.tracks[o.trackId] = tp;
@@ -119,6 +120,24 @@ export function applyOutcome(p0: Profile, o: LessonOutcome, now = Date.now()): O
   tp.log.push({ at: now, lessonId: o.lessonId, accuracy: o.accuracy, ms: o.ms, xp: o.xp, notes: o.notes });
   if (tp.log.length > 400) tp.log.splice(0, tp.log.length - 400);
 
+  return applyCommon(p, { xp: o.xp, ms: o.ms, notes: o.notes, accuracy: o.accuracy, lessonKind: o.lessonKind, trackId: o.trackId, avgResponseMs: o.avgResponseMs }, now);
+}
+
+interface CommonOutcome {
+  xp: number;
+  ms: number;
+  notes: number;
+  accuracy: number;
+  lessonKind: string;
+  trackId?: TrackId;
+  avgResponseMs?: number;
+  /** A Synth School lesson. */
+  synth?: boolean;
+}
+
+/** XP, the day's log, the streak, totals and achievements: what every finished lesson counts towards. `p` is already a copy. */
+function applyCommon(p: Profile, o: CommonOutcome, now: number): OutcomeReport {
+  const today = dayKey(new Date(now));
   const levelBefore = levelFromXp(p.xp).level;
   p.xp += o.xp;
   const levelAfter = levelFromXp(p.xp).level;
@@ -149,13 +168,15 @@ export function applyOutcome(p0: Profile, o: LessonOutcome, now = Date.now()): O
   p.totals.notes += o.notes;
   p.totals.ms += o.ms;
   p.totals.lessons += 1;
-  if (o.accuracy >= 0.999 && o.notes >= 5) p.totals.perfect += 1;
+  // a synth score is how close a sound came, not how many notes were right: Golden Ears counts those
+  if (!o.synth && o.accuracy >= 0.999 && o.notes >= 5) p.totals.perfect += 1;
 
   const unlocked = newAchievements(p, {
     trackId: o.trackId,
     accuracy: o.accuracy,
     lessonKind: o.lessonKind,
     avgResponseMs: o.avgResponseMs,
+    synth: o.synth,
   });
   for (const a of unlocked) p.achievements[a.id] = now;
 
@@ -167,6 +188,66 @@ export function applyOutcome(p0: Profile, o: LessonOutcome, now = Date.now()): O
     streak: p.streak.current,
     goalReached,
   };
+}
+
+export function newSynthProgress(now = Date.now()): SynthProgress {
+  return { startedAt: now, lastAt: now, lessons: {} };
+}
+
+export interface SynthOutcome {
+  lessonId: string;
+  lessonKind: string;
+  /** 0..1 */
+  score: number;
+  stars: number;
+  passed: boolean;
+  ms: number;
+  /** Notes played. */
+  notes: number;
+  xp: number;
+}
+
+/** Record a finished Synth School lesson. */
+export function applySynthOutcome(p0: Profile, o: SynthOutcome, now = Date.now()): OutcomeReport {
+  const p: Profile = structuredClone(p0);
+  const sp = p.synth ?? newSynthProgress(now);
+  p.synth = sp;
+  sp.lastAt = now;
+  const prev = sp.lessons[o.lessonId];
+  sp.lessons[o.lessonId] = {
+    stars: Math.max(prev?.stars ?? 0, o.stars),
+    best: Math.max(prev?.best ?? 0, o.score),
+    plays: (prev?.plays ?? 0) + 1,
+    passed: (prev?.passed && !prev.skipped) || o.passed,
+    skipped: prev?.skipped && !o.passed ? true : undefined,
+    lastAt: now,
+  };
+  return applyCommon(p, { xp: o.xp, ms: o.ms, notes: o.notes, accuracy: o.score, lessonKind: o.lessonKind, synth: true }, now);
+}
+
+/** Mark Synth School lessons as passed by testing out (a checkpoint passed early). */
+export function synthTestOut(p0: Profile, lessonIds: string[], now = Date.now()): Profile {
+  const p = structuredClone(p0);
+  const sp = p.synth ?? newSynthProgress(now);
+  p.synth = sp;
+  for (const id of lessonIds) {
+    const prev = sp.lessons[id];
+    if (prev?.passed) continue;
+    sp.lessons[id] = { stars: prev?.stars ?? 0, best: prev?.best ?? 0, plays: prev?.plays ?? 0, passed: true, skipped: true, lastAt: now };
+  }
+  return p;
+}
+
+/** Save (or replace, by id) a Synth Lab patch; the newest 60 are kept. */
+export function saveSynthPatch(p0: Profile, patch: SavedPatch): Profile {
+  const sp = p0.synth ?? newSynthProgress();
+  const patches = [patch, ...(sp.patches ?? []).filter(x => x.id !== patch.id)].slice(0, 60);
+  return { ...p0, synth: { ...sp, patches } };
+}
+
+export function deleteSynthPatch(p0: Profile, id: string): Profile {
+  if (!p0.synth?.patches) return p0;
+  return { ...p0, synth: { ...p0.synth, patches: p0.synth.patches.filter(x => x.id !== id) } };
 }
 
 /** Mark lessons as passed via a checkpoint "test out". */
@@ -252,6 +333,7 @@ export function parseImport(text: string): PersistedData {
         : base.totals,
       tracks: {},
       songs: isObj(rp.songs) ? (rp.songs as Profile['songs']) : undefined,
+      synth: parseSynth(rp.synth),
     };
     if (isObj(rp.tracks)) {
       for (const [tid, rt] of Object.entries(rp.tracks)) {
@@ -297,11 +379,22 @@ export function parseImport(text: string): PersistedData {
   };
 }
 
-function mergeTrack(a: TrackProgress | undefined, b: TrackProgress | undefined): TrackProgress | undefined {
-  if (!a) return b;
-  if (!b) return a;
-  const lessons = { ...a.lessons };
-  for (const [id, l] of Object.entries(b.lessons)) {
+function parseSynth(x: unknown): SynthProgress | undefined {
+  if (!isObj(x)) return undefined;
+  const patches = Array.isArray(x.patches)
+    ? (x.patches as unknown[]).filter((q): q is SavedPatch => isObj(q) && typeof q.id === 'string' && typeof q.name === 'string' && isObj(q.patch) && typeof q.at === 'number').slice(0, 60)
+    : undefined;
+  return {
+    startedAt: num(x.startedAt, Date.now()),
+    lastAt: num(x.lastAt, Date.now()),
+    lessons: isObj(x.lessons) ? (x.lessons as SynthProgress['lessons']) : {},
+    ...(patches?.length ? { patches } : {}),
+  };
+}
+
+function mergeLessons(a: Record<string, LessonProgress>, b: Record<string, LessonProgress>): Record<string, LessonProgress> {
+  const lessons = { ...a };
+  for (const [id, l] of Object.entries(b)) {
     const x = lessons[id];
     lessons[id] = x
       ? {
@@ -315,6 +408,26 @@ function mergeTrack(a: TrackProgress | undefined, b: TrackProgress | undefined):
         }
       : l;
   }
+  return lessons;
+}
+
+function mergeSynth(a: SynthProgress | undefined, b: SynthProgress | undefined): SynthProgress | undefined {
+  if (!a) return b;
+  if (!b) return a;
+  const seen = new Set((a.patches ?? []).map(x => x.id));
+  const patches = [...(a.patches ?? []), ...(b.patches ?? []).filter(x => !seen.has(x.id))].sort((x, y) => y.at - x.at).slice(0, 60);
+  return {
+    startedAt: Math.min(a.startedAt, b.startedAt),
+    lastAt: Math.max(a.lastAt, b.lastAt),
+    lessons: mergeLessons(a.lessons, b.lessons),
+    ...(patches.length ? { patches } : {}),
+  };
+}
+
+function mergeTrack(a: TrackProgress | undefined, b: TrackProgress | undefined): TrackProgress | undefined {
+  if (!a) return b;
+  if (!b) return a;
+  const lessons = mergeLessons(a.lessons, b.lessons);
   const items = { ...a.items };
   for (const [k, s] of Object.entries(b.items)) {
     if (!items[k] || items[k].last < s.last) items[k] = s;
@@ -362,6 +475,7 @@ export function mergeProfiles(a: Profile, b: Profile): Profile {
       perfect: Math.max(a.totals.perfect, b.totals.perfect),
     },
     songs: Object.keys(songs).length ? songs : undefined,
+    synth: mergeSynth(a.synth, b.synth),
   };
 }
 

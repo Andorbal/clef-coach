@@ -382,6 +382,11 @@
   background: rgba(244, 201, 122, 0.14);
 }
 
+.quick-icon.pink {
+  color: #ff7eb6;
+  background: rgba(255, 126, 182, 0.14);
+}
+
 .quick-text {
   flex: 1;
   display: flex;

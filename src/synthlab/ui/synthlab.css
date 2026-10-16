@@ -1,0 +1,936 @@
+/* ==========================================================================
+   Synth Lab: the learning synth's panel, controls and displays (prefix sl-)
+   Modules are dark "hardware" cards with a coloured accent per family; displays
+   are little screens. Nothing here animates per frame except the LFO sweep line
+   (transform) and the "new control" glow (opacity), and both only when needed.
+   ========================================================================== */
+
+.sl-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 248px), 1fr));
+  gap: 10px;
+  align-items: start;
+}
+
+@media (min-width: 760px) {
+  .sl-mod.wide {
+    grid-column: span 2;
+  }
+}
+
+/* ---------- flow strip ---------- */
+.sl-flow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px 8px 14px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015));
+  border: 1px solid var(--border);
+  min-width: 0;
+}
+
+.sl-flow-path {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sl-flow-chip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--c);
+  background: color-mix(in srgb, var(--c) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c) 30%, transparent);
+}
+
+.sl-flow-arrow {
+  color: var(--text-faint);
+  flex: none;
+}
+
+.sl-flow-out {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 24px;
+  color: var(--text-dim);
+  transition: color 0.2s;
+}
+
+.sl-flow.active .sl-flow-out {
+  color: var(--gold);
+}
+
+.sl-flow.active .sl-flow-chip {
+  animation: sl-chip-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes sl-chip-pulse {
+  50% {
+    opacity: 0.65;
+  }
+}
+
+.sl-flow-mods {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: 8px;
+}
+
+.sl-flow-mod {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--c);
+  border: 1px dashed color-mix(in srgb, var(--c) 45%, transparent);
+}
+
+.sl-flow-scope {
+  flex: none;
+  width: 180px;
+  height: 44px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #07090f;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sl-scope {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+@media (max-width: 640px) {
+  .sl-flow-mods {
+    display: none;
+  }
+  .sl-flow-scope {
+    width: 110px;
+  }
+}
+
+/* ---------- module card ---------- */
+.sl-mod {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border-radius: 18px;
+  background:
+    radial-gradient(120% 80% at 0% 0%, color-mix(in srgb, var(--c) 9%, transparent), transparent 60%),
+    linear-gradient(180deg, #161a2c, #10131f);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 12px 28px rgba(0, 0, 0, 0.35);
+  min-width: 0;
+}
+
+.sl-mod::before {
+  content: '';
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 0;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+  background: linear-gradient(90deg, transparent, var(--c), transparent);
+  opacity: 0.7;
+}
+
+.sl-mod.off .sl-screen,
+.sl-mod.off .sl-ctls {
+  opacity: 0.4;
+}
+
+.sl-mod.has-new {
+  border-color: color-mix(in srgb, var(--c) 45%, transparent);
+}
+
+.sl-mod-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sl-mod-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c);
+  box-shadow: 0 0 8px var(--c);
+  flex: none;
+}
+
+.sl-mod-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.sl-mod-role {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sl-mod-info {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--text-faint);
+}
+
+.sl-mod-info:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.sl-power {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  color: var(--text-faint);
+  transition: color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.sl-power.on {
+  color: #071214;
+  background: var(--c);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--c) 60%, transparent);
+}
+
+.sl-power.ghost,
+.sl-option.ghost,
+.sl-switch-btn.ghost {
+  outline: 2px dashed color-mix(in srgb, var(--c) 80%, white);
+  outline-offset: 2px;
+}
+
+/* ---------- screens (displays) ---------- */
+.sl-screen {
+  position: relative;
+  height: 56px;
+  border-radius: 11px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0)),
+    #07090f;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4) inset;
+}
+
+.sl-screen svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.sl-screen.sl-env.small {
+  height: 44px;
+}
+
+.sl-screen .sl-gridline {
+  stroke: rgba(255, 255, 255, 0.09);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.sl-screen .sl-gridline.faint {
+  stroke: rgba(255, 255, 255, 0.045);
+}
+
+.sl-trace {
+  fill: none;
+  stroke: var(--c);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.sl-trace-glow {
+  fill: none;
+  stroke: var(--c);
+  stroke-width: 7;
+  opacity: 0.14;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.sl-env-fill {
+  fill: color-mix(in srgb, var(--c) 14%, transparent);
+}
+
+.sl-env-focus {
+  fill: color-mix(in srgb, var(--c) 16%, transparent);
+}
+
+.sl-env {
+  height: 76px;
+}
+
+.sl-env svg {
+  height: calc(100% - 14px);
+}
+
+.sl-env-names {
+  position: relative;
+  height: 14px;
+}
+
+.sl-env-names span {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-faint);
+  line-height: 12px;
+}
+
+.sl-env-names span.on {
+  color: var(--c);
+}
+
+.sl-bar-pre {
+  stroke: rgba(255, 255, 255, 0.14);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.sl-bar {
+  stroke: color-mix(in srgb, var(--c) 75%, white);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.sl-cutoff {
+  stroke: var(--c);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  opacity: 0.6;
+  vector-effect: non-scaling-stroke;
+}
+
+.sl-hbar {
+  fill: var(--c);
+  opacity: 0.85;
+}
+
+.sl-axis {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 2px;
+  display: flex;
+  justify-content: space-around;
+  font-size: 9px;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+
+.sl-screen:has(.sl-axis) {
+  height: 84px;
+}
+
+.sl-screen-tag {
+  position: absolute;
+  right: 6px;
+  top: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--c);
+  opacity: 0.85;
+}
+
+.sl-lfo .sl-sweep {
+  position: absolute;
+  inset: 0;
+  border-right: 2px solid var(--c);
+  box-shadow: 6px 0 12px -6px var(--c);
+  animation: sl-sweep 1s linear infinite;
+  will-change: transform;
+  pointer-events: none;
+}
+
+@keyframes sl-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.sl-algo {
+  height: 96px;
+}
+
+.sl-algo-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.sl-algo-pair .sl-screen:not(.sl-algo) {
+  height: 96px;
+}
+
+.sl-op {
+  fill: rgba(155, 140, 255, 0.18);
+  stroke: #9b8cff;
+  stroke-width: 1.5;
+}
+
+.sl-op.carrier {
+  fill: rgba(244, 201, 122, 0.25);
+  stroke: var(--gold);
+}
+
+.sl-op-num {
+  font-size: 10px;
+  font-weight: 700;
+  fill: var(--text);
+}
+
+.sl-algo-link {
+  stroke: #9b8cff;
+  stroke-width: 2;
+}
+
+.sl-algo-out {
+  stroke: rgba(244, 201, 122, 0.6);
+  stroke-width: 1.5;
+}
+
+.sl-algo-bus {
+  stroke: rgba(244, 201, 122, 0.5);
+  stroke-width: 2;
+}
+
+.sl-algo-fb {
+  fill: none;
+  stroke: #9b8cff;
+  stroke-width: 1.5;
+}
+
+/* ---------- controls ---------- */
+.sl-ctls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 6px;
+  justify-content: flex-start;
+}
+
+.sl-ctl {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 64px;
+  padding: 4px 2px 2px;
+  border-radius: 12px;
+}
+
+.sl-ctl.is-new {
+  background: color-mix(in srgb, var(--c) 9%, transparent);
+}
+
+.sl-ctl.is-new::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid color-mix(in srgb, var(--c) 60%, transparent);
+  animation: sl-new-glow 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes sl-new-glow {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.sl-new {
+  position: absolute;
+  top: -7px;
+  right: -2px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #1a1206;
+  background: var(--c);
+  z-index: 1;
+}
+
+.sl-ctl-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+}
+
+button.sl-ctl-label {
+  padding: 2px 4px;
+  border-radius: 6px;
+  text-decoration: underline dotted rgba(255, 255, 255, 0.25);
+  text-underline-offset: 3px;
+}
+
+button.sl-ctl-label:hover {
+  color: var(--text);
+}
+
+.sl-ctl-value {
+  font-size: 11px;
+  color: var(--c);
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+/* knob */
+.sl-knob-dial {
+  position: relative;
+  touch-action: none;
+  cursor: ns-resize;
+  border-radius: 50%;
+  outline: none;
+}
+
+.sl-knob-dial:focus-visible {
+  box-shadow: 0 0 0 2px var(--gold);
+}
+
+.sl-knob-dial svg {
+  display: block;
+}
+
+.sl-knob-track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.1);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.sl-knob-value {
+  fill: none;
+  stroke: var(--c);
+  stroke-width: 4;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--c) 70%, transparent));
+}
+
+.sl-knob-body {
+  fill: #232842;
+  stroke: rgba(255, 255, 255, 0.12);
+  stroke-width: 1;
+}
+
+.sl-knob:hover .sl-knob-body,
+.sl-knob.dragging .sl-knob-body {
+  fill: #2a3050;
+}
+
+.sl-knob-pointer {
+  stroke: #f3f4fb;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+
+.sl-knob-ghost {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.6;
+  stroke-dasharray: 2 1.5;
+}
+
+.sl-knob-bubble {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  padding: 4px 9px;
+  border-radius: 8px;
+  background: #0b0d18;
+  border: 1px solid color-mix(in srgb, var(--c) 60%, transparent);
+  color: var(--c);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 5;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+}
+
+/* stepper */
+.sl-stepper-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 54px;
+}
+
+.sl-step-btn {
+  width: 28px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.sl-step-btn:active {
+  transform: scale(0.94);
+}
+
+.sl-step-btn:disabled {
+  opacity: 0.35;
+}
+
+.sl-step-value {
+  min-width: 46px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--c);
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.sl-step-ghost {
+  font-size: 10px;
+  color: #fff;
+  opacity: 0.75;
+}
+
+/* options */
+.sl-options-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  min-height: 54px;
+  align-items: center;
+  max-width: 230px;
+}
+
+.sl-option {
+  min-width: 36px;
+  height: 34px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-dim);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.sl-option.on {
+  color: var(--text);
+  background: color-mix(in srgb, var(--c) 22%, transparent);
+  border-color: color-mix(in srgb, var(--c) 70%, transparent);
+}
+
+.sl-option-text {
+  font-size: 11px;
+}
+
+.sl-wave-icon polyline {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+}
+
+.sl-option.on .sl-wave-icon polyline {
+  stroke: var(--c);
+}
+
+/* select */
+.sl-select-input {
+  height: 34px;
+  margin: 10px 0;
+  padding: 0 8px;
+  border-radius: 9px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  max-width: 140px;
+}
+
+.sl-select-input.has-ghost {
+  outline: 2px dashed color-mix(in srgb, var(--c) 80%, white);
+}
+
+/* switch */
+.sl-switch-btn {
+  margin: 13px 0 6px;
+  width: 46px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-strong);
+  position: relative;
+  transition: background 0.2s;
+}
+
+.sl-switch-btn span {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #e8eaf6;
+  transition: transform 0.2s var(--ease-out);
+}
+
+.sl-switch-btn.on {
+  background: color-mix(in srgb, var(--c) 70%, transparent);
+}
+
+.sl-switch-btn.on span {
+  transform: translateX(20px);
+}
+
+/* drawbars */
+.sl-drawbars {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 4px;
+  height: 140px;
+  touch-action: none;
+  padding: 4px 2px 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.sl-drawbar {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.sl-drawbar-track {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  max-width: 22px;
+  border-radius: 6px;
+  background: #07090f;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+
+.sl-drawbar-fill {
+  position: absolute;
+  inset: 0;
+  transform-origin: bottom;
+  background: linear-gradient(0deg, color-mix(in srgb, var(--c) 55%, transparent), var(--c));
+  border-radius: 5px;
+}
+
+.sl-drawbar-ghost {
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  height: 0;
+  border-top: 2px dashed #fff;
+}
+
+.sl-drawbar.is-new .sl-drawbar-track {
+  border-color: var(--c);
+}
+
+.sl-drawbar-num {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-faint);
+}
+
+/* ---------- keyboard and transport ---------- */
+.sl-keys {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sl-transport {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sl-octave {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 2px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.sl-octave-name {
+  min-width: 30px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.sl-loop {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sl-loop-select {
+  height: 36px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+.sl-stop {
+  margin-left: auto;
+}
+
+/* ---------- info sheet ---------- */
+.sl-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sl-sheet-about {
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.sl-sheet-tip {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--c) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c) 30%, transparent);
+}
+
+.sl-sheet-tip strong {
+  color: var(--c);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sl-sheet-aka {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sl-sheet-aka > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sl-sheet-module {
+  font-size: 13px;
+}
+
+/* a hint points at this control */
+.sl-ctl.is-hint {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.sl-ctl.is-hint::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 14px;
+  border: 2px solid #fff;
+  animation: sl-new-glow 1.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.sl-mod.hinted {
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+@media (max-width: 640px) {
+  .sl-transport {
+    gap: 6px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .sl-transport .chip-btn {
+    min-height: 32px;
+    padding: 0 10px;
+    font-size: 13px;
+  }
+  .sl-loop-select {
+    height: 32px;
+    max-width: 110px;
+  }
+  .sl-octave-name {
+    min-width: 26px;
+    font-size: 13px;
+  }
+}
