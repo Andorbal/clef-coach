@@ -11,6 +11,8 @@ export interface AchievementDef {
 
 export interface AchievementContext {
   trackId?: TrackId;
+  /** A Synth School lesson. */
+  synth?: boolean;
   accuracy?: number;
   lessonKind?: string;
   avgResponseMs?: number;
