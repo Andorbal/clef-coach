@@ -131,7 +131,7 @@ function SynthGroup({ delay }: { delay: number }) {
           </div>
           <div className="eyebrow">Any synth, any DAW</div>
           <h3 className="display learn-card-title">Synth School</h3>
-          <p className="dim learn-card-desc">Meet one knob at a time, hear what it does, then rebuild sounds by ear. Ends with FL Studio’s synths feeling familiar.</p>
+          <p className="dim learn-card-desc">Meet one knob at a time, hear what it does, then rebuild sounds by ear. Ends with any synth’s panel feeling familiar.</p>
           <div className="learn-card-meta faint">
             {COURSE.length} units · {lessons} lessons
           </div>
