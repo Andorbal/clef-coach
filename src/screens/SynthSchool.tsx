@@ -62,7 +62,7 @@ export default function SynthSchool() {
             <FlaskConical size={18} /> Synth Lab
           </Link>
           <button className="btn btn-lg btn-ghost" onClick={() => setGuideOpen(true)}>
-            <Compass size={18} /> Find it in FL Studio
+            <Compass size={18} /> Field guide
           </button>
         </div>
         <div className="synth-hero-meta faint">
@@ -86,7 +86,7 @@ export default function SynthSchool() {
         </section>
       ))}
 
-      <Modal open={guideOpen} onClose={() => setGuideOpen(false)} title="Find it in FL Studio" wide>
+      <Modal open={guideOpen} onClose={() => setGuideOpen(false)} title="Where to find it on real synths" wide>
         <FieldGuide />
       </Modal>
     </div>
@@ -190,7 +190,7 @@ function FieldGuide() {
   return (
     <div className="synth-guide">
       <p className="dim">
-        Everything in Synth School has a home on real synths. Here’s where to find it on the ones that come with FL Studio (and on the free wavetable synth most producers try next). Plugin layouts change between versions, so these are the names to look for.
+        Everything in Synth School has a home on real synths. Below are the ones that come with FL Studio, and the free wavetable synth most producers try next, with the names to look for on each. Plugin layouts change between versions, so look for the names rather than an exact spot.
       </p>
       <div className="synth-guide-list">
         {FIELD_GUIDE.map(g => (
