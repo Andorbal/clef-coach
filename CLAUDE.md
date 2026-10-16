@@ -95,6 +95,10 @@ parts.
   `styles/global.css`. Icons come from `lucide-react`, animation from `framer-motion`. The
   app is dark-only.
 - **UI copy:** short, warm, plain. Buttons and labels use sentence case.
+- **Other products:** name them in plain words to say what works with what ("from MuseScore", "FL Studio's
+  Sytrus"). No logos, no product name as the name of one of our features, nothing that reads as a
+  partnership, and comparisons must be true. Settings' About, the README's License section and the
+  Synth School field guide say Clef Coach isn't affiliated with them.
 - **Commits:** sentence-case, user-facing subjects, often with an area prefix ("MIDI import:
   …", "Song Studio: …"). The body is a short explanation, with bullets for several changes,
   and measurements when it's a performance change.

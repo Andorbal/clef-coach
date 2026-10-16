@@ -884,6 +884,11 @@
   gap: 4px;
 }
 
+.synth-guide-note {
+  margin: 0;
+  font-size: 12px;
+}
+
 .synth-main > .synth-dock {
   grid-row: 3;
 }

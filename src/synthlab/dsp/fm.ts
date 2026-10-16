@@ -2,7 +2,7 @@
  * FM synthesis: four sine-wave "operators". An operator can be heard (a carrier) or can
  * wobble another operator's phase so fast that the wobble becomes new harmonics (a
  * modulator). Which operator feeds which is the "algorithm", as on Yamaha's DX and TX
- * synths and the many FM synths since.
+ * synths, FL Studio's Sytrus and Toxic Biohazard.
  *
  * This is phase modulation, like the DX7: a modulator's output is added to its target's
  * phase. A modulator's level is its modulation index, so turning it up brightens the

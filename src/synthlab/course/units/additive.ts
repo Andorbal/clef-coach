@@ -1,6 +1,6 @@
 /**
- * Part three: additive synthesis (unit 8). Building sounds from harmonics, as organ drawbars
- * and additive synths do.
+ * Part three: additive synthesis (unit 8). Building sounds from harmonics, as Harmor,
+ * Harmless and Morphine do.
  */
 import { C, explain, explore, lesson, match, task } from '../build';
 import type { SynthUnit } from '../types';
@@ -36,7 +36,7 @@ export const additiveUnit: SynthUnit = {
           'Adding instead of subtracting',
           `Remember that every note is a stack of **harmonics**: sine waves at 1, 2, 3, 4… times its pitch? **Additive synthesis** builds the stack directly. Each bar below is one harmonic; drag it up to add that sine wave to the sound.
 
-It's how a pipe organ's drawbars work, and the engine inside every additive synth. Drag your finger across the bars to draw a whole spectrum in one go.`,
+It's how a pipe organ's drawbars work, and it's the engine inside FL Studio's Harmor, Harmless and Morphine. Drag your finger across the bars to draw a whole spectrum in one go.`,
           { visual: 'additive' },
         ),
         explore('Build a tone', 'Play a note after each change, and watch the wave take shape.', [
@@ -89,7 +89,7 @@ Sixteen harmonics are enough to hear the shapes clearly. Real additive synths us
 
 **Harmonics** here is a low-pass filter counted in harmonics: at 4, only the first four play. Because it counts harmonics rather than hertz, it follows the note: high and low notes stay equally bright.
 
-**Env amount** lets the filter envelope open extra harmonics over each note, exactly like the subtractive filter envelope, but harmonic by harmonic. (Additive synths often give you this as a filter with an envelope.)`,
+**Env amount** lets the filter envelope open extra harmonics over each note, exactly like the subtractive filter envelope, but harmonic by harmonic. (Harmless and Harmor in FL Studio give you this as a filter with an envelope.)`,
         ),
         explore('Move them', 'Play short notes.', [
           task('Set Harmonics to 3 and play: dark', p => p.addOpen <= 3.5),

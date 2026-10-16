@@ -1,6 +1,6 @@
 /**
  * Synth School: the course map. Parts by kind of synthesis, units with their lessons,
- * what's next, and the field guide to the kinds of synth the learner will meet next.
+ * what's next, and the field guide to FL Studio's synths.
  */
 import { motion } from 'framer-motion';
 import { ArrowRight, AudioWaveform, Check, ChevronRight, Compass, FlaskConical, Lock, Play, Star } from 'lucide-react';
@@ -62,7 +62,7 @@ export default function SynthSchool() {
             <FlaskConical size={18} /> Synth Lab
           </Link>
           <button className="btn btn-lg btn-ghost" onClick={() => setGuideOpen(true)}>
-            <Compass size={18} /> Field guide
+            <Compass size={18} /> Find it in FL Studio
           </button>
         </div>
         <div className="synth-hero-meta faint">
@@ -86,7 +86,7 @@ export default function SynthSchool() {
         </section>
       ))}
 
-      <Modal open={guideOpen} onClose={() => setGuideOpen(false)} title="Take it to any synth" wide>
+      <Modal open={guideOpen} onClose={() => setGuideOpen(false)} title="Find it in FL Studio" wide>
         <FieldGuide />
       </Modal>
     </div>
@@ -190,7 +190,7 @@ function FieldGuide() {
   return (
     <div className="synth-guide">
       <p className="dim">
-        Everything in Synth School has a home on real synths. Here’s where to find it on the kinds you’ll meet in any DAW or plugin collection. Every synth lays its panel out a little differently, so these are the names to look for.
+        Everything in Synth School has a home on real synths. Here’s where to find it on the ones that come with FL Studio (and on the free wavetable synth most producers try next). Plugin layouts change between versions, so these are the names to look for.
       </p>
       <div className="synth-guide-list">
         {FIELD_GUIDE.map(g => (
@@ -221,6 +221,7 @@ function FieldGuide() {
           </article>
         ))}
       </div>
+      <p className="faint synth-guide-note">FL Studio, Vital, Serum and the other product names here are trademarks of their respective owners. Clef Coach isn’t affiliated with or endorsed by any of them.</p>
     </div>
   );
 }

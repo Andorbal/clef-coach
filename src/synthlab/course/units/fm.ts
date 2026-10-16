@@ -1,6 +1,6 @@
 /**
  * Part two: FM synthesis (unit 7). The DX7's way of making sound, still at the heart of
- * every FM synth.
+ * Sytrus, Toxic Biohazard and DX10.
  */
 import { C, explain, explore, lesson, listen, match, round, task } from '../build';
 import type { SynthUnit } from '../types';
@@ -42,7 +42,7 @@ export const fmUnit: SynthUnit = {
 
 FM synths call their oscillators **operators**. An operator you hear is a **carrier**. An operator that wobbles another one is a **modulator**. When a modulator wobbles a carrier hundreds of times a second, you don't hear a wobble: you hear new harmonics appear around the note.
 
-Here, **operator 2** modulates **operator 1**. Operator 2's **level** is how hard it wobbles, and that's how bright the sound is. This is the sound of the Yamaha DX7, and of every FM synth since.`,
+Here, **operator 2** modulates **operator 1**. Operator 2's **level** is how hard it wobbles, and that's how bright the sound is. This is the sound of the Yamaha DX7, and of FL Studio's Sytrus, Toxic Biohazard and DX10.`,
           { visual: 'fm' },
         ),
         explore('Turn up the modulator', 'Hold a note and raise operator 2 slowly.', [
@@ -140,7 +140,7 @@ That's what makes FM electric pianos "ping", FM basses punch, and plucked FM sou
 
 **Feedback** lets the top operator modulate itself: a little turns its sine into something like a saw.
 
-Some FM synths replace fixed algorithms with a matrix where any operator can modulate any other: the same idea, more freedom.`,
+Sytrus in FL Studio replaces fixed algorithms with a matrix where any operator can modulate any other: the same idea, more freedom.`,
         ),
         explore('Rewire it', 'Change the algorithm and listen.', [
           task('Choose 1 + 2 + 3 + 4 and raise operators 2 and 3: an organ', p => p.fmAlgo === 7 && p.op2Level > 0.3 && p.op3Level > 0.3),

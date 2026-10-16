@@ -37,7 +37,7 @@ export const specialUnit: SynthUnit = {
           'Sum and difference',
           `A **ring modulator** multiplies one oscillator by another. Something odd happens: you no longer hear either pitch. You hear their **sum** and their **difference** instead. With two notes 300 and 200 Hz apart, you get 500 Hz and 100 Hz.
 
-Those new pitches are rarely in tune with each other or with the key you pressed, so the result is clangy and metallic: bells, gongs, robot voices, sci-fi. It's on many synths as **Ring** or **RM**; matrix FM synths give it a matrix of its own.`,
+Those new pitches are rarely in tune with each other or with the key you pressed, so the result is clangy and metallic: bells, gongs, robot voices, sci-fi. It's on many synths as **Ring** or **RM**; in FL Studio's Sytrus it has its own matrix.`,
         ),
         explore('Make metal', 'Start with two sines.', [
           task('Turn the ring up full and both oscillator levels to 0', p => p.ringLevel > 0.9 && p.osc1Level < 0.05 && p.osc2Level < 0.05),

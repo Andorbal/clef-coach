@@ -45,7 +45,7 @@ Below is a synth with just two controls: the oscillator's **wave**, and the **vo
 - **Saw** (sawtooth) is bright and buzzy, the raw material of strings, brass, leads and basses. It has every harmonic.
 - **Square** is hollow and woody, like a clarinet or an old video game. It has only the odd harmonics.
 
-Nearly every synth you'll meet has these four. Learn their sound and you'll know what you're starting from on any of them.`,
+Nearly every synth you'll meet, including all of FL Studio's, has these four. Learn their sound and you'll know what you're starting from on any of them.`,
           { visual: 'waveforms' },
         ),
         listen('Ear training: which wave?', 'Listen to each sound and pick its wave. Replay as often as you like.', 'Which wave is this?', [['sine', 'Sine'], ['triangle', 'Triangle'], ['saw', 'Saw'], ['square', 'Square']], [
@@ -71,7 +71,7 @@ Nearly every synth you'll meet has these four. Learn their sound and you'll know
 - **Octave** moves it by whole octaves: −1 is the same note an octave lower, deeper and heavier. Older synths write this in "feet", as organs do: 16′ is an octave below 8′.
 - **Semitones** moves it by the steps between neighbouring keys. +7 is a fifth up, +12 a full octave.
 
-Most synths call these **Oct** and **Semi**; some call the semitones knob **Coarse**.`,
+On FL Studio's 3x Osc these are the **Coarse** knobs; most synths call them **Oct** and **Semi**.`,
         ),
         explore('Move it around', 'Play a note after each change.', [
           task('Set the octave to −1 and play: the same note, an octave down', p => p.osc1Octave === -1),

@@ -136,7 +136,7 @@ export const designUnit: SynthUnit = {
       'sy11-1',
       'Acid bass',
       'Build the TB-303 squelch from nothing.',
-      `The sound of acid house, from Roland's TB-303 (and the many synths that copy it).
+      `The sound of acid house, from Roland's TB-303 (FL Studio's Transistor Bass copies it).
 
 - **Source**: one saw, an octave down.
 - **Filter**: a 24 dB low-pass, cutoff low (around 300 Hz), resonance high (around 75%).

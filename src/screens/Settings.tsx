@@ -342,7 +342,7 @@ export default function Settings() {
       <section className="set-section card about">
         <h2 className="set-title">About</h2>
         <p className="dim">
-          Clef Coach {APP_VERSION}. Music engraving by VexFlow with the Bravura font (SIL Open Font License). All songs are public-domain or original compositions. Sounds are synthesised on your device.
+          Clef Coach {APP_VERSION}. Music engraving by VexFlow with the Bravura font (SIL Open Font License). All songs are public-domain or original compositions. Sounds are synthesised on your device. Product names mentioned in Clef Coach are trademarks of their respective owners, and Clef Coach isn’t affiliated with or endorsed by them.
         </p>
       </section>
 
