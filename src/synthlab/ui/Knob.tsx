@@ -105,7 +105,10 @@ export const Knob = memo(function Knob({
     if (!d) return;
     const fine = e.shiftKey ? 0.2 : 1;
     const delta = ((d.y - e.clientY + (e.clientX - d.x) * 0.6) / 230) * fine;
-    set(fromNorm(spec, d.n + delta));
+    const n = d.n + delta;
+    // detents: snap to a nearby special value (a whole FM ratio), unless dragging finely
+    const near = !e.shiftKey && spec.detents?.find(v => Math.abs(toNorm(spec, v) - n) < 0.012);
+    set(near !== undefined && near !== false ? near : fromNorm(spec, n));
   };
   const end = () => {
     if (!drag.current) return;

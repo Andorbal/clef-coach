@@ -10,9 +10,11 @@
  * - **Pitch**: the note it plays (median offset, in cents). Skipped for unpitched targets.
  * - **Tone**: the colour of the sound — its spectrum in third-octave bands, frame by
  *   frame, each frame normalised so this is about timbre, not loudness.
- * - **Shape**: loudness over time — the contour of the note (decay, release), the
- *   attack time measured on its own (a 5 ms against a 60 ms attack barely moves an
- *   average but is the difference between a pluck and a bowed note), and overall level.
+ * - **Shape**: loudness over time — the contour of the note (decay, release) compared as
+ *   loudness relative to the peak, so a quiet dip matters less than the body of the
+ *   note; the attack time measured on its own (a 5 ms against a 60 ms attack barely
+ *   moves an average but is the difference between a pluck and a bowed note); and the
+ *   overall level.
  * - **Movement**: wobble from an LFO — depth and speed of the pitch, loudness and
  *   brightness modulation, compared without regard to phase so a vibrato a shade faster
  *   isn't marked as wrong on every frame. Only judged when either sound moves.
@@ -25,6 +27,8 @@ import { getFFT } from '../../audio/dsp/fft';
 import { detectPitch } from '../../audio/input/yin';
 
 export const ANALYSIS_RATE = 32000;
+/** Mean loudness difference (share of the peak) at which the contour score falls to 1/e. */
+const CONTOUR_SCALE = 0.07;
 
 const HOP_L = 256;
 const WIN_L = 512;
@@ -47,6 +51,8 @@ export interface Features {
   centroid: Float32Array;
   /** Pitch per HOP_P frame as a MIDI number (NaN when there's no clear pitch). */
   pitch: Float32Array;
+  /** How periodic each pitch frame is (YIN clarity, 0..1). */
+  clarity: Float32Array;
   sampleRate: number;
   /** Seconds the phrase holds its (first) note: where "held" motion is measured. */
   held: [number, number];
@@ -129,13 +135,15 @@ export function analyse(x: Float32Array, held: [number, number] = [0, 1]): Featu
   // pitch
   const nP = Math.max(1, Math.floor((x.length - WIN_P) / HOP_P) + 1);
   const pitch = new Float32Array(nP);
+  const clarity = new Float32Array(nP);
   for (let f = 0; f < nP; f++) {
     const o = f * HOP_P;
     const frame = x.subarray(o, o + WIN_P);
     const r = frame.length === WIN_P ? detectPitch(frame, sr, { minFreq: 40, maxFreq: 2400, minRms: 3e-4 }) : null;
     pitch[f] = r && r.clarity > 0.6 ? 69 + 12 * Math.log2(r.freq / 440) : NaN;
+    clarity[f] = r?.clarity ?? 0;
   }
-  return { loud, bands, bandFrameDb, centroid, pitch, sampleRate: sr, held };
+  return { loud, bands, bandFrameDb, centroid, pitch, clarity, sampleRate: sr, held };
 }
 
 export interface MatchResult {
@@ -150,7 +158,8 @@ export interface MatchResult {
     pitchCents: number | null;
     /** Tone distance (0 = same colour, 1 = nothing in common). */
     toneDist: number;
-    contourDb: number;
+    /** Mean loudness difference over the sounding frames, as a share of the peak (0..1). */
+    contour: number;
     levelDb: number;
     attackRatio: number;
     motion: { what: 'pitch' | 'loudness' | 'brightness'; target: Motion; mine: Motion }[];
@@ -185,7 +194,11 @@ function median(xs: number[]): number {
   return s.length % 2 ? s[m] : 0.5 * (s[m - 1] + s[m]);
 }
 
-/** Time (s) from the onset to within 4 dB of the first peak (not 1 or 2, so unison beating can't fake a late peak). */
+/**
+ * Time (s) from the onset to within 4 dB of the first peak. The first peak is where the
+ * loudness stops rising (falls 3 dB below its running maximum), so a wobble later in the
+ * note or a slow beating can't be mistaken for a slow attack.
+ */
 function attackTime(loud: Float32Array, peak: number): number {
   const fr = HOP_L / ANALYSIS_RATE;
   let onset = -1;
@@ -196,11 +209,15 @@ function attackTime(loud: Float32Array, peak: number): number {
     }
   }
   if (onset < 0) return 0;
-  // the first peak: the loudest point in the first second after the onset
-  const end = Math.min(loud.length, onset + Math.round(1 / fr));
+  const end = Math.min(loud.length, onset + Math.round(2 / fr));
   let top = -Infinity;
-  for (let i = onset; i < end; i++) top = Math.max(top, loud[i]);
-  for (let i = onset; i < end; i++) if (loud[i] >= top - 4) return (i - onset) * fr;
+  let last = onset;
+  for (let i = onset; i < end; i++) {
+    if (loud[i] > top) top = loud[i];
+    else if (loud[i] < top - 3) break;
+    last = i;
+  }
+  for (let i = onset; i <= last; i++) if (loud[i] >= top - 4) return (i - onset) * fr;
   return 0;
 }
 
@@ -274,12 +291,19 @@ export function motionOf(series: number[], dt: number): Motion {
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 
-/**
- * Compare `mine` with `target` (both from analyse(), same phrase and length). Movement is
- * judged only when `movement` is set (an LFO is at work in either patch); otherwise the
- * slow beating of detuned oscillators would be taken for an LFO.
- */
-export function compare(target: Features, mine: Features, movement = true): MatchResult {
+export interface CompareOptions {
+  /**
+   * Judge movement (an LFO is at work in either patch). Otherwise the slow beating of
+   * detuned oscillators would be taken for an LFO.
+   */
+  movement?: boolean;
+  /** Judge pitch (not for chords: a pitch tracker follows one note). */
+  pitch?: boolean;
+}
+
+/** Compare `mine` with `target` (both from analyse(), same phrase and length). */
+export function compare(target: Features, mine: Features, opts: CompareOptions = {}): MatchResult {
+  const movement = opts.movement ?? true;
   // ---- shape ----
   const lt = smooth(target.loud, 4);
   const lm = smooth(mine.loud, 4);
@@ -287,29 +311,30 @@ export function compare(target: Features, mine: Features, movement = true): Matc
   for (const v of lt) peak = Math.max(peak, v);
   let peakM = -Infinity;
   for (const v of lm) peakM = Math.max(peakM, v);
-  const rel = (v: number) => Math.max(-60, v - peak);
+  // quieter than this under the peak counts as silence
+  const rel = (v: number) => Math.max(-50, v - peak);
   const n = Math.min(lt.length, lm.length);
-  // overall level difference (from the louder frames of both)
-  const diffs: number[] = [];
-  for (let i = 0; i < n; i++) if (rel(lt[i]) > -25 || lm[i] - peak > -25) diffs.push(lt[i] - lm[i]);
-  const levelDb = Math.max(-12, Math.min(12, median(diffs)));
-  let wsum = 0;
+  // overall level difference: the loudest moments of each (a short hit and a long note alike)
+  const levelDb = Math.max(-12, Math.min(12, peak - peakM));
+  // compared as loudness (roughly sones: twice as loud every 10 dB) relative to the peak,
+  // not in decibels: a dip from −20 to −30 dB is a small change to the ear, a difference
+  // near the top of the note a big one
   let dsum = 0;
+  let active = 0;
   for (let i = 0; i < n; i++) {
-    const a = rel(lt[i]);
-    const b = rel(lm[i] + levelDb);
-    // quieter frames count less, but a release tail still counts
-    const w = Math.max(0.05, Math.pow(10, Math.max(a, b) / 40));
-    wsum += w;
-    // a decibel or so either way is beating between detuned oscillators, not a different shape
-    dsum += w * Math.max(0, Math.abs(a - b) - 1.5);
+    const a = Math.pow(10, rel(lt[i]) / 33);
+    const b = Math.pow(10, rel(lm[i] + levelDb) / 33);
+    if (Math.max(a, b) < 0.06) continue; // both near silent (−40 dB)
+    active++;
+    // up to 8% either way is the beating of detuned oscillators, not a different shape
+    dsum += Math.max(0, Math.abs(a - b) - 0.08 * Math.max(a, b));
   }
-  const contourDb = dsum / Math.max(1e-9, wsum);
+  const contour = active > 0 ? dsum / active : 0;
   const atT = attackTime(target.loud, peak);
   const atM = attackTime(mine.loud, peakM);
   const attackRatio = Math.abs(Math.log2((atM + 0.012) / (atT + 0.012)));
   const levelPenalty = Math.max(0, Math.abs(levelDb) - 3) * 0.045;
-  const shape = clamp01(Math.exp(-contourDb / 5.5) * Math.exp(-attackRatio / 1.6) - levelPenalty);
+  const shape = clamp01(Math.exp(-contour / CONTOUR_SCALE) * Math.exp(-attackRatio / 1.6) - levelPenalty);
 
   // ---- tone ----
   // Two views: the long-term average spectrum (steady colour; immune to the beating of
@@ -366,12 +391,17 @@ export function compare(target: Features, mine: Features, movement = true): Matc
   }
   let pitch: number | null = null;
   let pitchCents: number | null = null;
-  if (voicedT >= 3 && voicedT >= nP * 0.25) {
+  if ((opts.pitch ?? true) && voicedT >= 3 && voicedT >= nP * 0.25 && pitchSteady(target)) {
     pitchCents = offsets.length ? median(offsets) : 1200;
     const unvoicedShare = unvoicedM / voicedT;
     // how the pitch moves (a glide, a pitch envelope) besides where it sits
     // (half the mean, half the 90th percentile: a glide is brief but large)
-    const dev = offsets.map(o => Math.min(600, Math.abs(o - pitchCents!))).sort((a, b) => a - b);
+    // octave and twelfth jumps are the tracker changing its mind, not the sound
+    const dev = offsets
+      .map(o => Math.abs(o - pitchCents!))
+      .filter(d => Math.abs(d - 1200) > 150 && Math.abs(d - 1902) > 150 && Math.abs(d - 2400) > 150)
+      .map(d => Math.min(600, d))
+      .sort((a, b) => a - b);
     const wander = dev.length ? 0.5 * (dev.reduce((s, d) => s + d, 0) / dev.length) + 0.5 * dev[Math.floor(dev.length * 0.9)] : 0;
     pitch = clamp01(Math.exp(-Math.abs(pitchCents) / 140) * Math.exp(-wander / 200) * (1 - 0.8 * Math.max(0, unvoicedShare - 0.25)));
   }
@@ -425,7 +455,7 @@ export function compare(target: Features, mine: Features, movement = true): Matc
   if (moveScore !== null) parts.push([moveScore, 1.2]);
   const wTotal = parts.reduce((s, [, w]) => s + w, 0);
   const overall = Math.exp(parts.reduce((s, [v, w]) => s + w * Math.log(Math.max(1e-4, v)), 0) / wTotal);
-  return { overall, pitch, tone, shape, movement: moveScore, detail: { pitchCents, toneDist, contourDb, levelDb, attackRatio, motion } };
+  return { overall, pitch, tone, shape, movement: moveScore, detail: { pitchCents, toneDist, contour, levelDb, attackRatio, motion } };
 }
 
 /** A-weighting (dB) at each band's centre: the ear's sensitivity, most around 2–5 kHz. */
@@ -453,6 +483,24 @@ function bandDistance(va: ArrayLike<number>, vb: ArrayLike<number>): number {
     total += Math.max(a, b);
   }
   return total > 0 ? diff / total : 0;
+}
+
+/**
+ * Does the target hold a steady pitch over its first note? Bells, glass and other
+ * inharmonic sounds don't (a tracker hops between partials), and judging their "pitch"
+ * would only judge the tracker.
+ */
+function pitchSteady(f: Features): boolean {
+  const dt = HOP_P / ANALYSIS_RATE;
+  const from = Math.ceil((f.held[0] + 0.15) / dt);
+  const to = Math.min(f.pitch.length, Math.floor(f.held[1] / dt));
+  const vals = Array.from(f.pitch.subarray(from, Math.max(from, to))).filter(Number.isFinite).map(v => v * 100);
+  if (vals.length < 3) return true;
+  const med = median(vals);
+  const mad = median(vals.map(v => Math.abs(v - med)));
+  // inharmonic partials still repeat a little: their clarity stays low
+  const clear = median(Array.from(f.clarity.subarray(from, Math.max(from, to))));
+  return mad <= 60 && clear >= 0.85;
 }
 
 /** A frame's bands averaged with its neighbours (smooths fast wobble out of the tone). */

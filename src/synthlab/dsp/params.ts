@@ -214,6 +214,8 @@ export interface NumSpec {
   floor?: number;
   /** Centred control (−x..+x). */
   bipolar?: boolean;
+  /** Values a knob drag snaps to when close (FM ratios: whole and half numbers). */
+  detents?: readonly number[];
   unit: Unit;
 }
 
@@ -245,7 +247,9 @@ export const LFO_SHAPES: readonly LfoShape[] = ['sine', 'triangle', 'saw', 'squa
 export const TABLES: readonly TableId[] = ['basic', 'pwm', 'harmonic', 'vowel', 'metal', 'sync'];
 export const DIVISIONS: readonly Division[] = ['1/1', '1/2', '1/4', '1/4D', '1/4T', '1/8', '1/8D', '1/8T', '1/16', '1/16T'];
 
-const op = (ratio: number, lvl: number) => ({ ratio: num(0.5, 16, ratio, 'log', 'x', { step: 0.01 }), level: level(lvl) });
+/** Whole and half ratios, where FM sounds are harmonic. */
+const RATIO_DETENTS = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+const op = (ratio: number, lvl: number) => ({ ratio: num(0.5, 16, ratio, 'log', 'x', { step: 0.01, detents: RATIO_DETENTS }), level: level(lvl) });
 const op1 = op(1, 0.8);
 const op2 = op(1, 0);
 const op3 = op(2, 0);

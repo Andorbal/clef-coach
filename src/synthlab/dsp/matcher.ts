@@ -21,10 +21,10 @@ export interface Hint {
   value: Patch[ParamKey];
 }
 
-/** Is the LFO moving anything you'd hear? */
+/** Is the LFO (or the chorus, whose drift is an LFO too) moving anything you'd hear? */
 export function usesLfo(p: Patch): boolean {
   const pw = p.engine === 'subtractive' && ((p.osc1Wave === 'square' && p.osc1Level > 0) || (p.osc2Wave === 'square' && p.osc2Level > 0));
-  return p.lfoPitch > 0 || (p.filterOn && p.lfoCutoff > 0) || p.lfoAmp > 0 || (pw && p.lfoPw > 0) || (p.engine === 'wavetable' && p.lfoPos > 0);
+  return p.lfoPitch > 0 || (p.filterOn && p.lfoCutoff > 0) || p.lfoAmp > 0 || (pw && p.lfoPw > 0) || (p.engine === 'wavetable' && p.lfoPos > 0) || p.chorusMix > 0;
 }
 
 export class Matcher {
@@ -34,9 +34,13 @@ export class Matcher {
   private readonly targetFeatures: Features;
   private readonly cache = new Map<string, MatchResult>();
 
+  /** Notes overlap (a chord): pitch isn't judged. */
+  private readonly chordal: boolean;
+
   constructor(target: Patch, ph: Phrase) {
     this.target = target;
     this.phrase = ph;
+    this.chordal = ph.notes.some(a => ph.notes.some(b => a !== b && a.start === b.start));
     this.length = renderLength(target, ph);
     this.targetFeatures = this.features(target);
   }
@@ -51,7 +55,7 @@ export class Matcher {
     const key = JSON.stringify(mine);
     const hit = this.cache.get(key);
     if (hit) return hit;
-    const r = compare(this.targetFeatures, this.features(mine), usesLfo(this.target) || usesLfo(mine));
+    const r = compare(this.targetFeatures, this.features(mine), { movement: usesLfo(this.target) || usesLfo(mine), pitch: !this.chordal });
     if (this.cache.size > 64) this.cache.clear();
     this.cache.set(key, r);
     return r;

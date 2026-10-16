@@ -36,9 +36,13 @@ export const ALGORITHMS: readonly Algorithm[] = [
   { name: '1 + 2 + 3 + 4', carriers: [1, 2, 3, 4], links: [], feedback: 4, used: [1, 2, 3, 4], hint: 'Four sines added: additive synthesis, like drawbars.' },
 ];
 
-/** A modulator's level (0..1) → its modulation index, in cycles of phase (about 12 radians at full). */
+/**
+ * A modulator's level (0..1) → its modulation index, in cycles of phase (7.5 radians at
+ * full). Squared, so the middle of the knob covers the musical range (an index of about
+ * 0.5 to 4) where FM tones change quickly, and the top end is there for harshness.
+ */
 export function modIndex(level: number): number {
-  return level * level * 1.9;
+  return level * level * 1.2;
 }
 
 /** Full feedback, in cycles of phase: enough to turn a sine into a buzzy saw, not into noise. */

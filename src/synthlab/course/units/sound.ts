@@ -77,7 +77,7 @@ On FL Studio's 3x Osc these are the **Coarse** knobs; most synths call them **Oc
           task('Set the octave to −1 and play: the same note, an octave down', p => p.osc1Octave === -1),
           task('Set the octave to +1 and play', p => p.osc1Octave === 1),
           task('Set semitones to +7 and play: a fifth above the key you press', p => p.osc1Semi === 7),
-          task('Put both back to 0', p => p.osc1Octave === 0 && p.osc1Semi === 0, false),
+          task('Set the octave to −2 and play: deep bass territory', p => p.osc1Octave === -2),
         ]),
         match(
           'Quiz: match the bass',
@@ -114,7 +114,7 @@ That's the whole secret of subtractive synthesis, which the next units are about
           round('pulse', { osc1Pw: 0.18 }),
           round('square', { osc1Pw: 0.5, osc1Wave: 'square' }),
         ]),
-        match('Quiz: the chiptune', 'Match the width of this pulse.', { osc1Pw: 0.15 }),
+        match('Quiz: the chiptune', 'Match the width of this pulse.', { osc1Pw: 0.2 }, { pass: 0.65 }),
       ],
     ),
     lesson(
@@ -132,7 +132,7 @@ That's the whole secret of subtractive synthesis, which the next units are about
         ]),
         match('Match 1 of 3', 'A soft, deep sound.', { osc1Wave: 'triangle', osc1Octave: -1 }),
         match('Match 2 of 3', 'Bright, and not on the key you press.', { osc1Semi: 7 }),
-        match('Match 3 of 3', 'Thin and high.', { osc1Wave: 'square', osc1Pw: 0.2, osc1Octave: 1 }),
+        match('Match 3 of 3', 'Thin and high.', { osc1Wave: 'square', osc1Pw: 0.2, osc1Octave: 1 }, { pass: 0.65 }),
       ],
     ),
   ],

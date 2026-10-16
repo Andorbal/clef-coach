@@ -163,8 +163,8 @@ export const PRESETS: readonly Preset[] = [
     id: 'kick',
     name: 'Synth kick',
     category: 'Drums',
-    recipe: 'A sine whose pitch drops three octaves in a few hundredths of a second: the 808 kick.',
-    patch: { voiceMode: 'mono', osc1Wave: 'sine', osc1Octave: -1, modPitch: 36, modDecay: 0.06, ampAttack: 0, ampDecay: 0.45, ampSustain: 0, ampRelease: 0.1, drive: 0.2 },
+    recipe: 'A sine whose pitch drops over two octaves in about a tenth of a second: the 808 kick.',
+    patch: { voiceMode: 'mono', osc1Wave: 'sine', osc1Octave: -1, modPitch: 32, modDecay: 0.14, ampAttack: 0, ampDecay: 0.45, ampSustain: 0, ampRelease: 0.1, drive: 0.2 },
   },
   {
     id: 'snare',

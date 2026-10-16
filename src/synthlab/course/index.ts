@@ -3,9 +3,29 @@
  * See types.ts for how lessons work and src/synthlab/CLAUDE.md for adding one.
  */
 import type { SynthUnit } from './types';
+import { additiveUnit } from './units/additive';
+import { filterUnit } from './units/filter';
+import { fmUnit } from './units/fm';
+import { lfoUnit } from './units/modulation';
+import { designUnit, effectsUnit } from './units/production';
+import { sourcesUnit } from './units/sources';
+import { specialUnit } from './units/special';
+import { wavetableUnit } from './units/wavetable';
 import { ampUnit, oscillatorUnit } from './units/sound';
 
-export const COURSE: readonly SynthUnit[] = [oscillatorUnit, ampUnit];
+export const COURSE: readonly SynthUnit[] = [
+  oscillatorUnit,
+  ampUnit,
+  filterUnit,
+  sourcesUnit,
+  lfoUnit,
+  specialUnit,
+  fmUnit,
+  additiveUnit,
+  wavetableUnit,
+  effectsUnit,
+  designUnit,
+];
 
 export interface Part {
   id: string;

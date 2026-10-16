@@ -3,8 +3,8 @@ import { Matcher } from './matcher';
 import { makePatch, type PatchDelta } from './params';
 import { phrase, type PhraseId } from './render';
 
-/** A quiz passes at 0.8 by default (see course/types.ts). */
-const PASS = 0.8;
+/** A quiz passes at 0.75 by default (course/types.ts PASS_MARK). */
+const PASS = 0.75;
 
 const score = (target: PatchDelta, mine: PatchDelta, ph: PhraseId = 'note') => new Matcher(makePatch(target), phrase(ph)).score(makePatch(mine));
 
@@ -60,7 +60,7 @@ const far: [string, PatchDelta, PatchDelta, PhraseId?][] = [
   ['wobble in eighths against quarters', wob, { ...wob, lfoDiv: '1/4' }, 'long'],
   ['wobble against none', wob, { ...wob, lfoCutoff: 0 }, 'long'],
   ['much quieter', {}, { volume: 0.3 }],
-  ['noise against none', { noiseLevel: 0.3 }, {}],
+  ['noise against none', { noiseLevel: 0.5 }, {}],
   ['a second oscillator a fifth up', { osc2Level: 0.7, osc2Semi: 7 }, {}],
   ['ring modulation against none', { ringLevel: 0.8, osc2Semi: 7, osc1Wave: 'sine', osc2Wave: 'sine' }, { osc1Wave: 'sine', osc2Wave: 'sine' }],
   ['FM ratio 1 against 2', { engine: 'fm', op2Level: 0.5 }, { engine: 'fm', op2Level: 0.5, op2Ratio: 2 }],

@@ -105,4 +105,4 @@ export interface SynthUnit {
 }
 
 /** Default quiz pass mark. */
-export const PASS_MARK = 0.8;
+export const PASS_MARK = 0.75;
