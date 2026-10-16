@@ -45,6 +45,8 @@ export interface Lab {
   synth: LabSynth;
   /** Subscribe to notes (lessons watch for "now play a note"). */
   onNote: (cb: (e: NoteEvent) => void) => () => void;
+  /** The patch as it is right now: `patch` catches up on the next frame after a knob moves. */
+  getPatch: () => Patch;
   /** Stop everything (loop, held notes, clips). */
   silence: () => void;
 }
@@ -244,6 +246,7 @@ export function useLab(initial: Patch, opts: { keyboard?: boolean } = {}): Lab {
   }, [player, synth]);
 
   const held = useMemo(() => new Set([...handHeld, ...loopHeld]), [handHeld, loopHeld]);
+  const getPatch = useCallback(() => patchRef.current, []);
 
-  return { patch, set, setPatch, held, active, noteOn, noteOff, hold, setHold, loop, playLoop, root, setRoot, synth, onNote, silence };
+  return { patch, set, setPatch, held, active, noteOn, noteOff, hold, setHold, loop, playLoop, root, setRoot, synth, onNote, silence, getPatch };
 }

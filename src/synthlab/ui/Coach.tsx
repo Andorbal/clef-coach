@@ -69,8 +69,6 @@ export function ExploreCoach({ step, lab, onDone }: CoachProps<ExploreStep>) {
   const [done, setDone] = useState<boolean[]>(() => step.tasks.map(() => false));
   const doneRef = useRef(done);
   doneRef.current = done;
-  const patchRef = useRef(lab.patch);
-  patchRef.current = lab.patch;
 
   const tick = (i: number) => {
     setDone(d => {
@@ -82,17 +80,19 @@ export function ExploreCoach({ step, lab, onDone }: CoachProps<ExploreStep>) {
     sfx.correct();
   };
 
-  // tasks that need a note: done when one sounds while their condition holds
+  // tasks that need a note: done when one sounds while their condition holds (checked
+  // against the live patch, so a key played straight after a knob turn counts)
   useEffect(
     () =>
       lab.onNote(e => {
         if (!e.on) return;
+        const p = lab.getPatch();
         step.tasks.forEach((t, i) => {
-          if (!doneRef.current[i] && t.play && t.check(patchRef.current)) tick(i);
+          if (!doneRef.current[i] && t.play && t.check(p)) tick(i);
         });
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lab.onNote, step],
+    [lab.onNote, lab.getPatch, step],
   );
   // tasks that only need a setting
   useEffect(() => {
