@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { AudioWaveform, BookOpen, Check, FlaskConical, KeyboardMusic, Minus, Plus } from 'lucide-react';
+import { AudioWaveform, BookOpen, Check, FlaskConical, KeyboardMusic, Minus, Plus, SlidersHorizontal, SlidersVertical } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { MobileSettingsButton, PageHeader } from '../components/Shell';
 import { TrackBadge } from '../components/TrackBadge';
@@ -12,6 +12,7 @@ import { InstrumentIcon } from '../components/InstrumentIcon';
 import { INSTRUMENT_IDS, type InstrumentId, instrumentDef, instrumentFromId } from '../music/instruments';
 import { COURSE } from '../synthlab/course';
 import { courseCompletion, nextLesson as nextSynthLesson } from '../synthlab/course/progress';
+import { PRODUCTION } from '../production/course';
 import { THEORY } from '../theory/course';
 import './learn.css';
 
@@ -104,6 +105,7 @@ export default function Learn() {
       ))}
       <TheoryGroup delay={groups.length * 0.15} />
       <SynthGroup delay={groups.length * 0.15 + 0.1} />
+      <ProductionGroup delay={groups.length * 0.15 + 0.2} />
     </div>
   );
 }
@@ -222,6 +224,67 @@ function SynthGroup({ delay }: { delay: number }) {
           <p className="dim learn-card-desc">The whole synth, every module showing, with a library of classic presets to take apart.</p>
           <div className="learn-card-actions">
             <Link to="/synth/lab" className="btn">
+              Open the lab
+            </Link>
+          </div>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+/** Production School: recording and mixing, on the app's own multitrack sessions. */
+function ProductionGroup({ delay }: { delay: number }) {
+  const profile = useProfile();
+  const pp = profile?.production;
+  const done = PRODUCTION.courseCompletion(pp);
+  const next = PRODUCTION.nextLesson(pp);
+  return (
+    <section className="learn-group">
+      <div className="learn-group-head">
+        <h2 className="display learn-group-title">
+          <SlidersHorizontal size={22} /> Recording and mixing
+        </h2>
+        <span className="dim">How records are put together: levels, panning, EQ, compression, reverb and mastering.</span>
+      </div>
+      <div className="learn-grid">
+        <motion.div className={`learn-card card ${pp ? 'mine' : ''}`} style={{ ['--accent' as string]: '#4dd0c8' }} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay }}>
+          <div className="learn-card-top">
+            <span className="synth-learn-badge teal">
+              <SlidersHorizontal size={28} />
+            </span>
+            {pp && (
+              <ProgressRing value={done} size={50} stroke={4} color="#4dd0c8">
+                <span className="ring-pct small">{Math.round(done * 100)}%</span>
+              </ProgressRing>
+            )}
+          </div>
+          <div className="eyebrow">Mix it yourself</div>
+          <h3 className="display learn-card-title">Production School</h3>
+          <p className="dim learn-card-desc">A real mixing console and multitrack sessions to mix: hear what each control does, then match mixes by ear.</p>
+          <div className="learn-card-meta faint">
+            {PRODUCTION.units.length} units · {PRODUCTION.totalLessons} lessons
+          </div>
+          <div className="learn-card-actions">
+            <Link to={next && pp ? `/production/lesson/${next.lesson.id}` : '/production'} className="btn btn-primary">
+              {pp ? 'Continue' : 'Start'}
+            </Link>
+            <Link to="/production" className="btn btn-ghost btn-sm">
+              Course map
+            </Link>
+          </div>
+        </motion.div>
+        <motion.div className="learn-card card" style={{ ['--accent' as string]: '#f4c97a' }} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: delay + 0.06 }}>
+          <div className="learn-card-top">
+            <span className="synth-learn-badge">
+              <SlidersVertical size={28} />
+            </span>
+          </div>
+          <div className="eyebrow">Mix freely</div>
+          <h3 className="display learn-card-title">Mix Lab</h3>
+          <p className="dim learn-card-desc">The whole console and four sessions to mix your way, with a finished reference mix to compare against.</p>
+          <div className="learn-card-actions">
+            <Link to="/production/lab" className="btn">
               Open the lab
             </Link>
           </div>

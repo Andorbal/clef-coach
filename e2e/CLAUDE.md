@@ -31,6 +31,10 @@
   `playing`…) and `data-expected`. Synth panels carry `data-module` (`osc1`, `filter`…) and
   the lesson coach `data-step`; scope control names to a module, since the keyboard has
   its own "Octave down". On a phone the lab's engine names are short (Analog, Table).
+- **Production School:** strips carry `data-strip` (a channel id, `fx`, `master`), faders and
+  knobs `data-key` (`bass:fader`); a fader moves 0.5 dB per arrow key. `.pr-play` is enabled
+  once a lesson's tracks are on the console, and Check once the quiz's judge is ready
+  (`production.spec.ts`).
 - **Loading screen:** `index.html` shows `#boot` until a screen is up (`boot.spec.ts`). It
   stops intercepting clicks as soon as it starts fading, so tests needn't wait for it.
 
@@ -38,7 +42,7 @@
 
 | Spec | Run | What |
 |---|---|---|
-| `sweep` | `SWEEP=1 npx playwright test sweep --project=ipad` | every step of every lesson renders (via dev-only `?step=N`); Synth School's quizzes also wait for their judge (`-g "Synth School"`); Theory School with `-g "Theory School"` |
+| `sweep` | `SWEEP=1 npx playwright test sweep --project=ipad` | every step of every lesson renders (via dev-only `?step=N`); Synth School's quizzes also wait for their judge (`-g "Synth School"`); Theory School with `-g "Theory School"`; Production School with `-g "Production School"` (waits for each lesson's tracks and each quiz's judge) |
 | `screens` | `SHOTS=dir npx playwright test screens` | a screenshot of every screen |
 | `media` | `tools/readme-media.sh` | re-records the README screenshots and GIFs (needs ffmpeg) |
 | `audio-bench` | `BENCH=1 npx playwright test audio-bench --project=ipad` | audio-thread cost of band scenarios in an OfflineAudioContext, with loudness fingerprints (`BENCH_TRACKS`, `BENCH_ONLY`, `BENCH_RUNS`, `BENCH_BANK`, `BENCH_OUT`) |

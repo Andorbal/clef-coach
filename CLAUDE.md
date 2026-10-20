@@ -5,14 +5,15 @@ mallets and the bowed strings (violin, viola, cello, double bass). It listens to
 VexFlow, synthesises every sound itself (plus optional SoundFont/SFZ banks), and can play a
 band along with the player. Synth School (`/synth`) teaches synthesizers on a synth the app
 runs itself, judging quizzes by ear. Theory School (`/theory`) teaches music theory on a staff
-and a keyboard. No server: state lives in localStorage and IndexedDB. The main
+and a keyboard. Production School (`/production`) teaches recording and mixing on a console the
+app runs itself, with multitrack sessions played by its own instruments, judging mixes by ear. No server: state lives in localStorage and IndexedDB. The main
 target is an **iPad in Safari** (as a home-screen PWA). Treat CPU, GPU and battery use
 there as features.
 
 More detailed notes sit next to the code (each loads when you work in that folder):
 `src/audio/CLAUDE.md`, `src/perform/CLAUDE.md`, `src/engine/CLAUDE.md`,
 `src/songs/CLAUDE.md`, `src/curriculum/CLAUDE.md`, `src/synthlab/CLAUDE.md`, `src/theory/CLAUDE.md`,
-`e2e/CLAUDE.md`. Performance
+`src/production/CLAUDE.md`, `e2e/CLAUDE.md`. Performance
 measurements and history are in `docs/performance.md`. The song file format is in
 `docs/song-format.md`.
 
@@ -33,7 +34,7 @@ run e2e. Pushing to `main` deploys to GitHub Pages (`deploy.yml`).
 
 Opt-in Playwright runs (skipped unless their env var is set):
 
-- `SWEEP=1 npx playwright test sweep --project=ipad`: renders every step of every lesson (`-g "Synth School"` for the synth course alone, about a minute; `-g "Theory School"` about two).
+- `SWEEP=1 npx playwright test sweep --project=ipad`: renders every step of every lesson (`-g "Synth School"` for the synth course alone, about a minute; `-g "Theory School"` about two; `-g "Production School"`).
 - `SHOTS=dir npx playwright test screens`: screenshots of every screen.
 - `MEDIA=dir …` via `tools/readme-media.sh`: the README media.
 - `BENCH=1 npx playwright test audio-bench --project=ipad`: audio render cost (see `docs/performance.md`).
@@ -63,6 +64,9 @@ src/
                       the panel UI and the course → src/synthlab/CLAUDE.md
   theory/             Theory School: pure theory (intervals, scales, chords, numerals), the
                       course, links to the instrument tracks → src/theory/CLAUDE.md
+  production/         Production School: the mixing console (pure-TS DSP in an AudioWorklet),
+                      sessions and stems (in a worker), the mix judge, the console UI and the
+                      course → src/production/CLAUDE.md
   content/songs/      the built-in song library (TS), one file per instrument
   songs/              song file format, importers (MusicXML, MIDI, Guitar Pro, tab), Claude scan
   state/              zustand store, persistence, SRS, achievements, export/import, courseNav
@@ -114,7 +118,8 @@ parts.
   optional and read with `?? default`. A new top-level `PersistedData` field also needs
   `makeExport`, `parseImport` and `mergeData` in `state/logic.ts`.
 - **Ids are persistence keys:** lesson ids, song ids, track ids and SRS item keys
-  (`note:treble:C4`, `chord:…`), and Synth School's unit and lesson ids (`sy-osc`, `sy1-1`).
+  (`note:treble:C4`, `chord:…`), and the unit and lesson ids of Synth, Theory and Production
+  School (`sy-osc`, `sy1-1`, `th5-2`, `pr-eq`, `pr5-2`).
   Renaming one orphans users' progress.
 
 ## Keep in sync by hand

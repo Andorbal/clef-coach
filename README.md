@@ -7,7 +7,7 @@
 </p>
 <p align="center"><sub>Playing in time: a count-in, a beat light to follow, and every note judged as you play it.</sub></p>
 
-Clef Coach is an installable web app (PWA) that takes you from your very first note to advanced sight-reading and real songs. It listens to your instrument through **MIDI** or the **microphone**, shows real engraved notation, an accurate keyboard, fretboard or set of mallet bars, and teaches proper **fingering**, **sticking**, **hands-together** playing, **chords** and the **whole neck**. **Theory School** explains why music works, from the names of the notes to chromatic harmony and form, on a staff and a keyboard you can play. When you want to make sounds of your own, **Synth School** teaches synthesizers, from the first oscillator to FM and wavetables, on a synth built into the app.
+Clef Coach is an installable web app (PWA) that takes you from your very first note to advanced sight-reading and real songs. It listens to your instrument through **MIDI** or the **microphone**, shows real engraved notation, an accurate keyboard, fretboard or set of mallet bars, and teaches proper **fingering**, **sticking**, **hands-together** playing, **chords** and the **whole neck**. **Theory School** explains why music works, from the names of the notes to chromatic harmony and form, on a staff and a keyboard you can play. When you want to make sounds of your own, **Synth School** teaches synthesizers, from the first oscillator to FM and wavetables, on a synth built into the app, and **Production School** teaches recording and mixing on a mixing console built into it.
 
 There's no account and no server. Progress lives on your device, and you can export or import it at any time.
 
@@ -54,6 +54,11 @@ There's no account and no server. Progress lives on your device, and you can exp
   - Ear training, and **quizzes judged by ear**: hear a target sound and rebuild it with the controls you have. It doesn't have to be exact. The judge listens for pitch, tone, shape and movement, and hints point at the knob that matters.
   - Every control has the name real synths use, and a field guide shows where to find it on the synths that come with FL Studio (3x Osc, Sytrus, Harmor, Flex…) and on Vital or Serum.
   - The **Synth Lab**: the whole synth to play freely from the on-screen keys, a computer keyboard or a MIDI keyboard, with 24 presets to take apart and your own saved patches.
+- **Production School: mix it yourself.** Ten units on the hands-on side of making records: what's in a mix, balance, panning and width, gain staging and recording problems, EQ, compression, reverb and delay, the mix bus, mastering and loudness, then whole mixes from rough to finished.
+  - A real **mixing console** built into the app: a strip for every track with trim, high-pass, a four-band EQ, a compressor with its gain reduction, reverb and delay sends, pan, mute and solo, a fader and a meter; effect returns; a master with a bus compressor, a limiter, a mono check and a loudness meter in LUFS.
+  - **Multitrack sessions** played by the app's own instruments — pop, acoustic, rock and electronic — with recording faults to hear and fix: a take recorded too hot, a mic too close, a rumbling room, an uneven player.
+  - **Mixes judged by ear**: switch between Target and Yours while the loop plays, then the judge listens to the result (balance, panning, tone, dynamics, space and loudness), not the settings, and points at what's furthest off.
+  - The **Mix Lab**: the whole console with any session, and a finished reference mix to compare against.
 - **Tags.** Label any song — “christmas”, “recital”, “warm-ups” — and filter the library by one or more tags.
 - **Chord chart.** Any chord on every instrument — chord boxes for guitar, ukulele and bass, marked keys for piano, marked bars for mallets — with fingers, intervals or note names, and each voicing written out in standard notation in the clef that instrument reads. On a tablet or laptop, compare several chords side by side on several instruments at once (guitar over piano, say), or see every voicing of one chord. Tap to hear.
 - **Studio**
@@ -174,10 +179,12 @@ src/
                 offline), the judge that compares two sounds by ear, the synth panel and the course
   theory/       Theory School: intervals, scales, chords and numerals, the course, and the links
                 between theory lessons and instrument lessons
+  production/   Production School: a mixing console in pure TypeScript (run in an AudioWorklet and
+                offline), multitrack sessions rendered in a worker, the mix judge, the course
   state/        zustand store, persistence, spaced repetition, achievements, export/import
   screens/      onboarding, home, learn, track map, lesson player, songs, song studio, import,
                 chord chart, studio tools, metronome, progress, settings, Synth School and Synth Lab,
-                Theory School
+                Theory School, Production School and the Mix Lab
 tools/          `clefsong` command-line tool (runs the app's TypeScript through Vite)
 docs/           song-format.md: the song file format and why
 ```

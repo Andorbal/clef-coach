@@ -61,6 +61,11 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'theory-reader', title: 'Fluent Reader', description: 'Pass every Theory School checkpoint on reading music.', icon: 'BookOpenCheck', check: p => coursePassed(p, 'theory', ['th1-c', 'th2-c', 'th3-c', 'th4-c']) },
   { id: 'theory-harmony', title: 'Harmonist', description: 'Pass the Theory School checkpoint on chords in a key.', icon: 'Layers', check: p => coursePassed(p, 'theory', ['th11-c']) },
   { id: 'theory-graduate', title: 'Theorist', description: 'Pass the Theory School final exam.', icon: 'GraduationCap', check: p => coursePassed(p, 'theory', ['th17-c']) },
+  { id: 'production-first', title: 'At the Desk', description: 'Pass your first Production School lesson.', icon: 'SlidersHorizontal', check: p => courseCount(p, 'production') >= 1 },
+  { id: 'production-ears', title: 'Engineer’s Ears', description: 'Pass the Production School checkpoints on hearing a mix: levels, balance and panning.', icon: 'Ear', check: p => coursePassed(p, 'production', ['pr1-c', 'pr2-c', 'pr3-c']) },
+  { id: 'production-shaper', title: 'Sound Shaper', description: 'Pass the Production School checkpoints on EQ and compression.', icon: 'Filter', check: p => coursePassed(p, 'production', ['pr5-c', 'pr6-c']) },
+  { id: 'production-master', title: 'Mastered', description: 'Pass the Production School checkpoint on mastering and loudness.', icon: 'Gem', check: p => coursePassed(p, 'production', ['pr9-c']) },
+  { id: 'production-graduate', title: 'Mix Engineer', description: 'Pass the Production School final mix.', icon: 'GraduationCap', check: p => coursePassed(p, 'production', ['pr10-c']) },
 ];
 
 export function newAchievements(p: Profile, ctx: AchievementContext): AchievementDef[] {
