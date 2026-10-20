@@ -19,7 +19,11 @@ export type TrackId =
   | 'bass-lines'
   | 'bass-fretboard'
   | 'mallets-two'
-  | 'mallets-four';
+  | 'mallets-four'
+  | 'violin-treble'
+  | 'viola-alto'
+  | 'cello-bass'
+  | 'doublebass-lines';
 
 export const TRACK_IDS: TrackId[] = [
   'piano-treble',
@@ -35,6 +39,10 @@ export const TRACK_IDS: TrackId[] = [
   'bass-fretboard',
   'mallets-two',
   'mallets-four',
+  'violin-treble',
+  'viola-alto',
+  'cello-bass',
+  'doublebass-lines',
 ];
 
 export interface ItemStat {

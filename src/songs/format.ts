@@ -36,7 +36,7 @@ import { type Clef, type Score, measureStartTick } from '../music/score';
 export const SONG_FORMAT = 'clef-coach-song';
 export const SONG_FORMAT_VERSION = 1;
 
-const CLEFS: Clef[] = ['treble', 'bass', 'treble8vb', 'bass8vb'];
+const CLEFS: Clef[] = ['treble', 'bass', 'treble8vb', 'bass8vb', 'alto', 'tenor'];
 
 /** The on-disk shape. Mirrors SongDef with a header and a friendlier tempo. */
 export interface SongDoc {

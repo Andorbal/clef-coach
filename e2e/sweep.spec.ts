@@ -20,6 +20,10 @@ const TRACK_IDS = [
   'bass-fretboard',
   'mallets-two',
   'mallets-four',
+  'violin-treble',
+  'viola-alto',
+  'cello-bass',
+  'doublebass-lines',
 ];
 
 for (const trackId of TRACK_IDS) {

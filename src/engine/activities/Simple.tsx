@@ -55,7 +55,8 @@ type RhythmDef = Extract<ActivityDef, { type: 'rhythm' }>;
 function rhythmScore(def: RhythmDef, clef: Clef, seed: number, instrument: InstrumentId): Score {
   const rng = makeRng(seed);
   const slots = genRhythm(rng, def.time, def.measures, def.cells, true);
-  const pitch = parsePitch(clef === 'bass' ? 'D3' : clef === 'treble8vb' ? 'B3' : clef === 'bass8vb' ? 'D2' : 'B4');
+  // the staff's middle line
+  const pitch = parsePitch({ bass: 'D3', treble8vb: 'B3', bass8vb: 'D2', alto: 'C4', tenor: 'A3', treble: 'B4' }[clef]);
   const specs: NoteSpec[] = slots.flat().map(s => ({ pitches: s.rest ? [] : [pitch], base: s.base, dots: s.dots, triplet: s.triplet }));
   const id = `rh${seed}`;
   return {
@@ -72,7 +73,7 @@ function rhythmScore(def: RhythmDef, clef: Clef, seed: number, instrument: Instr
 
 export function RhythmTap({ def, ctx, onDone }: ActivityProps<RhythmDef>) {
   const tc = ctx.track.clef;
-  const clef: Clef = tc === 'bass' || tc === 'treble8vb' || tc === 'bass8vb' ? tc : (tc === 'fretboard' || tc === 'chords') && ctx.instrument === 'bass' ? 'bass8vb' : (tc === 'fretboard' || tc === 'chords') && ctx.instrument === 'guitar' ? 'treble8vb' : 'treble';
+  const clef: Clef = tc === 'bass' || tc === 'treble8vb' || tc === 'bass8vb' || tc === 'alto' || tc === 'tenor' ? tc : (tc === 'fretboard' || tc === 'chords') && ctx.instrument === 'bass' ? 'bass8vb' : (tc === 'fretboard' || tc === 'chords') && ctx.instrument === 'guitar' ? 'treble8vb' : 'treble';
   const reps = def.reps ?? 2;
   const [rep, setRep] = useState(0);
   const [seed] = useState(() => Math.floor(Math.random() * 1e9));

@@ -1,5 +1,5 @@
 import type { FingeringMode } from '../curriculum/types';
-import { familyOf, tuningFor } from '../music/instruments';
+import { familyOf, instrumentDef, tuningFor } from '../music/instruments';
 import { diatonicIndex, midiOf } from '../music/pitch';
 import type { NoteEl, Score } from '../music/score';
 
@@ -18,7 +18,7 @@ export function applyFingeringMode(score: Score, mode: FingeringMode): Score {
   const tuning = copy.tuning ?? tuningFor(copy.instrument).open;
   copy.staves.forEach(st =>
     st.voices.forEach(v => {
-      const simandl = isSimandl(copy, v.notes);
+      const system = handSystem(copy, v.notes);
       let prev: NoteEl | null = null;
       let prevPrev: NoteEl | null = null;
       for (const n of v.notes) {
@@ -39,7 +39,7 @@ export function applyFingeringMode(score: Score, mode: FingeringMode): Score {
         const keep =
           family === 'mallet'
             ? !prev || stickingBreaks(prevPrev, prev, n)
-            : !prev || !!n.shift || positionChanged(prev, n, family === 'fretted', st.hand ?? 'R', tuning, simandl);
+            : !prev || !!n.shift || positionChanged(prev, n, family === 'fretted', st.hand ?? 'R', tuning, system);
         if (!keep) n.fingers = undefined;
         prevPrev = prev;
         prev = orig;
@@ -65,24 +65,41 @@ function stickingBreaks(pp: NoteEl | null, p: NoteEl, n: NoteEl): boolean {
   return false;
 }
 
-/** Bass fingered Simandl style (1-2-4 in the low positions): no third finger anywhere. */
-function isSimandl(score: Score, notes: NoteEl[]): boolean {
-  return score.instrument === 'bass' && !notes.some(n => n.fingers?.includes(3));
+/**
+ * How a voice's fingers map to frets: one finger per fret; Simandl (1-2-4 in the low
+ * positions: bass guitar fingered without a third finger anywhere, and the double bass);
+ * or the violin's, where the 2nd and 3rd fingers each have a low and a high place.
+ */
+type HandSystem = 'one-per-fret' | 'simandl' | 'violin';
+
+function handSystem(score: Score, notes: NoteEl[]): HandSystem {
+  const bowed = instrumentDef(score.instrument).bowed;
+  if (bowed?.fingers === 'violin') return 'violin';
+  if (score.instrument === 'doublebass' || (score.instrument === 'bass' && !notes.some(n => n.fingers?.includes(3)))) return 'simandl';
+  return 'one-per-fret';
 }
 
-/** Index-finger fret for a fretted note (bass: Simandl 1-2-4 in the low positions). */
-function indexFret(fret: number, finger: number, simandl: boolean): number {
-  if (simandl && finger === 4 && fret - 2 < 7) return fret - 2;
-  return fret - finger + 1;
+/** Semitones above the index finger each finger can lie (violin: low or high 2 and 3, low 4). */
+const VIOLIN_OFFSETS: [number, number][] = [[0, 0], [-1, 0], [1, 2], [3, 4], [4, 5]];
+
+/** The index finger's possible frets for a fretted note, lowest first. */
+function indexFrets(fret: number, finger: number, system: HandSystem): [number, number] {
+  if (system === 'violin') {
+    const [lo, hi] = VIOLIN_OFFSETS[finger] ?? [finger - 1, finger - 1];
+    return [fret - hi, fret - lo];
+  }
+  if (system === 'simandl' && finger === 4 && fret - 2 < 7) return [fret - 2, fret - 2];
+  return [fret - finger + 1, fret - finger + 1];
 }
 
 /**
- * Where the hand is for a note (its top note): piano – the white key under the thumb in a
- * five-finger position (each finger has its own white key); fretted – the index finger's
+ * Where the hand is for a note (its top note), as a range (the violin's fingers have a low
+ * and a high place, so a note leaves some doubt): piano – the white key under the thumb in
+ * a five-finger position (each finger has its own white key); fretted – the index finger's
  * fret. Higher numbers are higher up. null without a finger, on an open string, or on a
  * string the tuning doesn't have.
  */
-function handPosition(n: NoteEl, fretted: boolean, hand: 'R' | 'L', tuning: readonly number[], simandl: boolean): number | null {
+function handPosition(n: NoteEl, fretted: boolean, hand: 'R' | 'L', tuning: readonly number[], system: HandSystem): [number, number] | null {
   const f = n.fingers?.[n.fingers.length - 1];
   const p = n.pitches[n.pitches.length - 1];
   if (f === undefined || !p) return null;
@@ -90,12 +107,15 @@ function handPosition(n: NoteEl, fretted: boolean, hand: 'R' | 'L', tuning: read
     const s = n.strings?.[n.strings.length - 1];
     const fret = s === undefined || tuning[s - 1] === undefined ? -1 : midiOf(p) - tuning[s - 1];
     if (f === 0 || fret < 0) return null;
-    return indexFret(fret, f, simandl);
+    return indexFrets(fret, f, system);
   }
-  return hand === 'R' ? diatonicIndex(p) - (f - 1) : diatonicIndex(p) + (f - 1);
+  const at = hand === 'R' ? diatonicIndex(p) - (f - 1) : diatonicIndex(p) + (f - 1);
+  return [at, at];
 }
 
-function positionChanged(a: NoteEl, b: NoteEl, fretted: boolean, hand: 'R' | 'L', tuning: readonly number[], simandl = false): boolean {
+const overlaps = (a: [number, number], b: [number, number]) => a[0] <= b[1] && b[0] <= a[1];
+
+function positionChanged(a: NoteEl, b: NoteEl, fretted: boolean, hand: 'R' | 'L', tuning: readonly number[], system: HandSystem = 'one-per-fret'): boolean {
   const fa = a.fingers?.[a.fingers.length - 1];
   const fb = b.fingers?.[b.fingers.length - 1];
   if (fa === undefined || fb === undefined) return true;
@@ -104,7 +124,10 @@ function positionChanged(a: NoteEl, b: NoteEl, fretted: boolean, hand: 'R' | 'L'
     if (a.strings?.[a.strings.length - 1] === undefined || b.strings?.[b.strings.length - 1] === undefined) return true;
     if (fa === 0) return false;
   }
-  return handPosition(a, fretted, hand, tuning, simandl) !== handPosition(b, fretted, hand, tuning, simandl);
+  const pa = handPosition(a, fretted, hand, tuning, system);
+  const pb = handPosition(b, fretted, hand, tuning, system);
+  if (!pa || !pb) return pa !== pb;
+  return !overlaps(pa, pb);
 }
 
 /** A move the hand made this many notes ago or less isn't marked again. */
@@ -125,23 +148,24 @@ export function markHandShifts(score: Score, copy = false): Score {
     const tuning = score.tuning ?? tuningFor(score.instrument).open;
     for (const st of score.staves) {
       for (const v of st.voices) {
-        let at: number | null = null;
+        // the range of places the hand can be, narrowed note by note until a note falls outside it
+        let at: [number, number] | null = null;
         let i = 0;
         // a figure that repeats (an arpeggio, a broken chord) shows its moves the first time only
         const lastMove = new Map<string, number>();
-        const simandl = isSimandl(score, v.notes);
+        const system = handSystem(score, v.notes);
         for (const n of v.notes) {
           if (n.rest || n.tiePrev) continue;
-          const pos = handPosition(n, family === 'fretted', st.hand ?? 'R', tuning, simandl);
+          const pos = handPosition(n, family === 'fretted', st.hand ?? 'R', tuning, system);
           if (pos === null) continue;
           i++;
-          if (at !== null && pos !== at) {
-            const move = `${at}>${pos}:${n.pitches.map(midiOf).join(',')}:${n.fingers?.join(',')}`;
+          if (at !== null && !overlaps(at, pos)) {
+            const move = `${at.join('-')}>${pos.join('-')}:${n.pitches.map(midiOf).join(',')}:${n.fingers?.join(',')}`;
             const seen = lastMove.get(move);
-            if (seen === undefined || i - seen > REPEAT_WINDOW) shifts.set(n.id, pos > at ? 1 : -1);
+            if (seen === undefined || i - seen > REPEAT_WINDOW) shifts.set(n.id, pos[0] > at[1] ? 1 : -1);
             lastMove.set(move, i);
-          }
-          at = pos;
+            at = pos;
+          } else at = at ? [Math.max(at[0], pos[0]), Math.min(at[1], pos[1])] : pos;
         }
       }
     }

@@ -5,6 +5,10 @@ import { GUITAR_TREBLE, GUITAR_BASS } from './guitarLibrary';
 import { UKULELE } from './ukuleleLibrary';
 import { BASS } from './bassLibrary';
 import { MALLETS } from './malletLibrary';
+import { VIOLIN } from './violinLibrary';
+import { VIOLA } from './violaLibrary';
+import { CELLO } from './celloLibrary';
+import { DOUBLEBASS } from './doubleBassLibrary';
 
 /** Library shelves: one or more per instrument. */
 export type SongGroup =
@@ -16,7 +20,11 @@ export type SongGroup =
   | 'ukulele'
   | 'bass'
   | 'mallets-two'
-  | 'mallets-four';
+  | 'mallets-four'
+  | 'violin'
+  | 'viola'
+  | 'cello'
+  | 'doublebass';
 
 export interface SongGroupDef {
   id: SongGroup;
@@ -36,13 +44,17 @@ export const SONG_GROUPS: SongGroupDef[] = [
   { id: 'bass', instrument: 'bass', label: 'Bass guitar', track: 'bass-lines' },
   { id: 'mallets-two', instrument: 'mallets', label: 'Two mallets', track: 'mallets-two' },
   { id: 'mallets-four', instrument: 'mallets', label: 'Four mallets', track: 'mallets-four' },
+  { id: 'violin', instrument: 'violin', label: 'Violin', track: 'violin-treble' },
+  { id: 'viola', instrument: 'viola', label: 'Viola', track: 'viola-alto' },
+  { id: 'cello', instrument: 'cello', label: 'Cello', track: 'cello-bass' },
+  { id: 'doublebass', instrument: 'doublebass', label: 'Double bass', track: 'doublebass-lines' },
 ];
 
 /**
  * Every built-in song. Libraries for each instrument live in their own file and are
  * appended here.
  */
-export const ALL_SONGS: SongDef[] = [...PIANO_RH, ...PIANO_LH, ...PIANO_BOTH, ...GUITAR_TREBLE, ...GUITAR_BASS, ...UKULELE, ...BASS, ...MALLETS];
+export const ALL_SONGS: SongDef[] = [...PIANO_RH, ...PIANO_LH, ...PIANO_BOTH, ...GUITAR_TREBLE, ...GUITAR_BASS, ...UKULELE, ...BASS, ...MALLETS, ...VIOLIN, ...VIOLA, ...CELLO, ...DOUBLEBASS];
 
 const byId = new Map(ALL_SONGS.map(s => [s.id, s]));
 
@@ -60,6 +72,11 @@ export function songGroup(s: SongDef): SongGroup {
       return 'bass';
     case 'mallets':
       return s.mallets === 4 || s.staves.length > 1 ? 'mallets-four' : 'mallets-two';
+    case 'violin':
+    case 'viola':
+    case 'cello':
+    case 'doublebass':
+      return s.instrument;
     default:
       if (s.staves.length > 1) return 'piano-both';
       return s.staves[0].clef === 'bass' ? 'piano-lh' : 'piano-rh';

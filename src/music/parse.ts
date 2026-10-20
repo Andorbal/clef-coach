@@ -22,13 +22,13 @@
  *            loaded, so the player practises exactly what is performed.
  *   "[K:G]"  key change from this measure on   (any key name: Bb, F#m, …)
  *   "[T:3/4]" time signature change from this measure on
- *   "[C:bass]" clef change from this point on (treble, bass, treble8vb, bass8vb);
- *            it may come anywhere in a bar and applies to the whole staff
+ *   "[C:bass]" clef change from this point on (treble, bass, treble8vb, bass8vb, alto,
+ *            tenor); it may come anywhere in a bar and applies to the whole staff
  *
  * Duration carries over from the previous note when omitted.
- * Pitches are SOUNDING pitches for piano and fretted instruments (guitar and bass
- * guitar are displayed an octave higher automatically: clefs treble8vb / bass8vb)
- * and WRITTEN pitches for mallet percussion.
+ * Pitches are SOUNDING pitches for piano and fretted instruments (guitar, bass
+ * guitar and double bass are displayed an octave higher automatically: clefs
+ * treble8vb / bass8vb) and WRITTEN pitches for mallet percussion.
  *
  * Example:  E4/q@3 E4 F4@4 G4@5 | G4 F4 E4 D4 | C4/h. r/q |
  */
@@ -43,7 +43,7 @@ const TOKEN_RE = /\[[^\]]*\][^\s|]*|:?\|\|?:?[12]?|[^\s|]+/g;
 const NOTE_RE = /^(\[[^\]]*\]|r|[A-Ga-g](?:##|bb|x|#|b|n)?-?\d)(?:\/([whqestx])(\.{0,2})(3)?)?(?:@([\dLRlr,\-]+))?(?:%([\d,\-]+))?(~)?$/;
 const BAR_RE = /^(:?)\|(\|?)(:?)([12]?)$/;
 const META_RE = /^\[(K|T|C):\s*([^\]]+)\]$/;
-const CLEF_NAMES: Clef[] = ['treble', 'bass', 'treble8vb', 'bass8vb'];
+const CLEF_NAMES: Clef[] = ['treble', 'bass', 'treble8vb', 'bass8vb', 'alto', 'tenor'];
 
 export interface ParseResult {
   specs: NoteSpec[];

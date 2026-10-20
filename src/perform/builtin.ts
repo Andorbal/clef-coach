@@ -79,7 +79,21 @@ export function builtinLabel(sound: BuiltinSound): string {
     case 'live':
       return { organ: 'Organ', 'church-organ': 'Church organ', strings: 'Strings', 'solo-strings': 'Solo strings', pad: 'Pad', brass: 'Brass', reed: 'Reeds', flute: 'Flute', lead: 'Synth lead', choir: 'Choir' }[sound.patch];
     case 'rendered':
-      return { piano: 'Piano', epiano: 'Electric piano', guitar: 'Guitar', ukulele: 'Nylon guitar', bass: 'Bass', marimba: 'Marimba', xylophone: 'Xylophone', glockenspiel: 'Bells', vibraphone: 'Vibraphone' }[sound.voice];
+      return {
+        piano: 'Piano',
+        epiano: 'Electric piano',
+        guitar: 'Guitar',
+        ukulele: 'Nylon guitar',
+        bass: 'Bass',
+        marimba: 'Marimba',
+        xylophone: 'Xylophone',
+        glockenspiel: 'Bells',
+        vibraphone: 'Vibraphone',
+        violin: 'Violin',
+        viola: 'Viola',
+        cello: 'Cello',
+        doublebass: 'Double bass',
+      }[sound.voice];
     default:
       return 'No built-in sound';
   }

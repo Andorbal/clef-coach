@@ -9,7 +9,8 @@ import { flashScore } from '../../curriculum/generate';
 import type { ActivityDef } from '../../curriculum/types';
 import type { FretMark, KeyMark, MarkColor } from '../../instruments';
 import { positionsFor } from '../../music/guitar';
-import { isFretted, isMallet } from '../../music/instruments';
+import { instrumentDef, isFretted, isMallet } from '../../music/instruments';
+import { firstPositionFinger } from '../../music/autofinger';
 import { midiOf, parsePitch, pitchLabel, pitchToString, stepLabel } from '../../music/pitch';
 import { NotationView } from '../../notation/NotationView';
 import { type ActivityProps, ctxTuning } from '../context';
@@ -42,9 +43,10 @@ export function Meet({ def, ctx, onDone }: ActivityProps<MeetDef>) {
   const tipText = def.tips?.[i] ?? def.tips?.[0];
   const finger = def.fingers?.[i];
   const fretted = isFretted(ctx.instrument);
+  const look = instrumentDef(ctx.instrument).fretted;
   const fret = def.frets?.[i] ?? (fretted ? (() => {
     const p = positionsFor(midi, 15, 0, ctxTuning(ctx)).sort((a, b) => a.fret - b.fret)[0];
-    return p ? { ...p, finger: p.fret === 0 ? 0 : Math.min(4, p.fret) } : undefined;
+    return p ? { ...p, finger: firstPositionFinger(ctx.instrument, p.fret) } : undefined;
   })() : undefined);
 
   useComputerPiano(!fretted, def.clef === 'bass' ? 3 : 4);
@@ -132,7 +134,7 @@ export function Meet({ def, ctx, onDone }: ActivityProps<MeetDef>) {
           </motion.div>
         </AnimatePresence>
       </div>
-      <InstrumentPanel ctx={ctx} range={range} marks={keyMarks} fretMarks={fretMarks} fretRange={[0, Math.max(5, (fret?.fret ?? 0) + 3)]} focus={midi} />
+      <InstrumentPanel ctx={ctx} range={range} marks={keyMarks} fretMarks={fretMarks} fretRange={[0, Math.max(look?.fretless ? look.defaultWindow[1] : 5, (fret?.fret ?? 0) + 3)]} focus={midi} />
     </div>
   );
 }

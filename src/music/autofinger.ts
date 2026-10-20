@@ -1,6 +1,6 @@
 import { fingerPianoLine } from './fingering';
-import { type FingerSystem, fingerGuitarLine } from './guitar';
-import { type InstrumentPrefs, familyOf, tuningFor } from './instruments';
+import { type FingerSystem, fingerFor, fingerGuitarLine } from './guitar';
+import { type InstrumentId, type InstrumentPrefs, familyOf, instrumentDef, tuningFor } from './instruments';
 import { midiOf } from './pitch';
 import type { Score } from './score';
 import { stickLine } from './sticking';
@@ -13,10 +13,45 @@ export interface AutoFingerOptions extends InstrumentPrefs {
   tuning?: number[];
 }
 
+/** How a fretted instrument's left hand covers the neck (see FingerSystem). */
+export function fingerSystemFor(instrument: InstrumentId): FingerSystem {
+  const bowed = instrumentDef(instrument).bowed;
+  if (bowed) return bowed.fingers;
+  return instrument === 'bass' ? 'simandl' : 'one-per-fret';
+}
+
+/**
+ * The hand position (index-finger fret) fingering assumes when a lesson names none: first
+ * position. On a guitar the index finger plays fret 1; on a violin, viola or cello it sits
+ * a tone above the open string; a double bass starts in half position.
+ */
+export function defaultPosition(instrument: InstrumentId): number {
+  return instrumentDef(instrument).bowed?.firstPosition ?? 1;
+}
+
+/** The finger for a fret in the instrument's first position (a violin's 2nd fret is its 1st finger). */
+export function firstPositionFinger(instrument: InstrumentId, fret: number): number {
+  return fingerFor(fingerSystemFor(instrument), defaultPosition(instrument), fret);
+}
+
+/**
+ * Options for fingering music in one hand position: the position (or the instrument's
+ * first) and the highest fret the hand reaches from it without shifting. A violinist's 4th
+ * finger lies five semitones above the 1st; a cellist reaches four with an extension.
+ */
+export function positionWindow(instrument: InstrumentId, position?: number): { guitarPosition: number; maxFret: number } {
+  const pos = position ?? defaultPosition(instrument);
+  const bowed = instrumentDef(instrument).bowed;
+  if (!bowed) return { guitarPosition: pos, maxFret: Math.max(5, pos + 4) };
+  const reach = bowed.fingers === 'violin' ? 5 : bowed.fingers === 'one-per-fret' ? 4 : 3;
+  return { guitarPosition: pos, maxFret: pos + reach };
+}
+
 /**
  * Fill in missing fingering throughout a score (in place) and return it.
  *  Piano:   finger numbers per hand.
- *  Fretted: string + left-hand finger (guitar, ukulele, bass – any tuning).
+ *  Fretted: string + left-hand finger (guitar, ukulele, bass – any tuning – and the
+ *           violin family, in its own finger systems).
  *  Mallets: mallet sticking (L/R, or 1–4 with four mallets).
  */
 export function autoFinger(score: Score, opts: AutoFingerOptions = {}): Score {
@@ -25,7 +60,7 @@ export function autoFinger(score: Score, opts: AutoFingerOptions = {}): Score {
     score.tuning = opts.tuning ?? score.tuning ?? tuningFor(score.instrument, opts).open;
   }
   if (family === 'mallet') score.mallets = score.mallets ?? 2;
-  const fingerSystem: FingerSystem = score.instrument === 'bass' ? 'simandl' : 'one-per-fret';
+  const fingerSystem = fingerSystemFor(score.instrument);
   score.staves.forEach((staff, si) => {
     staff.voices.forEach(voice => {
       const notes = voice.notes.filter(n => !n.rest && !n.tiePrev);
@@ -54,7 +89,7 @@ export function autoFinger(score: Score, opts: AutoFingerOptions = {}): Score {
         if (complete) return;
         const res = fingerGuitarLine(
           notes.map(n => ({ midis: n.pitches.map(midiOf), strings: n.strings })),
-          { preferPosition: opts.guitarPosition ?? 1, maxFret: opts.maxFret ?? 15, tuning: score.tuning, fingerSystem },
+          { preferPosition: opts.guitarPosition ?? defaultPosition(score.instrument), maxFret: opts.maxFret ?? 15, tuning: score.tuning, fingerSystem },
         );
         notes.forEach((n, i) => {
           n.strings = res[i].map(r => r.string);

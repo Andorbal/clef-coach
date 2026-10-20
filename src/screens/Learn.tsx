@@ -20,6 +20,10 @@ const GROUP_SUBS: Record<InstrumentId, string> = {
   ukulele: 'Melodies in treble clef, chord shapes and strumming.',
   bass: 'Bass clef bass lines, grooves and the whole neck.',
   mallets: 'Marimba, xylophone, glockenspiel or vibes: sticking, then four-mallet chords.',
+  violin: 'The treble clef on a fretless fingerboard: finger patterns, keys and shifting.',
+  viola: 'The alto clef, from the open C string to third position.',
+  cello: 'The bass clef, extensions and shifting, then the tenor clef.',
+  doublebass: 'Bass lines in the bass clef, Simandl fingering, bowed and plucked.',
 };
 
 export default function Learn() {

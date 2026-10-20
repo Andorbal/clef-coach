@@ -5,7 +5,7 @@
  */
 import { type ChordSymbol, chordDegreeLabels, parseChordSymbol, rootLabel, rootPc, spellChordTone } from './chords';
 import { type FrettedVoicing, bassShapes, chartString, frettedVoicings, malletVoicings, parseChart, pianoVoicings } from './chordbook';
-import { type InstrumentId, type InstrumentPrefs, isFretted, malletVariant, tuningFor } from './instruments';
+import { type InstrumentId, type InstrumentPrefs, isBowed, isFretted, malletVariant, tuningFor } from './instruments';
 import { type Pitch, type Step, STEP_SEMIS, spellMidi, stepLabel } from './pitch';
 
 export type LabelMode = 'fingers' | 'degrees' | 'notes';
@@ -155,7 +155,8 @@ function frettedViews(chord: ChordSymbol, instrument: InstrumentId, prefs: Instr
   const names = stringNamesOf(tuning);
   const n = tuning.length;
   const out: FrettedView[] = [];
-  if (instrument === 'bass') {
+  // the violin family plays a chord's notes as an arpeggio (or two at a time), not strummed shapes
+  if (instrument === 'bass' || isBowed(instrument)) {
     for (const s of bassShapes(chord, tuning)) {
       const notes = s.positions.map(p => {
         const midi = tuning[p.string - 1] + p.fret;
@@ -178,6 +179,7 @@ function frettedViews(chord: ChordSymbol, instrument: InstrumentId, prefs: Instr
       });
     }
   }
+  if (isBowed(instrument)) return out;
   const voicings = frettedVoicingsFor(chord, tuning, instrument as 'guitar' | 'ukulele' | 'bass', instrument === 'bass' ? 4 : 8, chart, fingers);
   for (const v of voicings) {
     const notes: FretNote[] = [];

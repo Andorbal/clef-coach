@@ -22,6 +22,7 @@ import {
 import type { AppSoundMark } from '../context';
 import { clamp, interp } from '../dsp/util';
 import { MALLET_VARIANTS, type SynthVoiceId } from '../../music/instruments';
+import { bowedLoop, bowedNoteLength, bowedRelease, isBowedVoice, renderBowedSamples } from './bowed';
 import { epianoAudibleSeconds, epianoNoteLength, renderEPianoSamples } from './epiano';
 import { guitarNoteLength, renderGuitarSamples } from './guitar';
 import { type MalletVoice, malletAudibleSeconds, malletNoteLength, renderMalletSamples } from './mallets';
@@ -118,7 +119,19 @@ const VOICE_TRIM: Record<SynthVoice, number> = {
   xylophone: 0.5,
   glockenspiel: 0.42,
   vibraphone: 0.55,
+  violin: 0.62,
+  viola: 0.66,
+  cello: 0.7,
+  doublebass: 0.8,
 };
+
+/**
+ * A bowed note's sustain loops until it is released (see bowed.ts). One that is never
+ * released (a lost key-up) still stops after this long, and a one-shot without a length
+ * (a "hear it" button) gets a bow stroke's worth.
+ */
+const MAX_BOW_SECONDS = 16;
+const BOW_STROKE_SECONDS = 1.2;
 
 /**
  * Key-up release time constant (s). Top piano octave has no dampers → longer.
@@ -127,6 +140,7 @@ const VOICE_TRIM: Record<SynthVoice, number> = {
  */
 function releaseTau(voice: SynthVoice, midi: number): number {
   if (isPlucked(voice)) return voice === 'bass' ? 0.05 : 0.035;
+  if (isBowedVoice(voice)) return bowedRelease(voice);
   if (voice === 'vibraphone') return 0.45;
   if (isMalletVoice(voice)) return 0.22;
   return midi >= 89 ? 0.25 : 0.04;
@@ -137,6 +151,7 @@ function audibleSeconds(voice: SynthVoice, midi: number): number {
   if (voice === 'piano') return interp([[21, 3.2], [48, 2.4], [60, 1.9], [84, 1.1], [108, 0.5]], midi);
   if (voice === 'epiano') return epianoAudibleSeconds(midi);
   if (isMalletVoice(voice)) return malletAudibleSeconds(voice, midi);
+  if (isBowedVoice(voice)) return MAX_BOW_SECONDS;
   const base = interp([[28, 3.0], [40, 2.6], [64, 1.7], [88, 0.9]], midi);
   return voice === 'ukulele' ? base * 0.7 : voice === 'bass' ? base * 1.2 : base;
 }
@@ -275,13 +290,22 @@ export class SynthEngine {
     if (hit) return hit;
     const sr = ctx.sampleRate;
     const len =
-      voice === 'piano' ? pianoNoteLength(m, sr) : voice === 'epiano' ? epianoNoteLength(m, sr) : isMalletVoice(voice) ? malletNoteLength(voice, m, sr) : guitarNoteLength(m, sr, voice);
+      voice === 'piano'
+        ? pianoNoteLength(m, sr)
+        : voice === 'epiano'
+          ? epianoNoteLength(m, sr)
+          : isMalletVoice(voice)
+            ? malletNoteLength(voice, m, sr)
+            : isBowedVoice(voice)
+              ? bowedNoteLength(voice, sr)
+              : guitarNoteLength(m, sr, voice);
     const buf = ctx.createBuffer(1, len, sr);
     // Render straight into the buffer's memory – no extra copy.
     const data = buf.getChannelData(0);
     if (voice === 'piano') renderPianoSamples(m, BUCKET_VELOCITY[b], sr, { out: data });
     else if (voice === 'epiano') renderEPianoSamples(m, BUCKET_VELOCITY[b], sr, { out: data });
     else if (isMalletVoice(voice)) renderMalletSamples(voice, m, BUCKET_VELOCITY[b], sr, { out: data });
+    else if (isBowedVoice(voice)) renderBowedSamples(voice, m, BUCKET_VELOCITY[b], sr, { out: data });
     else renderGuitarSamples(m, BUCKET_VELOCITY[b], sr, { out: data, variant: voice });
     this.cache.set(key, buf);
     return buf;
@@ -334,6 +358,14 @@ export class SynthEngine {
 
     const src = ctx.createBufferSource();
     src.buffer = buffer;
+    const bowed = isBowedVoice(voice);
+    if (bowed) {
+      // the sustain loops until the note is released
+      const loop = bowedLoop(voice, buffer.sampleRate);
+      src.loop = true;
+      src.loopStart = loop.start / buffer.sampleRate;
+      src.loopEnd = loop.end / buffer.sampleRate;
+    }
     const gain = ctx.createGain();
     const level = velocityGain(vel) * VOICE_TRIM[voice];
     gain.gain.setValueAtTime(level, now);
@@ -350,7 +382,7 @@ export class SynthEngine {
       gain.connect(out);
     }
 
-    const audible = Math.min(buffer.duration, audibleSeconds(voice, m));
+    const audible = bowed ? MAX_BOW_SECONDS : Math.min(buffer.duration, audibleSeconds(voice, m));
     const mark = opts.mark === false ? null : markAppSound(start + audible, { from: start, midis: [m], kind: 'tonal', intervals: opts.mark });
     const v: Voice = {
       src,
@@ -382,6 +414,8 @@ export class SynthEngine {
     this.enforcePolyphony();
     if (opts.duration !== undefined && Number.isFinite(opts.duration)) {
       this.release(v, start + Math.max(0.02, opts.duration));
+    } else if (bowed) {
+      this.release(v, start + MAX_BOW_SECONDS);
     }
     return v;
   }
@@ -476,8 +510,9 @@ export class SynthEngine {
       return;
     }
     const strum = (voice === 'guitar' || voice === 'ukulele') && notes.length > 1 ? 0.014 : 0;
+    const duration = opts.duration ?? (isBowedVoice(voice) ? BOW_STROKE_SECONDS : undefined);
     notes.forEach((m, i) => {
-      this.startVoice(m, { ...opts, voice, when: base + i * strum });
+      this.startVoice(m, { ...opts, voice, duration, when: base + i * strum });
     });
   }
 

@@ -41,9 +41,11 @@ const LINE_SPACING = 10; // VexFlow default (px between staff lines)
 const HALF = LINE_SPACING / 2;
 
 /** Top-line / bottom-line diatonic indexes of each clef (written pitch). */
-const CLEF_LINES: Record<'treble' | 'bass', { top: number; bottom: number }> = {
+const CLEF_LINES: Record<'treble' | 'bass' | 'alto' | 'tenor', { top: number; bottom: number }> = {
   treble: { top: 38, bottom: 30 }, // F5 / E4
   bass: { top: 26, bottom: 18 }, // A3 / G2
+  alto: { top: 32, bottom: 24 }, // G4 / F3
+  tenor: { top: 30, bottom: 22 }, // E4 / D3
 };
 
 let fontsReady: Promise<void> | null = null;
@@ -69,7 +71,7 @@ export function writtenPitch(p: Pitch, clef: Clef): Pitch {
   return o ? transposeOctaves(p, o) : p;
 }
 
-function vexClef(clef: Clef): 'treble' | 'bass' {
+function vexClef(clef: Clef): 'treble' | 'bass' | 'alto' | 'tenor' {
   return clefBase(clef);
 }
 
@@ -183,8 +185,9 @@ function staffExtents(score: Score, si: number, opts: RenderOptions): { above: n
   return { above, below };
 }
 
+/** The staff's middle line, where rests sit. */
 function restKey(clef: Clef): string {
-  return vexClef(clef) === 'bass' ? 'd/3' : 'b/4';
+  return { treble: 'b/4', bass: 'd/3', alto: 'c/4', tenor: 'a/3' }[vexClef(clef)];
 }
 
 interface BuiltNote {

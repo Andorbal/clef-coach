@@ -16,7 +16,10 @@ import { Segmented } from '../components/ui';
 import { prefsOf } from '../engine/context';
 import { CHORD_QUALITIES, type ChordQuality, type ChordSymbol, chordDegreeLabels, chordName, chordSymbolText, rootLabel, rootPc, spellChordTone } from '../music/chords';
 import { CHORD_ROOTS, commonProgressions } from '../music/chordbook';
-import { INSTRUMENT_IDS, type InstrumentId, instrumentDef, instrumentName } from '../music/instruments';
+import { INSTRUMENT_IDS, type InstrumentId, instrumentDef, instrumentName, isBowed } from '../music/instruments';
+
+/** Instruments that play chords from shapes (the violin family plays them as arpeggios and double stops instead). */
+const CHORD_INSTRUMENTS = INSTRUMENT_IDS.filter(i => !isBowed(i));
 import { useProfile } from '../state/store';
 import { ChordCell, ChordPicture, playView } from '../instruments/ChordCell';
 import { type LabelMode, type PianoHand, chordToneLine, chordViews, tryChord } from '../music/chordViews';
@@ -73,8 +76,10 @@ export default function ChordChart() {
   });
   const [focus, setFocus] = useState(0);
   const [instruments, setInstruments] = useState<InstrumentId[]>(() => {
-    const list = (params.get('instruments') ?? '').split(',').filter((s): s is InstrumentId => (INSTRUMENT_IDS as string[]).includes(s));
-    return list.length ? list : mine;
+    const list = (params.get('instruments') ?? '').split(',').filter((s): s is InstrumentId => (CHORD_INSTRUMENTS as string[]).includes(s));
+    if (list.length) return list;
+    const chordable = mine.filter(i => CHORD_INSTRUMENTS.includes(i));
+    return chordable.length ? chordable : ['piano'];
   });
   /** write each voicing on the staff too */
   const [notation, setNotation] = useState(() => params.get('notation') === '1');
@@ -179,7 +184,7 @@ export default function ChordChart() {
       setInstruments(list => [i, ...list.filter(x => x !== i)]);
       return;
     }
-    setInstruments(list => (list.includes(i) ? (list.length > 1 ? list.filter(x => x !== i) : list) : INSTRUMENT_IDS.filter(x => x === i || list.includes(x))));
+    setInstruments(list => (list.includes(i) ? (list.length > 1 ? list.filter(x => x !== i) : list) : CHORD_INSTRUMENTS.filter(x => x === i || list.includes(x))));
   };
 
   // --- playing the whole set in turn -----------------------------------------
@@ -215,7 +220,7 @@ export default function ChordChart() {
         sub="Any chord on every instrument. Tap a picture to hear it."
         right={
           <div className="cc-instruments" role="group" aria-label="Instruments">
-            {INSTRUMENT_IDS.map(i => (
+            {CHORD_INSTRUMENTS.map(i => (
               <button key={i} className={`chip-btn ${shown.includes(i) ? 'on' : ''}`} onClick={() => toggleInstrument(i)} aria-pressed={shown.includes(i)}>
                 <InstrumentIcon instrument={i} size={16} /> {instrumentDef(i).short}
               </button>

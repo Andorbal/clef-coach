@@ -15,7 +15,7 @@ import type { ActivityDef } from '../../curriculum/types';
 import type { KeyMark, FretMark, MarkColor } from '../../instruments';
 import { keyDisplayName, parseKey } from '../../music/keys';
 import { positionsFor } from '../../music/guitar';
-import { instrumentDef, isFretted } from '../../music/instruments';
+import { instrumentDef, isBowed, isFretted } from '../../music/instruments';
 import {
   INTERVAL_NAMES,
   type Pitch,
@@ -259,7 +259,7 @@ export function Flashcards({ def, ctx, onDone }: ActivityProps<FlashDef>) {
       ? 'Tap the letter — or play the note.'
       : def.type === 'play'
         ? isFretted(ctx.instrument)
-          ? `Play the written note on your ${instrumentDef(ctx.instrument).short.toLowerCase()} (or tap the fretboard).`
+          ? `Play the written note on your ${instrumentDef(ctx.instrument).name.toLowerCase()} (or tap the ${isBowed(ctx.instrument) ? 'fingerboard' : 'fretboard'}).`
           : 'Play the written note.'
         : def.type === 'interval'
           ? 'Count lines and spaces from the lower note, including both notes.'

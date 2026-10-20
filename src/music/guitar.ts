@@ -30,11 +30,14 @@ export interface FingeredPos extends FretPos {
 
 /**
  * How the fretting hand covers the neck:
- *  'one-per-fret' – four fingers over four frets (guitar, ukulele, bass up the neck)
+ *  'one-per-fret' – four fingers over four frets (guitar, ukulele, bass up the neck, and
+ *                   the cello, a semitone per finger)
  *  'simandl'      – bass in the low positions: index, middle and pinky over three
- *                   frets (the ring finger helps the pinky)
+ *                   frets (the ring finger helps the pinky); the double bass's system
+ *  'violin'       – violin and viola: four fingers over a fourth (six semitones), the
+ *                   2nd and 3rd fingers moving between a "low" and a "high" place
  */
-export type FingerSystem = 'one-per-fret' | 'simandl';
+export type FingerSystem = 'one-per-fret' | 'simandl' | 'violin';
 
 export function openMidi(string: number, tuning: TuningNotes = STANDARD_TUNING): number {
   return tuning[string - 1] ?? tuning[tuning.length - 1];
@@ -92,7 +95,14 @@ export function guitarRange(maxFret = 19, tuning: TuningNotes = STANDARD_TUNING)
 /** Frets the hand spans without shifting, and the finger used at each offset from the index finger. */
 function handShape(system: FingerSystem): { span: number; finger: (offset: number) => number } {
   if (system === 'simandl') return { span: 3, finger: o => (o <= 0 ? 1 : o === 1 ? 2 : 4) };
+  // 1 | low 2, high 2 | 3, high 3 | 4: first position on the A string is B, C/C♯, D/D♯, E
+  if (system === 'violin') return { span: 6, finger: o => (o <= 0 ? 1 : o <= 2 ? 2 : o <= 4 ? 3 : 4) };
   return { span: 4, finger: o => Math.min(4, Math.max(1, o + 1)) };
+}
+
+/** The finger that plays a fret with the index finger at `handPos` (0 for an open string). */
+export function fingerFor(system: FingerSystem, handPos: number, fret: number): number {
+  return fret === 0 ? 0 : handShape(system === 'simandl' && handPos >= 7 ? 'one-per-fret' : system).finger(fret - handPos);
 }
 
 /**
@@ -109,7 +119,7 @@ export function fingerGuitarLine(
   const prefer = opts.preferPosition ?? 1;
   const allowOpen = opts.allowOpen ?? true;
   // Simandl fingering is for the low positions; up the neck the hand opens up again
-  const systemAt = (pos: number): FingerSystem => (opts.fingerSystem === 'simandl' && pos < 7 ? 'simandl' : 'one-per-fret');
+  const systemAt = (pos: number): FingerSystem => (opts.fingerSystem === 'simandl' ? (pos < 7 ? 'simandl' : 'one-per-fret') : opts.fingerSystem ?? 'one-per-fret');
   const reach = handShape(systemAt(prefer)).span - 1;
   const lowestString = stringsLowToHigh(tuning)[0];
 

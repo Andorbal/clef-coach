@@ -1,6 +1,9 @@
 /**
  * Fretboard — a fretted neck seen as in tablature (string 1 on top). Works for any
- * tuning and number of strings: guitar, ukulele (re-entrant or not) and 4/5-string bass.
+ * tuning and number of strings: guitar, ukulele (re-entrant or not) and 4/5-string bass,
+ * and the fretless fingerboards of the violin family (`look.fretless`). There a "fret" is
+ * the place a semitone up where the finger stops the string, so marks sit on those
+ * places rather than between them, and beginner's finger tapes replace the frets.
  *
  * Fret spacing is real: the distance from the nut to fret n is proportional to
  * 1 − 2^(−n/12), rescaled so the requested window fills the width. The wood,
@@ -117,6 +120,8 @@ interface FbLayout {
   numbersY: number;
   numbersH: number;
   scrollable: boolean;
+  /** No frets: a note is where the finger stops the string, on the semitone line. */
+  fretless: boolean;
 }
 
 function computeLayout(
@@ -128,6 +133,7 @@ function computeLayout(
   height: number | undefined,
   n: number,
   gauges: number[],
+  fretless = false,
 ): FbLayout {
   const minFret = clamp(Math.round(minFretIn), 0, MAX_WINDOW_FRET - 1);
   const maxFret = clamp(Math.round(Math.max(maxFretIn, minFret + 1)), 1, MAX_WINDOW_FRET);
@@ -147,7 +153,8 @@ function computeLayout(
   const nutW = hasNut ? clamp(s * 0.24, 6, 10) : 0;
   const leadIn = hasNut ? 0 : 14;
   const leftW = hasNut ? openW + nutW : clamp(s * 1.2, 40, 56);
-  const tailW = 14;
+  // a fretless board's last stop sits right at the end of the window: room for its mark
+  const tailW = fretless ? 30 : 14;
 
   const span = distFromNut(maxFret) - distFromNut(start);
   const narrowest = distFromNut(maxFret) - distFromNut(maxFret - 1);
@@ -185,6 +192,7 @@ function computeLayout(
     numbersY: y0 + boardH + 10 + 15,
     numbersH,
     scrollable: containerW > 0 && totalW > containerW + 0.5,
+    fretless,
   };
 }
 
@@ -198,7 +206,8 @@ function cellCenter(lay: FbLayout, fret: number): number {
 
 /** Where a fingertip goes: centred in the cell, nudged just behind the fret wire. */
 function fingerX(lay: FbLayout, fret: number): number {
-  if (fret === 0) return lay.openW / 2;
+  if (fret === 0) return lay.hasNut || !lay.fretless ? lay.openW / 2 : lay.wx[0];
+  if (lay.fretless) return lay.wx[fret];
   const a = lay.wx[fret - 1];
   const b = lay.wx[fret];
   return a + (b - a) * 0.52;
@@ -255,7 +264,7 @@ const FretboardStatic = memo(function FretboardStatic({ lay, id, leftHanded, sho
 
   const frets: ReactElement[] = [];
   const firstWire = hasNut ? 1 : lay.start;
-  for (let n = firstWire; n <= lay.maxFret; n++) {
+  for (let n = firstWire; n <= lay.maxFret && !lay.fretless; n++) {
     const x = wx[n];
     frets.push(
       <g key={n}>
@@ -264,6 +273,23 @@ const FretboardStatic = memo(function FretboardStatic({ lay, id, leftHanded, sho
         <rect x={x - fw / 2} y={y0 - 0.6} width={fw} height={boardH + 1.2} rx={fw / 2} fill={`url(#${id}-fret)`} />
       </g>,
     );
+  }
+
+  // fretless: the beginner's finger tapes, thin pale strips across the board
+  const tapes: ReactElement[] = [];
+  const tapeLabels: ReactElement[] = [];
+  if (lay.fretless) {
+    for (const t of look.tapes ?? []) {
+      if (t.fret < Math.max(1, lay.minFret) || t.fret > lay.maxFret) continue;
+      const x = wx[t.fret];
+      tapes.push(<rect key={t.fret} x={x - 1.6} y={y0} width={3.2} height={boardH} fill="#f3ead8" opacity={0.42} />);
+      if (showFretNumbers && t.label)
+        tapeLabels.push(
+          <text key={t.fret} x={mx(x)} y={lay.numbersY} className="fb-num is-marker">
+            {t.label}
+          </text>,
+        );
+    }
   }
 
   const strings: ReactElement[] = [];
@@ -280,14 +306,14 @@ const FretboardStatic = memo(function FretboardStatic({ lay, id, leftHanded, sho
     );
     strings.push(
       <g key={str}>
-        <rect x={0} y={y - t / 2} width={totalW} height={t} fill={`url(#${id}-${wound ? 'wound' : 'plain'})`} />
+        <rect x={0} y={y - t / 2} width={totalW} height={t} fill={`url(#${id}-${wound ? (look.silverWound ? 'silver' : 'wound') : 'plain'})`} />
         {wound && <rect x={0} y={y - t / 2} width={totalW} height={t} fill={`url(#${id}-winding)`} />}
       </g>,
     );
   }
 
   const numbers: ReactElement[] = [];
-  if (showFretNumbers) {
+  if (showFretNumbers && !lay.fretless) {
     for (let f = Math.max(1, lay.minFret); f <= lay.maxFret; f++) {
       const marker = SINGLE_INLAYS.has(f) || DOUBLE_INLAYS.has(f);
       numbers.push(
@@ -372,6 +398,12 @@ const FretboardStatic = memo(function FretboardStatic({ lay, id, leftHanded, sho
           <stop offset="0.55" stopColor="#c3c8ce" />
           <stop offset="1" stopColor="#555a61" />
         </linearGradient>
+        <linearGradient id={`${id}-silver`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#5d636b" />
+          <stop offset="0.3" stopColor="#e9edf1" />
+          <stop offset="0.55" stopColor="#a7aeb6" />
+          <stop offset="1" stopColor="#3d4248" />
+        </linearGradient>
         <linearGradient id={`${id}-wound`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#6a5638" />
           <stop offset="0.3" stopColor="#f1dcb3" />
@@ -407,17 +439,20 @@ const FretboardStatic = memo(function FretboardStatic({ lay, id, leftHanded, sho
           <rect x={boardL + 6} y={y0 + 8} width={boardW - 12} height={boardH} rx={4} fill="#000" opacity={0.65} filter={`url(#${id}-drop)`} />
           <rect x={boardL} y={y0} width={boardW} height={boardH} fill={`url(#${id}-wood)`} />
           <rect x={boardL} y={y0} width={boardW} height={boardH} fill="#000" filter={`url(#${id}-grain)`} />
+          {/* ebony: the grain barely shows */}
+          {lay.fretless && <rect x={boardL} y={y0} width={boardW} height={boardH} fill="#0b0806" opacity={0.55} />}
           <rect x={boardL} y={y0} width={boardW} height={boardH} fill={`url(#${id}-sheen)`} />
           <rect x={boardL} y={y0} width={boardW} height={1} fill="#ffcf9e" opacity={0.18} />
           <rect x={boardL} y={y0 + boardH - 1} width={boardW} height={1} fill="#000" opacity={0.5} />
           {inlays}
           {frets}
+          {tapes}
           {shadows}
         </g>
         {hasNut && (
           <g>
             <rect x={lay.openW + lay.nutW} y={y0} width={6} height={boardH} fill={`url(#${id}-fret-shadow)`} />
-            <rect x={lay.openW} y={y0 - 1.5} width={lay.nutW} height={boardH + 3} rx={1.5} fill={`url(#${id}-bone)`} />
+            <rect x={lay.openW} y={y0 - 1.5} width={lay.nutW} height={boardH + 3} rx={1.5} fill={lay.fretless ? '#0f0b08' : `url(#${id}-bone)`} />
             {Array.from({ length: lay.n }, (_, i) => i + 1).map(str => (
               <rect
                 key={str}
@@ -435,6 +470,7 @@ const FretboardStatic = memo(function FretboardStatic({ lay, id, leftHanded, sho
       </g>
 
       {numbers}
+      {tapeLabels}
       {!hasNut && (
         <g className="fb-pos">
           <text x={mx((lay.leftW - lay.leadIn) / 2)} y={midY} dy="0.1em" className="fb-pos-num">
@@ -595,9 +631,9 @@ export function Fretboard({
   const minCell = minCellWidth ?? (isCoarsePointer() ? 34 : 30);
 
   const lay = useMemo(
-    () => computeLayout(minFret, maxFret, containerW, minCell, showFretNumbers, height, nStrings, Array.from({ length: nStrings }, (_, i) => look.gauge[i] ?? 2)),
+    () => computeLayout(minFret, maxFret, containerW, minCell, showFretNumbers, height, nStrings, Array.from({ length: nStrings }, (_, i) => look.gauge[i] ?? 2), !!look.fretless),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [minFret, maxFret, containerW, minCell, showFretNumbers, height, nStrings, gaugeKey],
+    [minFret, maxFret, containerW, minCell, showFretNumbers, height, nStrings, gaugeKey, look.fretless],
   );
   const mx = useCallback((x: number) => (leftHanded ? lay.totalW - x : x), [leftHanded, lay.totalW]);
 
@@ -637,6 +673,15 @@ export function Fretboard({
       if (y < y0 - s * 0.4 || y > y0 + boardH + s * 0.4) return null;
       const str = clamp(Math.floor((y - y0) / s) + 1, 1, lay.n);
       if (x < 0 || x > lay.totalW) return null;
+      if (lay.fretless) {
+        // the nearest stopping place (or the open string, up to halfway to the first)
+        if (lay.hasNut && x < (lay.wx[0] + lay.wx[1]) / 2) return { string: str, fret: 0 };
+        if (!lay.hasNut && x < lay.wx[lay.start]) return null;
+        for (let f = Math.max(1, lay.minFret); f < lay.maxFret; f++) {
+          if (x < (lay.wx[f] + lay.wx[f + 1]) / 2) return { string: str, fret: f };
+        }
+        return { string: str, fret: lay.maxFret };
+      }
       if (lay.hasNut && x < lay.wx[0]) return { string: str, fret: 0 };
       if (!lay.hasNut && x < lay.wx[lay.start]) return null;
       for (let f = Math.max(1, lay.minFret); f <= lay.maxFret; f++) {
