@@ -42,7 +42,6 @@ export interface ConsoleProps {
 const strip = (id: string, keys: ReadonlySet<string>, section: readonly string[]) => section.some(p => keys.has(`${id}:${p}`));
 
 export function Console({ api, visible, fresh, ghost, highlight, transport, autoOpen = true, blind = false }: ConsoleProps) {
-  const channelKeys = useMemo(() => [...visible].filter(k => !k.startsWith('master:') && !k.startsWith('fx:')), [visible]);
   const showFx = [...visible].some(k => k.startsWith('fx:'));
   const showMaster = [...visible].some(k => k.startsWith('master:'));
   const editable = (id: string) => strip(id, visible, ['hpOn', 'hpFreq', 'eqOn', 'lowGain', 'midGain', 'presGain', 'highGain', 'compOn', 'threshold', 'ratio', 'attack', 'release', 'makeup']);
@@ -55,7 +54,8 @@ export function Console({ api, visible, fresh, ghost, highlight, transport, auto
     setSelected(id);
     setClosed(false);
   };
-  const showStrips = api.tracks.filter(t => channelKeys.some(k => k.startsWith(`${t.id}:`)) || !channelKeys.length);
+  // every track keeps its strip (its meter is part of the picture), controls or not
+  const showStrips = api.tracks;
   const mix = api.mix;
   const isFresh = (k: string) => !!fresh?.has(k);
   return (

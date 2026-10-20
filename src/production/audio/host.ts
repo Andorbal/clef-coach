@@ -82,7 +82,9 @@ class Backroom {
         setTimeout(() => {
           try {
             const x = m as StudioRequest;
-            resolve((x.t === 'stems' ? core.stems(x.req) : x.t === 'prepare' ? core.prepare(x.job) : core.score(x.key, x.mix)) as T);
+            // stems are copied: the cache keeps its own, and the page hands these to the audio thread
+            const value = x.t === 'stems' ? Object.fromEntries(Object.entries(core.stems(x.req)).map(([k, v]) => [k, v.slice()])) : x.t === 'prepare' ? core.prepare(x.job) : core.score(x.key, x.mix);
+            resolve(value as T);
           } catch (e) {
             reject(e as Error);
           }
