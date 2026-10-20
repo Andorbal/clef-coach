@@ -1,6 +1,6 @@
 # Clef Coach
 
-**Learn to read music and play songs on piano, guitar, ukulele, bass guitar and mallet percussion — with your real instrument.**
+**Learn to read music and play songs on piano, guitar, ukulele, bass guitar, mallet percussion, violin, viola, cello and double bass — with your real instrument.**
 
 <p align="center">
   <img src="docs/media/tempo-mode.gif" width="880" alt="Playing Ode to Joy in time on Clef Coach's piano: a one-bar count-in of 1 2 3 4, a beat light flashing with the metronome, the music scrolling past the playhead and each note turning green as it is played on the beat.">
@@ -13,12 +13,13 @@ There's no account and no server. Progress lives on your device, and you can exp
 
 ## Highlights
 
-- **Five instruments, thirteen tracks you can run side by side**
+- **Nine instruments, seventeen tracks you can run side by side**
   - **Piano:** Treble Clef (right hand), Bass Clef (left hand), Both Hands (grand staff).
   - **Guitar:** Treble Clef (standard notation), Bass Clef (bass lines and low voices), Fretboard Navigator (every note, octave shapes, CAGED, pentatonic boxes, 3-notes-per-string scales), Chords (open chords to barre and colour chords, strumming along with songs).
   - **Ukulele** (standard high-G, low-G or baritone tuning): Treble Clef (melodies, positions, campanella, chord-melody, the fretboard), Chords & Strumming.
   - **Bass guitar** (4 or 5 strings): Bass Clef (grooves, walking lines, Simandl fingering), Fretboard & Grooves.
   - **Mallets** (marimba, xylophone, glockenspiel or vibraphone): Two Mallets and Four Mallets, with sticking for every note. Xylophone and glockenspiel are written in their own octave and heard where they really sound.
+  - **Violin, viola, cello and double bass:** a reading track each, from the open strings to the higher positions — the viola in the alto clef, the cello into tenor and treble, the double bass with Simandl fingering — with finger numbers, string choices and shifts worked out on a fingerboard without frets, double stops, and a songbook for each.
 - **Smooth progression.** Each track has 10–15 units of short lessons. Every unit ends with a checkpoint, and you can **test out** of any unit to skip ahead.
 - **Endless content.** A harmony-aware generator writes fresh exercises with exactly the notes, rhythms, keys, leaps and accompaniment patterns each lesson calls for. You don't get "max level" and then refreshers forever: the **Sight-reading Gym** keeps going at your level.
 - **Real feedback**
@@ -53,7 +54,7 @@ There's no account and no server. Progress lives on your device, and you can exp
 - **Chord chart.** Any chord on every instrument — chord boxes for guitar, ukulele and bass, marked keys for piano, marked bars for mallets — with fingers, intervals or note names, and each voicing written out in standard notation in the clef that instrument reads. On a tablet or laptop, compare several chords side by side on several instruments at once (guitar over piano, say), or see every voicing of one chord. Tap to hear.
 - **Studio**
   - Free Play: play anything and see it appear on the staff, with chord names.
-  - Fretboard Explorer (guitar, ukulele, bass), a chromatic tuner, a scales-and-fingering reference and a sight-reading gym for every instrument.
+  - Fretboard Explorer (guitar, ukulele, bass and the bowed strings), a chromatic tuner, a scales-and-fingering reference and a sight-reading gym for every instrument.
   - Metronome: tap tempo, time signatures, subdivisions, accents and a speed trainer.
 - **Progress.** XP, streaks with streak freezes, a daily goal, a practice calendar, per-note mastery heatmaps on a keyboard or fretboard, and low-key milestones.
 - **Multiple players on one device**, plus **export/import** (download, share sheet, or paste) with merge or replace.

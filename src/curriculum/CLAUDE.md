@@ -13,7 +13,7 @@
 - `generate.ts`: the seeded generator (`makeRng`, `generateScore(MelodyGen)`, `scaleScore`,
   `flashScore`, `drawItems`). It writes harmony-aware melodies with accompaniment patterns.
   `chordScore.ts` builds the chord-practice scores.
-- `tracks/*.ts`: one file per track (13), each exporting a `TrackDef`. `index.ts` has `TRACKS`,
+- `tracks/*.ts`: one file per track (17), each exporting a `TrackDef`. `index.ts` has `TRACKS`,
   `getTrack`, `allLessons`, `findLesson`.
 
 **Adding a lesson:** add a `lesson(...)` to a unit. Every unit **ends with a `checkpoint`**

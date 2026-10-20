@@ -1,7 +1,7 @@
 # Clef Coach — notes for working in this repo
 
-A React 19 + Vite + TypeScript PWA that teaches reading music on piano, guitar, ukulele, bass
-and mallets. It listens to a real instrument (Web MIDI or the microphone), draws notation with
+A React 19 + Vite + TypeScript PWA that teaches reading music on piano, guitar, ukulele, bass,
+mallets and the bowed strings (violin, viola, cello, double bass). It listens to a real instrument (Web MIDI or the microphone), draws notation with
 VexFlow, synthesises every sound itself (plus optional SoundFont/SFZ banks), and can play a
 band along with the player. Synth School (`/synth`) teaches synthesizers on a synth the app
 runs itself, judging quizzes by ear. No server: state lives in localStorage and IndexedDB. The main
@@ -56,7 +56,7 @@ src/
                       metronome, sfx, mic/MIDI/touch input → see src/audio/CLAUDE.md
   perform/            the band: arranger, harmony inference, performer, sinks → src/perform/CLAUDE.md
   engine/             lesson runtime: PlayAlong (wait/tempo), activities → src/engine/CLAUDE.md
-  curriculum/         13 tracks of units/lessons, builders, generator → src/curriculum/CLAUDE.md
+  curriculum/         17 tracks of units/lessons, builders, generator → src/curriculum/CLAUDE.md
   synthlab/           Synth School: the synth (pure-TS DSP in an AudioWorklet), the sound judge,
                       the panel UI and the course → src/synthlab/CLAUDE.md
   content/songs/      the built-in song library (TS), one file per instrument

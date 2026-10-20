@@ -19,7 +19,7 @@ A song is ONE JSON object:
   "arranger": "…",                           // optional
   "year": "1818",                            // optional
   "source": "Scanned from a lesson book",    // optional, where it came from
-  "instrument": "piano",                     // piano | guitar | ukulele | bass | mallets
+  "instrument": "piano",                     // piano | guitar | ukulele | bass | mallets | violin | viola | cello | doublebass
   "level": 3,                                // 1 (first weeks) … 10 (advanced)
   "key": "Bb",                               // C, G, D, F, Bb, Eb, Am, F#m, …  (key signature + mode)
   "time": [6, 8],                            // time signature
@@ -43,6 +43,10 @@ A song is ONE JSON object:
 - ukulele: clef "treble", pitch exactly as printed (open strings G4 C4 E4 A4, high-G tuning).
 - mallets (marimba, xylophone, glockenspiel, vibraphone): clef "treble" (and "bass" for marimba
   left hand), pitch exactly as PRINTED (written pitch).
+- violin: clef "treble", pitch as printed (open strings G3 D4 A4 E5).
+- viola: clef "alto" (switch to "treble" for high passages), pitch as printed (open strings C3 G3 D4 A4).
+- cello: clef "bass" (switch to "tenor" or "treble" for high passages), pitch as printed (open strings C2 G2 D3 A3).
+- doublebass: clef "bass8vb", SOUNDING pitch = one octave below printed (open strings E1 A1 D2 G2).
 
 ## Notes: one string per voice, tokens separated by spaces, "|" after every bar
   token := head [/duration] [@fingers] [%strings] [~]
@@ -53,9 +57,9 @@ A song is ONE JSON object:
   The duration carries over until it changes: "C4/q D4 E4 F4 |" is four quarters.
   ~        := tie to the next note (same pitch), e.g. "G4/h~ | G4/q …"
               inside a chord, after one pitch, ties only that note: "[C4~ E4]/h [C4 F4]" holds C4
-  @fingers := printed fingering: piano 1-5; guitar/ukulele/bass fretting finger 0-4 (0 = open);
+  @fingers := printed fingering: piano 1-5; guitar/ukulele/bass/violin family finger 0-4 (0 = open);
               mallets sticking L or R (or 1-4 with four mallets). One per chord note, "-" to skip one.
-  %strings := guitar/ukulele/bass string number per note (1 = highest string), e.g. "%3"
+  %strings := string number per note for guitar/ukulele/bass and bowed strings (1 = highest string), e.g. "%3"
   Every bar MUST add up exactly to the time signature (6/8 = six eighths). The first bar may be
   short only if "pickup" says so; then the last bar is usually short by the same amount.
   Write ALL accidentals explicitly as they sound (F# in G major is written F#4 every time —
@@ -67,7 +71,7 @@ A song is ONE JSON object:
 ## Structure tokens (inside the voice strings)
   |:  start repeat     :|  end repeat     |1  first ending starts     :|2  second ending starts
   ||  double bar       [K:G]  key change at the start of a bar     [T:3/4]  time change at the start of a bar
-  [C:treble] / [C:bass]  clef change on that staff, right before the note it applies to
+  [C:treble] / [C:bass] / [C:alto] / [C:tenor]  clef change on that staff, right before the note it applies to
   Every voice must use the same repeat signs at the same places. D.C./D.S. must be written out.
 
 ## Chords (optional "chords" line)
@@ -115,7 +119,7 @@ export function transcribeTask(opts: { instrument?: InstrumentId; title?: string
     opts.textTab
       ? 'The tab is written as plain text (ASCII tab). Read the tuning, capo and strings from it, and work out the rhythm as described under Tablature; say in "source" how the rhythm was decided (e.g. "rhythm from the tab spacing" or "rhythm as recorded").'
       : '',
-    opts.instrument ? `It is for ${opts.instrument === 'mallets' ? 'mallet percussion (marimba/xylophone)' : opts.instrument}: use "instrument": "${opts.instrument}".` : 'Work out which instrument it is for (piano grand staff, guitar, ukulele, bass guitar or mallets).',
+    opts.instrument ? `It is for ${opts.instrument === 'mallets' ? 'mallet percussion (marimba/xylophone)' : opts.instrument}: use "instrument": "${opts.instrument}".` : 'Work out which instrument it is for (piano grand staff, guitar, ukulele, bass guitar, mallets, violin, viola, cello or double bass).',
     opts.title ? `The title is "${opts.title}".` : '',
     opts.hints ? `Notes from the player: ${opts.hints}` : '',
   ];
