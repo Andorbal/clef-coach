@@ -4,13 +4,15 @@ A React 19 + Vite + TypeScript PWA that teaches reading music on piano, guitar, 
 mallets and the bowed strings (violin, viola, cello, double bass). It listens to a real instrument (Web MIDI or the microphone), draws notation with
 VexFlow, synthesises every sound itself (plus optional SoundFont/SFZ banks), and can play a
 band along with the player. Synth School (`/synth`) teaches synthesizers on a synth the app
-runs itself, judging quizzes by ear. No server: state lives in localStorage and IndexedDB. The main
+runs itself, judging quizzes by ear. Theory School (`/theory`) teaches music theory on a staff
+and a keyboard. No server: state lives in localStorage and IndexedDB. The main
 target is an **iPad in Safari** (as a home-screen PWA). Treat CPU, GPU and battery use
 there as features.
 
 More detailed notes sit next to the code (each loads when you work in that folder):
 `src/audio/CLAUDE.md`, `src/perform/CLAUDE.md`, `src/engine/CLAUDE.md`,
-`src/songs/CLAUDE.md`, `src/curriculum/CLAUDE.md`, `src/synthlab/CLAUDE.md`, `e2e/CLAUDE.md`. Performance
+`src/songs/CLAUDE.md`, `src/curriculum/CLAUDE.md`, `src/synthlab/CLAUDE.md`, `src/theory/CLAUDE.md`,
+`e2e/CLAUDE.md`. Performance
 measurements and history are in `docs/performance.md`. The song file format is in
 `docs/song-format.md`.
 
@@ -31,7 +33,7 @@ run e2e. Pushing to `main` deploys to GitHub Pages (`deploy.yml`).
 
 Opt-in Playwright runs (skipped unless their env var is set):
 
-- `SWEEP=1 npx playwright test sweep --project=ipad`: renders every step of every lesson (`-g "Synth School"` for the synth course alone, about a minute).
+- `SWEEP=1 npx playwright test sweep --project=ipad`: renders every step of every lesson (`-g "Synth School"` for the synth course alone, about a minute; `-g "Theory School"` about two).
 - `SHOTS=dir npx playwright test screens`: screenshots of every screen.
 - `MEDIA=dir …` via `tools/readme-media.sh`: the README media.
 - `BENCH=1 npx playwright test audio-bench --project=ipad`: audio render cost (see `docs/performance.md`).
@@ -59,9 +61,12 @@ src/
   curriculum/         17 tracks of units/lessons, builders, generator → src/curriculum/CLAUDE.md
   synthlab/           Synth School: the synth (pure-TS DSP in an AudioWorklet), the sound judge,
                       the panel UI and the course → src/synthlab/CLAUDE.md
+  theory/             Theory School: pure theory (intervals, scales, chords, numerals), the
+                      course, links to the instrument tracks → src/theory/CLAUDE.md
   content/songs/      the built-in song library (TS), one file per instrument
   songs/              song file format, importers (MusicXML, MIDI, Guitar Pro, tab), Claude scan
-  state/              zustand store, persistence, SRS, achievements, export/import
+  state/              zustand store, persistence, SRS, achievements, export/import, courseNav
+                      (progress through a unit-and-lesson course)
   screens/, components/  React screens (one CSS file each) and shared UI
 tools/                clefsong CLI, fetch-sounds, README media script
 e2e/                  Playwright specs → e2e/CLAUDE.md

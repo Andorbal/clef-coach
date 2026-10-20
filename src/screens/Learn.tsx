@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { AudioWaveform, Check, FlaskConical, Minus, Plus } from 'lucide-react';
+import { AudioWaveform, BookOpen, Check, FlaskConical, KeyboardMusic, Minus, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { MobileSettingsButton, PageHeader } from '../components/Shell';
 import { TrackBadge } from '../components/TrackBadge';
@@ -12,6 +12,7 @@ import { InstrumentIcon } from '../components/InstrumentIcon';
 import { INSTRUMENT_IDS, type InstrumentId, instrumentDef, instrumentFromId } from '../music/instruments';
 import { COURSE } from '../synthlab/course';
 import { courseCompletion, nextLesson as nextSynthLesson } from '../synthlab/course/progress';
+import { THEORY } from '../theory/course';
 import './learn.css';
 
 const GROUP_SUBS: Record<InstrumentId, string> = {
@@ -101,8 +102,70 @@ export default function Learn() {
           </div>
         </section>
       ))}
-      <SynthGroup delay={groups.length * 0.15} />
+      <TheoryGroup delay={groups.length * 0.15} />
+      <SynthGroup delay={groups.length * 0.15 + 0.1} />
     </div>
+  );
+}
+
+/** Theory School: for every instrument, taught on a staff and a keyboard. */
+function TheoryGroup({ delay }: { delay: number }) {
+  const profile = useProfile();
+  const tp = profile?.theory;
+  const done = THEORY.courseCompletion(tp);
+  const next = THEORY.nextLesson(tp);
+  return (
+    <section className="learn-group">
+      <div className="learn-group-head">
+        <h2 className="display learn-group-title">
+          <BookOpen size={22} /> Music theory
+        </h2>
+        <span className="dim">Why music works: notes, rhythm, keys, intervals, chords and harmony, for any instrument.</span>
+      </div>
+      <div className="learn-grid">
+        <motion.div className={`learn-card card ${tp ? 'mine' : ''}`} style={{ ['--accent' as string]: '#7fb4ff' }} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay }}>
+          <div className="learn-card-top">
+            <span className="synth-learn-badge blue">
+              <BookOpen size={28} />
+            </span>
+            {tp && (
+              <ProgressRing value={done} size={50} stroke={4} color="#7fb4ff">
+                <span className="ring-pct small">{Math.round(done * 100)}%</span>
+              </ProgressRing>
+            )}
+          </div>
+          <div className="eyebrow">From zero to harmony</div>
+          <h3 className="display learn-card-title">Theory School</h3>
+          <p className="dim learn-card-desc">See each idea on the staff, hear it, then play it on the keyboard. No piano skills needed. Lessons in your tracks link to the theory behind them.</p>
+          <div className="learn-card-meta faint">
+            {THEORY.units.length} units · {THEORY.totalLessons} lessons
+          </div>
+          <div className="learn-card-actions">
+            <Link to={next && tp ? `/theory/lesson/${next.lesson.id}` : '/theory'} className="btn btn-primary">
+              {tp ? 'Continue' : 'Start'}
+            </Link>
+            <Link to="/theory" className="btn btn-ghost btn-sm">
+              Course map
+            </Link>
+          </div>
+        </motion.div>
+        <motion.div className="learn-card card" style={{ ['--accent' as string]: '#7fb4ff' }} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: delay + 0.06 }}>
+          <div className="learn-card-top">
+            <span className="synth-learn-badge blue">
+              <KeyboardMusic size={28} />
+            </span>
+          </div>
+          <div className="eyebrow">Try anything</div>
+          <h3 className="display learn-card-title">Free play</h3>
+          <p className="dim learn-card-desc">Play on any instrument and see your notes on the staff, with chords and intervals named as you go.</p>
+          <div className="learn-card-actions">
+            <Link to="/studio/free" className="btn">
+              Open free play
+            </Link>
+          </div>
+        </motion.div>
+      </div>
+    </section>
   );
 }
 

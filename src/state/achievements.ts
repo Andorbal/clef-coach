@@ -1,4 +1,4 @@
-import type { Profile, TrackId } from './types';
+import type { CourseId, Profile, TrackId } from './types';
 
 export interface AchievementDef {
   id: string;
@@ -13,6 +13,8 @@ export interface AchievementContext {
   trackId?: TrackId;
   /** A Synth School lesson. */
   synth?: boolean;
+  /** A Theory or Production School lesson. */
+  course?: CourseId;
   accuracy?: number;
   lessonKind?: string;
   avgResponseMs?: number;
@@ -27,6 +29,9 @@ const passedCount = (p: Profile, t?: TrackId) =>
 const SYNTH_PART_ONE = ['sy1-4', 'sy2-4', 'sy3-6', 'sy4-5', 'sy5-5', 'sy6-6'];
 const synthPassed = (p: Profile, ids: string[]) => ids.every(id => p.synth?.lessons[id]?.passed);
 const synthCount = (p: Profile) => Object.values(p.synth?.lessons ?? {}).filter(l => l.passed && !l.skipped).length;
+/** Theory and Production School: lessons passed (not tested out), and checkpoints passed (lesson ids, saved in profiles). */
+const courseCount = (p: Profile, c: 'theory' | 'production') => Object.values(p[c]?.lessons ?? {}).filter(l => l.passed && !l.skipped).length;
+const coursePassed = (p: Profile, c: 'theory' | 'production', ids: string[]) => ids.every(id => p[c]?.lessons[id]?.passed);
 
 export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'first-lesson', title: 'Opening Bars', description: 'Finish your first lesson.', icon: 'Music', check: p => p.totals.lessons >= 1 },
@@ -52,6 +57,10 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'synth-subtractive', title: 'Subtractive Thinker', description: 'Pass every checkpoint of Synth School’s first part.', icon: 'Filter', check: p => synthPassed(p, SYNTH_PART_ONE) },
   { id: 'synth-engines', title: 'Four Engines', description: 'Pass the FM, additive and wavetable checkpoints.', icon: 'Cpu', check: p => synthPassed(p, ['sy7-5', 'sy8-5', 'sy9-4']) },
   { id: 'synth-graduate', title: 'Sound Designer', description: 'Pass the Synth School final exam.', icon: 'GraduationCap', check: p => synthPassed(p, ['sy11-7']) },
+  { id: 'theory-first', title: 'Why, Not Just How', description: 'Pass your first Theory School lesson.', icon: 'BookOpen', check: p => courseCount(p, 'theory') >= 1 },
+  { id: 'theory-reader', title: 'Fluent Reader', description: 'Pass every Theory School checkpoint on reading music.', icon: 'BookOpenCheck', check: p => coursePassed(p, 'theory', ['th1-c', 'th2-c', 'th3-c', 'th4-c']) },
+  { id: 'theory-harmony', title: 'Harmonist', description: 'Pass the Theory School checkpoint on chords in a key.', icon: 'Layers', check: p => coursePassed(p, 'theory', ['th11-c']) },
+  { id: 'theory-graduate', title: 'Theorist', description: 'Pass the Theory School final exam.', icon: 'GraduationCap', check: p => coursePassed(p, 'theory', ['th17-c']) },
 ];
 
 export function newAchievements(p: Profile, ctx: AchievementContext): AchievementDef[] {

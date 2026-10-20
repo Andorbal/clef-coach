@@ -1,0 +1,176 @@
+/* ---------- Theory School: the workbench ---------- */
+:root {
+  --theory: #7fb4ff;
+}
+
+.th-paper-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.th-paper {
+  position: relative;
+  flex: 1;
+  min-height: 150px;
+  display: grid;
+  place-items: center;
+  padding: 10px 14px;
+  overflow: hidden;
+}
+
+.th-paper .notation {
+  width: 100%;
+  height: 100%;
+}
+
+.th-paper-wrap.is-live .th-paper {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--theory) 45%, transparent) inset;
+}
+
+.th-paper-empty {
+  max-width: 28ch;
+  text-align: center;
+  font-size: 15px;
+  color: #6b6457;
+}
+
+.th-live-tag {
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #1c2a44;
+  background: color-mix(in srgb, var(--theory) 35%, #fff);
+}
+
+.th-hear {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+}
+
+.th-hear.playing {
+  color: var(--theory);
+}
+
+.th-readout {
+  min-height: 44px;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 14px;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.th-readout.on {
+  background: color-mix(in srgb, var(--theory) 9%, var(--surface));
+  border-color: color-mix(in srgb, var(--theory) 40%, transparent);
+}
+
+.th-readout strong {
+  font-size: 18px;
+  font-family: var(--font-display);
+}
+
+.th-readout strong::first-letter {
+  text-transform: uppercase;
+}
+
+.th-listen {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 22px;
+  border-radius: 18px;
+  text-align: left;
+  color: #1c1915;
+  background: rgba(28, 25, 21, 0.05);
+  border: 1px solid rgba(28, 25, 21, 0.15);
+}
+
+.th-listen span {
+  display: flex;
+  flex-direction: column;
+}
+
+.th-listen strong {
+  font-size: 18px;
+}
+
+.th-listen-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: grid !important;
+  place-items: center;
+  background: var(--theory);
+  color: #0d1b33;
+  flex: none;
+}
+
+.th-listen-icon.playing {
+  animation: th-listen-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes th-listen-pulse {
+  50% {
+    transform: scale(0.92);
+  }
+}
+
+.th-play-note {
+  margin: -4px 0 0;
+  font-size: 13px;
+}
+
+.th-locked {
+  margin-bottom: 10px;
+}
+
+.th-drill {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.th-drill > .activity {
+  flex: 1;
+}
+
+.course-links.compact {
+  margin-top: 4px;
+}
+
+/* the course map's hero picture */
+.th-hero-art line,
+.th-hero-art path {
+  vector-effect: non-scaling-stroke;
+}
+
+@media (max-width: 760px) {
+  .th-paper {
+    min-height: 120px;
+  }
+  .th-readout {
+    min-height: 38px;
+    padding: 8px 12px;
+  }
+  .th-readout strong {
+    font-size: 16px;
+  }
+}

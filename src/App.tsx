@@ -32,6 +32,8 @@ const SoundsSettings = lazy(() => import('./screens/SoundsSettings'));
 const SynthSchool = lazy(() => import('./screens/SynthSchool'));
 const SynthLesson = lazy(() => import('./screens/SynthLesson'));
 const SynthLab = lazy(() => import('./screens/SynthLab'));
+const TheorySchool = lazy(() => import('./screens/TheorySchool'));
+const TheoryLesson = lazy(() => import('./screens/TheoryLesson'));
 const InstrumentsPreview = lazy(() => import('./dev/InstrumentsPreview'));
 const NotationPreview = lazy(() => import('./dev/NotationPreview'));
 const IconPreview = lazy(() => import('./dev/IconPreview'));
@@ -173,6 +175,7 @@ export default function App() {
             <Route path="/studio/metronome" element={<RequireProfile><MetronomeTool /></RequireProfile>} />
             <Route path="/synth/lab" element={<RequireProfile><SynthLab /></RequireProfile>} />
             <Route path="/synth/lesson/:lessonId" element={<RequireProfile><Keyed C={SynthLesson} /></RequireProfile>} />
+            <Route path="/theory/lesson/:lessonId" element={<RequireProfile><Keyed C={TheoryLesson} /></RequireProfile>} />
             <Route path="/dev/instruments" element={<Screen><InstrumentsPreview /></Screen>} />
             <Route path="/dev/notation" element={<Screen><NotationPreview /></Screen>} />
             <Route path="/dev/icon" element={<Screen><IconPreview /></Screen>} />
@@ -192,6 +195,7 @@ export default function App() {
                           <Route path="/studio" element={<Studio />} />
                           <Route path="/chords" element={<ChordChart />} />
                           <Route path="/synth" element={<SynthSchool />} />
+                          <Route path="/theory" element={<TheorySchool />} />
                           <Route path="/progress" element={<Progress />} />
                           <Route path="/settings" element={<Settings />} />
                           <Route path="/settings/sounds" element={<SoundsSettings />} />

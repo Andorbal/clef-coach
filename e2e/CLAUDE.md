@@ -38,7 +38,7 @@
 
 | Spec | Run | What |
 |---|---|---|
-| `sweep` | `SWEEP=1 npx playwright test sweep --project=ipad` | every step of every lesson renders (via dev-only `?step=N`); Synth School's quizzes also wait for their judge (`-g "Synth School"`) |
+| `sweep` | `SWEEP=1 npx playwright test sweep --project=ipad` | every step of every lesson renders (via dev-only `?step=N`); Synth School's quizzes also wait for their judge (`-g "Synth School"`); Theory School with `-g "Theory School"` |
 | `screens` | `SHOTS=dir npx playwright test screens` | a screenshot of every screen |
 | `media` | `tools/readme-media.sh` | re-records the README screenshots and GIFs (needs ffmpeg) |
 | `audio-bench` | `BENCH=1 npx playwright test audio-bench --project=ipad` | audio-thread cost of band scenarios in an OfflineAudioContext, with loudness fingerprints (`BENCH_TRACKS`, `BENCH_ONLY`, `BENCH_RUNS`, `BENCH_BANK`, `BENCH_OUT`) |

@@ -7,7 +7,7 @@
 </p>
 <p align="center"><sub>Playing in time: a count-in, a beat light to follow, and every note judged as you play it.</sub></p>
 
-Clef Coach is an installable web app (PWA) that takes you from your very first note to advanced sight-reading and real songs. It listens to your instrument through **MIDI** or the **microphone**, shows real engraved notation, an accurate keyboard, fretboard or set of mallet bars, and teaches proper **fingering**, **sticking**, **hands-together** playing, **chords** and the **whole neck**. When you want to make sounds of your own, **Synth School** teaches synthesizers, from the first oscillator to FM and wavetables, on a synth built into the app.
+Clef Coach is an installable web app (PWA) that takes you from your very first note to advanced sight-reading and real songs. It listens to your instrument through **MIDI** or the **microphone**, shows real engraved notation, an accurate keyboard, fretboard or set of mallet bars, and teaches proper **fingering**, **sticking**, **hands-together** playing, **chords** and the **whole neck**. **Theory School** explains why music works, from the names of the notes to chromatic harmony and form, on a staff and a keyboard you can play. When you want to make sounds of your own, **Synth School** teaches synthesizers, from the first oscillator to FM and wavetables, on a synth built into the app.
 
 There's no account and no server. Progress lives on your device, and you can export or import it at any time.
 
@@ -45,6 +45,10 @@ There's no account and no server. Progress lives on your device, and you can exp
 - **Import your own songs**: MusicXML (from MuseScore, Finale, Sibelius, Dorico, Flat, Noteflight or any sheet-music scanner), MIDI, **Guitar Pro** files, **text tab** pasted from a website, or Clef Coach song files. **Scan sheet music or tab with Claude** using your own Anthropic API key — photos, a PDF, or text tab whose rhythm Claude works out — or use the prompt with any AI assistant. Every file is checked bar by bar with errors that say exactly what to fix. See [docs/song-format.md](docs/song-format.md).
   - **Import a whole collection at once**: pick several files, a `.zip`, or (on a computer) a folder or files dropped on the page; untick the ones you don't want, tag them all in one go, and duplicates of songs you already have are spotted.
   - Imports keep clef changes, cross-staff notes on the right hand's staff, two voices with their stems the right way up, held notes inside chords, 64th notes, cadenza bars and repeats; MIDI files spread over several tracks become one grand staff, and chord symbols are worked out from a chord track.
+- **Theory School: why music works.** Seventeen units, from high and low and the musical alphabet to keys, intervals, chords, harmony in a key, cadences, modes, chromatic chords and form. No piano skills needed: the keyboard is there to try things on.
+  - Each idea is shown on the staff and heard, then you play it yourself: build a fifth above a note, hold a minor triad, play the V7 of a key. The staff names whatever you play — notes, intervals, chords and their Roman numerals in the lesson's key.
+  - Quizzes are fresh every time, and ear training runs through the course.
+  - **Linked with your instruments.** An instrument lesson that brings in a minor key, 6/8 or a new chord shows the theory behind it, ticked when you've done it; a theory lesson shows where you'll use it on the instruments you play.
 - **Synth School: learn to speak synth.** Eleven units that take you from your first oscillator to designing your own sounds, on a real synthesizer built into the app with four engines: **subtractive** (two oscillators, sub, noise, ring mod, hard sync), **FM** (four operators, eight algorithms), **additive** (16 harmonics) and **wavetable**, with a 12/24 dB filter, three envelopes, an LFO, unison, glide and effects.
   - Each lesson brings in one or two knobs at a time, shows what they do with live pictures of the wave, the spectrum and the envelope, and gives you small things to try.
   - Ear training, and **quizzes judged by ear**: hear a target sound and rebuild it with the controls you have. It doesn't have to be exact. The judge listens for pitch, tone, shape and movement, and hints point at the knob that matters.
@@ -168,9 +172,12 @@ src/
                 fretboard activities, review & gym generators, unlock logic
   synthlab/     Synth School: a four-engine synth in pure TypeScript (run in an AudioWorklet and
                 offline), the judge that compares two sounds by ear, the synth panel and the course
+  theory/       Theory School: intervals, scales, chords and numerals, the course, and the links
+                between theory lessons and instrument lessons
   state/        zustand store, persistence, spaced repetition, achievements, export/import
   screens/      onboarding, home, learn, track map, lesson player, songs, song studio, import,
-                chord chart, studio tools, metronome, progress, settings, Synth School and Synth Lab
+                chord chart, studio tools, metronome, progress, settings, Synth School and Synth Lab,
+                Theory School
 tools/          `clefsong` command-line tool (runs the app's TypeScript through Vite)
 docs/           song-format.md: the song file format and why
 ```

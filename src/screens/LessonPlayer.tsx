@@ -17,6 +17,7 @@ import { Activity } from '../engine/Activity';
 import { activityLabel } from '../engine/labels';
 import { type ActivityResult, type LessonCtx, prefsOf } from '../engine/context';
 import { InsightVisual } from '../engine/InsightVisual';
+import { TheoryLinks } from '../theory/ui/Links';
 import { testOutLessonIds } from '../engine/progress';
 import { buildEndlessLesson, buildReviewLesson } from '../engine/review';
 import type { OutcomeReport } from '../state/logic';
@@ -238,6 +239,7 @@ export default function LessonPlayer() {
                 <h1 className="display intro-title">{lesson.intro[introIdx].title}</h1>
                 <p className="intro-body">{lesson.intro[introIdx].body}</p>
                 {lesson.intro[introIdx].visual && <InsightVisual visual={lesson.intro[introIdx].visual!} naming={profile.settings.naming} instrument={track.instrument} prefs={prefsOf(profile.settings)} />}
+                {introIdx + 1 === lesson.intro.length && <TheoryLinks trackId={track.id} lessonId={lesson.id} title="Want to know why?" />}
                 <div className="intro-actions">
                   <button
                     className="btn btn-primary btn-lg"

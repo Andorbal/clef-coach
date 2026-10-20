@@ -86,3 +86,32 @@ test('every step renders: Synth School', async ({ page }) => {
   console.log(`Synth School: ${lessons.length} lessons, ${count} steps`);
   expect(errors, errors.join('\n')).toEqual([]);
 });
+
+test('every step renders: Theory School', async ({ page }) => {
+  test.setTimeout(30 * 60_000);
+  const errors: string[] = [];
+  let where = '';
+  page.on('pageerror', e => errors.push(`${where}: ${e.message}`));
+  page.on('console', m => {
+    if (m.type() === 'error') errors.push(`${where}: console: ${m.text()}`);
+  });
+  await onboard(page, 'Sweep');
+  const lessons = await page.evaluate(async () => {
+    const mod = await import(/* @vite-ignore */ '/src/theory/course/index.ts');
+    return mod.THEORY.allLessons().map((r: { lesson: { id: string; steps: { type: string }[] } }) => ({ id: r.lesson.id, steps: r.lesson.steps.map(s => s.type) }));
+  });
+  expect(lessons.length).toBeGreaterThan(60);
+  let count = 0;
+  for (const l of lessons) {
+    for (let i = 0; i < l.steps.length; i++) {
+      where = `${l.id}#${i}(${l.steps[i]})`;
+      await page.goto(`/#/theory/lesson/${l.id}?step=${i}`);
+      await expect(page.locator(`.course-coach[data-step="${l.steps[i]}"]`), where).toBeVisible({ timeout: 8000 });
+      if (l.steps[i] === 'drill') await expect(page.locator('.th-drill .activity, .th-drill .tip-activity, .th-drill [data-activity]').first(), where).toBeVisible({ timeout: 8000 });
+      await page.waitForTimeout(150);
+      count++;
+    }
+  }
+  console.log(`Theory School: ${lessons.length} lessons, ${count} steps`);
+  expect(errors, errors.join('\n')).toEqual([]);
+});
