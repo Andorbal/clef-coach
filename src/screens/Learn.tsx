@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { AudioWaveform, Check, FlaskConical, Minus, Plus } from 'lucide-react';
+import { AudioWaveform, BookOpen, Check, FlaskConical, KeyboardMusic, Minus, Plus, SlidersHorizontal, SlidersVertical } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { MobileSettingsButton, PageHeader } from '../components/Shell';
 import { TrackBadge } from '../components/TrackBadge';
@@ -12,6 +12,8 @@ import { InstrumentIcon } from '../components/InstrumentIcon';
 import { INSTRUMENT_IDS, type InstrumentId, instrumentDef, instrumentFromId } from '../music/instruments';
 import { COURSE } from '../synthlab/course';
 import { courseCompletion, nextLesson as nextSynthLesson } from '../synthlab/course/progress';
+import { PRODUCTION } from '../production/course';
+import { THEORY } from '../theory/course';
 import './learn.css';
 
 const GROUP_SUBS: Record<InstrumentId, string> = {
@@ -20,6 +22,10 @@ const GROUP_SUBS: Record<InstrumentId, string> = {
   ukulele: 'Melodies in treble clef, chord shapes and strumming.',
   bass: 'Bass clef bass lines, grooves and the whole neck.',
   mallets: 'Marimba, xylophone, glockenspiel or vibes: sticking, then four-mallet chords.',
+  violin: 'The treble clef on a fretless fingerboard: finger patterns, keys and shifting.',
+  viola: 'The alto clef, from the open C string to third position.',
+  cello: 'The bass clef, extensions and shifting, then the tenor clef.',
+  doublebass: 'Bass lines in the bass clef, Simandl fingering, bowed and plucked.',
 };
 
 export default function Learn() {
@@ -97,8 +103,71 @@ export default function Learn() {
           </div>
         </section>
       ))}
-      <SynthGroup delay={groups.length * 0.15} />
+      <TheoryGroup delay={groups.length * 0.15} />
+      <SynthGroup delay={groups.length * 0.15 + 0.1} />
+      <ProductionGroup delay={groups.length * 0.15 + 0.2} />
     </div>
+  );
+}
+
+/** Theory School: for every instrument, taught on a staff and a keyboard. */
+function TheoryGroup({ delay }: { delay: number }) {
+  const profile = useProfile();
+  const tp = profile?.theory;
+  const done = THEORY.courseCompletion(tp);
+  const next = THEORY.nextLesson(tp);
+  return (
+    <section className="learn-group">
+      <div className="learn-group-head">
+        <h2 className="display learn-group-title">
+          <BookOpen size={22} /> Music theory
+        </h2>
+        <span className="dim">Why music works: notes, rhythm, keys, intervals, chords and harmony, for any instrument.</span>
+      </div>
+      <div className="learn-grid">
+        <motion.div className={`learn-card card ${tp ? 'mine' : ''}`} style={{ ['--accent' as string]: '#7fb4ff' }} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay }}>
+          <div className="learn-card-top">
+            <span className="synth-learn-badge blue">
+              <BookOpen size={28} />
+            </span>
+            {tp && (
+              <ProgressRing value={done} size={50} stroke={4} color="#7fb4ff">
+                <span className="ring-pct small">{Math.round(done * 100)}%</span>
+              </ProgressRing>
+            )}
+          </div>
+          <div className="eyebrow">From zero to harmony</div>
+          <h3 className="display learn-card-title">Theory School</h3>
+          <p className="dim learn-card-desc">See each idea on the staff, hear it, then play it on the keyboard. No piano skills needed. Lessons in your tracks link to the theory behind them.</p>
+          <div className="learn-card-meta faint">
+            {THEORY.units.length} units · {THEORY.totalLessons} lessons
+          </div>
+          <div className="learn-card-actions">
+            <Link to={next && tp ? `/theory/lesson/${next.lesson.id}` : '/theory'} className="btn btn-primary">
+              {tp ? 'Continue' : 'Start'}
+            </Link>
+            <Link to="/theory" className="btn btn-ghost btn-sm">
+              Course map
+            </Link>
+          </div>
+        </motion.div>
+        <motion.div className="learn-card card" style={{ ['--accent' as string]: '#7fb4ff' }} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: delay + 0.06 }}>
+          <div className="learn-card-top">
+            <span className="synth-learn-badge blue">
+              <KeyboardMusic size={28} />
+            </span>
+          </div>
+          <div className="eyebrow">Try anything</div>
+          <h3 className="display learn-card-title">Free play</h3>
+          <p className="dim learn-card-desc">Play on any instrument and see your notes on the staff, with chords and intervals named as you go.</p>
+          <div className="learn-card-actions">
+            <Link to="/studio/free" className="btn">
+              Open free play
+            </Link>
+          </div>
+        </motion.div>
+      </div>
+    </section>
   );
 }
 
@@ -155,6 +224,67 @@ function SynthGroup({ delay }: { delay: number }) {
           <p className="dim learn-card-desc">The whole synth, every module showing, with a library of classic presets to take apart.</p>
           <div className="learn-card-actions">
             <Link to="/synth/lab" className="btn">
+              Open the lab
+            </Link>
+          </div>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+/** Production School: recording and mixing, on the app's own multitrack sessions. */
+function ProductionGroup({ delay }: { delay: number }) {
+  const profile = useProfile();
+  const pp = profile?.production;
+  const done = PRODUCTION.courseCompletion(pp);
+  const next = PRODUCTION.nextLesson(pp);
+  return (
+    <section className="learn-group">
+      <div className="learn-group-head">
+        <h2 className="display learn-group-title">
+          <SlidersHorizontal size={22} /> Recording and mixing
+        </h2>
+        <span className="dim">How records are put together: levels, panning, EQ, compression, reverb and mastering.</span>
+      </div>
+      <div className="learn-grid">
+        <motion.div className={`learn-card card ${pp ? 'mine' : ''}`} style={{ ['--accent' as string]: '#4dd0c8' }} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay }}>
+          <div className="learn-card-top">
+            <span className="synth-learn-badge teal">
+              <SlidersHorizontal size={28} />
+            </span>
+            {pp && (
+              <ProgressRing value={done} size={50} stroke={4} color="#4dd0c8">
+                <span className="ring-pct small">{Math.round(done * 100)}%</span>
+              </ProgressRing>
+            )}
+          </div>
+          <div className="eyebrow">Mix it yourself</div>
+          <h3 className="display learn-card-title">Production School</h3>
+          <p className="dim learn-card-desc">A real mixing console and multitrack sessions to mix: hear what each control does, then match mixes by ear.</p>
+          <div className="learn-card-meta faint">
+            {PRODUCTION.units.length} units · {PRODUCTION.totalLessons} lessons
+          </div>
+          <div className="learn-card-actions">
+            <Link to={next && pp ? `/production/lesson/${next.lesson.id}` : '/production'} className="btn btn-primary">
+              {pp ? 'Continue' : 'Start'}
+            </Link>
+            <Link to="/production" className="btn btn-ghost btn-sm">
+              Course map
+            </Link>
+          </div>
+        </motion.div>
+        <motion.div className="learn-card card" style={{ ['--accent' as string]: '#f4c97a' }} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: delay + 0.06 }}>
+          <div className="learn-card-top">
+            <span className="synth-learn-badge">
+              <SlidersVertical size={28} />
+            </span>
+          </div>
+          <div className="eyebrow">Mix freely</div>
+          <h3 className="display learn-card-title">Mix Lab</h3>
+          <p className="dim learn-card-desc">The whole console and four sessions to mix your way, with a finished reference mix to compare against.</p>
+          <div className="learn-card-actions">
+            <Link to="/production/lab" className="btn">
               Open the lab
             </Link>
           </div>

@@ -113,7 +113,7 @@ A song is one JSON object. File extension: `.json` (we suggest `name.clefsong.js
 | `title` | yes | |
 | `composer`, `arranger`, `year`, `source`, `license`, `blurb` | no | Shown in the library. |
 | `tags` | no | Labels to find the song by (`["christmas", "recital"]`); you can add and remove them in the app, and filter the library by them. |
-| `instrument` | yes | `piano`, `guitar`, `ukulele`, `bass` (bass guitar) or `mallets` (marimba, xylophone, glockenspiel, vibraphone) |
+| `instrument` | yes | `piano`, `guitar`, `ukulele`, `bass` (bass guitar), `mallets` (marimba, xylophone, glockenspiel, vibraphone), `violin`, `viola`, `cello` or `doublebass` |
 | `level` | no | 1 (first weeks) … 10 (advanced). Default 3. |
 | `key` | yes | Key signature as a key name: `C`, `G`, `F`, `Bb`, `Eb`, `F#`, `Am`, `F#m`, `Dm` … |
 | `time` | yes | `[3, 4]` or `"3/4"` |
@@ -136,6 +136,10 @@ A song is one JSON object. File extension: `.json` (we suggest `name.clefsong.js
 | bass guitar | one | `bass8vb` | **sounding** pitch: one octave below printed (open strings E1 A1 D2 G2) |
 | ukulele | one | `treble` | as printed (open strings G4 C4 E4 A4, high-G) |
 | mallets | one, or treble + bass for a marimba grand staff | `treble`, `bass` | as printed (written pitch). The app knows a xylophone sounds an octave higher and a glockenspiel two. |
+| violin | one | `treble` | as printed (open strings G3 D4 A4 E5) |
+| viola | one | `alto` (`treble` for high passages) | as printed (open strings C3 G3 D4 A4) |
+| cello | one | `bass`, then `tenor` and `treble` for high passages | as printed (open strings C2 G2 D3 A3) |
+| double bass | one | `bass8vb` | **sounding** pitch: one octave below printed (open strings E1 A1 D2 G2) |
 
 ### The note language
 
@@ -160,10 +164,10 @@ duration := w | h | q | e | s | t | x   then "." per dot, "3" for a triplet   (x
   can be held into a chord: `C4/e~ E4~ G4/q [C4 E4 G4]/h`.
 - **Rests**: `r/q`, a whole-bar rest in 3/4 is `r/h.`.
 - **Fingering** (`@`): piano fingers `1`–`5`; fretting fingers `0`–`4` for guitar/ukulele/bass
-  (`0` = open string); mallet sticking `L`/`R` or `1`–`4` (four mallets, numbered left to right).
+  and the violin family (`0` = open string); mallet sticking `L`/`R` or `1`–`4` (four mallets, numbered left to right).
   One per chord note, `-` to leave one out: `[C4 E4 G4]/q@1,3,5`. Optional — the app adds
   fingering and sticking that's missing.
-- **Strings** (`%`): string number per note for fretted instruments, 1 = highest string: `G3/q%3`.
+- **Strings** (`%`): string number per note for fretted and bowed instruments, 1 = highest string: `G3/q%3`.
 - **Every bar must add up** to the time signature. Only the first bar may be short, when
   `pickup` says so (and then the last bar is usually short by the same amount).
 - **Two voices on one staff** (e.g. melody with stems up and an inner line with stems down): give
@@ -178,7 +182,7 @@ Structure marks inside a voice:
 | `\|1` … `:\|2` | first and second endings |
 | `[K:G]` | key change from this bar on |
 | `[T:3/4]` | time-signature change from this bar on (up to 64 beats, for long cadenza bars) |
-| `[C:bass]` | clef change on this staff from this point on (`treble`, `bass`, `treble8vb`, `bass8vb`); it can come anywhere in a bar, right before the note it applies to, and is usually written in the staff's first voice |
+| `[C:bass]` | clef change on this staff from this point on (`treble`, `bass`, `treble8vb`, `bass8vb`, `alto`, `tenor`); it can come anywhere in a bar, right before the note it applies to, and is usually written in the staff's first voice |
 
 Repeats are written out when the song loads, so practice follows the performance. All voices — and
 the `chords` line — must use the same repeat marks. Each repeat is taken once; a `:|` with no `|:`

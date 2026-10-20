@@ -1,0 +1,781 @@
+/* Production School: the console, its strips, meters and editors.
+ * Anything that moves while the loop plays (meters, the playhead, gain reduction) moves by
+ * transform only, so playing a mix repaints nothing. */
+
+.pr-console {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #161a2e, #10131f);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-1);
+}
+
+.pr-console.auditioning .pr-strips {
+  opacity: 0.55;
+}
+
+/* ear training: listen, don't look (the meters would show which part changed) */
+.pr-console.blind .pr-meter,
+.pr-console.blind .pr-loud,
+.pr-console.blind .pr-gr {
+  visibility: hidden;
+}
+
+.pr-console.blind.auditioning .pr-strips {
+  opacity: 1;
+}
+
+/* ---------- transport ---------- */
+.pr-transport {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pr-play {
+  min-width: 108px;
+  justify-content: center;
+}
+
+.pr-playhead {
+  flex: 1 1 80px;
+  min-width: 60px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.pr-playhead span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent, var(--gold)), color-mix(in srgb, var(--accent, var(--gold)) 50%, white));
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+.pr-loud {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.3);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.pr-loud small {
+  font-size: 10px;
+  color: var(--text-faint);
+  letter-spacing: 0.06em;
+}
+
+.pr-clip {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.pr-clip.on {
+  color: #fff;
+  background: var(--bad);
+}
+
+/* ---------- strips ---------- */
+.pr-strips {
+  display: flex;
+  gap: 6px;
+  overflow: auto;
+  overscroll-behavior-x: contain;
+  padding-bottom: 4px;
+  min-height: 0;
+  flex: 1 1 auto;
+  transition: opacity 0.2s;
+}
+
+.pr-strip {
+  position: relative;
+  flex: 1 0 76px;
+  max-width: 100px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 4px 6px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--border);
+}
+
+.pr-strip > * {
+  flex-shrink: 0;
+}
+
+.pr-strip.bare {
+  flex: 0 0 54px;
+  padding-inline: 3px;
+}
+
+.pr-strip.bare .pr-strip-name {
+  font-size: 10.5px;
+  padding-inline: 2px;
+}
+
+.pr-strip.bare .pr-fader.placeholder {
+  display: none;
+}
+
+.pr-strip.selected {
+  border-color: color-mix(in srgb, var(--c) 55%, transparent);
+  background: color-mix(in srgb, var(--c) 6%, rgba(255, 255, 255, 0.035));
+}
+
+.pr-strip.is-hint {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold) inset;
+}
+
+.pr-strip.silenced .pr-fader-sec,
+.pr-strip.silenced .pr-strip-val {
+  opacity: 0.45;
+}
+
+.pr-silenced {
+  position: absolute;
+  top: 34px;
+  right: 6px;
+  color: var(--text-faint);
+}
+
+.pr-strip-name {
+  width: 100%;
+  padding: 5px 4px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #0b0e1b;
+  background: var(--c);
+  border: none;
+}
+
+.pr-strip-name:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.pr-sec {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+}
+
+.pr-sec .sl-ctl {
+  min-width: 0;
+}
+
+.pr-sec .sl-ctl-label {
+  font-size: 10.5px;
+}
+
+.pr-sec-trim {
+  flex-direction: row;
+  justify-content: center;
+  gap: 2px;
+}
+
+.pr-sec-trim .pr-meter {
+  height: 54px;
+}
+
+.pr-sends {
+  flex-direction: row;
+  justify-content: center;
+  gap: 0;
+}
+
+.pr-mini {
+  padding: 4px 2px 2px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.pr-mini small {
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.pr-ms {
+  flex-direction: row;
+  justify-content: center;
+  gap: 6px;
+}
+
+.pr-ms-btn {
+  width: 30px;
+  height: 26px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-strong);
+}
+
+.pr-ms-btn.mute.on {
+  background: #ff8a65;
+  color: #1b0d07;
+  border-color: #ff8a65;
+}
+
+.pr-ms-btn.solo.on {
+  background: #ffd54f;
+  color: #1d1704;
+  border-color: #ffd54f;
+}
+
+.pr-ms-btn.is-new {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 60%, transparent);
+}
+
+.pr-strip-val {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--c);
+}
+
+/* ---------- fader and meter ---------- */
+.pr-strip > .pr-fader-sec {
+  flex: 1 0 auto;
+}
+
+.pr-fader-sec {
+  flex: 1 1 auto;
+  min-height: 120px;
+  flex-direction: row;
+  justify-content: center;
+  align-items: stretch;
+  gap: 6px;
+  padding: 4px 0;
+  border-radius: 10px;
+}
+
+.pr-fader-sec.is-new {
+  background: color-mix(in srgb, var(--c) 9%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 50%, transparent) inset;
+}
+
+.pr-fader {
+  position: relative;
+  width: 30px;
+  touch-action: none;
+  cursor: ns-resize;
+  outline: none;
+  border-radius: 8px;
+}
+
+.pr-fader:focus-visible {
+  box-shadow: 0 0 0 2px var(--gold);
+}
+
+.pr-fader.placeholder {
+  cursor: default;
+}
+
+.pr-fader-track {
+  position: absolute;
+  left: 50%;
+  top: 10px;
+  bottom: 10px;
+  width: 4px;
+  margin-left: -2px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.55);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.pr-fader-notch {
+  position: absolute;
+  left: -7px;
+  right: -7px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.pr-fader-ghost {
+  position: absolute;
+  left: -11px;
+  right: -11px;
+  height: 0;
+  border-top: 2px dashed color-mix(in srgb, var(--c) 85%, white);
+}
+
+.pr-fader-cap {
+  position: absolute;
+  left: -11px;
+  width: 26px;
+  height: 18px;
+  margin-bottom: -9px;
+  border-radius: 5px;
+  background: linear-gradient(180deg, #e9ecf8, #a9afc8 48%, #6e7493 52%, #c9cee2);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.pr-fader-cap::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  top: 8px;
+  height: 2px;
+  background: var(--c);
+}
+
+.pr-meter {
+  position: relative;
+  display: flex;
+  gap: 2px;
+  width: 6px;
+}
+
+.pr-meter.stereo {
+  width: 14px;
+}
+
+.pr-meter-bar {
+  position: relative;
+  flex: 1;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+
+.pr-meter-bar span {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(0deg, #3fdc9a 0%, #3fdc9a 62%, #ffd54f 82%, #ff8a65 92%, #ff5f78 100%);
+  transform: scaleY(0);
+  transform-origin: bottom;
+  will-change: transform;
+}
+
+.pr-meter-zero {
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.pr-meter-hold {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 100%;
+  border-top: 2px solid rgba(255, 255, 255, 0.75);
+  transform: translateY(100%);
+  pointer-events: none;
+}
+
+.pr-meter-hold.over {
+  border-top-color: var(--bad);
+}
+
+/* gain reduction: a bar that grows from the right (as on most plug-ins) */
+.pr-gr {
+  display: block;
+  width: 64px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  direction: rtl;
+}
+
+.pr-gr span {
+  display: block;
+  height: 100%;
+  background: #ffb74d;
+  transform: scaleX(0);
+  transform-origin: right;
+}
+
+.pr-gr-val {
+  margin-left: 4px;
+  color: #ffb74d;
+}
+
+/* ---------- effects and master ---------- */
+.pr-fx,
+.pr-master {
+  flex: 0 0 auto;
+  min-width: 108px;
+}
+
+.pr-fx .pr-strip-name,
+.pr-master .pr-strip-name {
+  cursor: default;
+}
+
+.pr-fx-sec {
+  padding: 4px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.pr-sec-title {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.pr-fx-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.pr-mono {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-strong);
+}
+
+.pr-mono.on {
+  color: #1d1704;
+  background: var(--gold);
+  border-color: var(--gold);
+}
+
+/* ---------- the large EQ and compressor ---------- */
+.pr-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--border);
+}
+
+.pr-detail-pick {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pr-pick {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
+}
+
+.pr-pick.on {
+  color: #0b0e1b;
+  background: var(--c);
+}
+
+.pr-editor-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pr-editor-close {
+  margin-left: auto;
+}
+
+.pr-editor-name {
+  font-weight: 750;
+  color: var(--c);
+}
+
+.pr-editor-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+}
+
+.pr-editor-sec {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.pr-editor-pic {
+  flex: none;
+  padding: 4px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.pr-editor-comp {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pr-gr-big {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+
+.pr-ctls {
+  gap: 4px 2px;
+}
+
+.pr-ctls .sl-ctl {
+  min-width: 58px;
+}
+
+.pr-ctls .sl-ctl-label {
+  font-size: 11px;
+}
+
+.pr-eq-curve,
+.pr-comp-curve {
+  display: block;
+}
+
+.pr-curve {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.pr-curve-ghost {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+
+.pr-grid {
+  stroke: rgba(255, 255, 255, 0.1);
+  stroke-width: 1;
+}
+
+.pr-grid-label {
+  fill: var(--text-faint);
+  font-size: 9px;
+}
+
+.pr-threshold {
+  stroke: #ffb74d;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+/* ---------- A/B and hearing buttons ---------- */
+.pr-ab {
+  display: inline-flex;
+  padding: 3px;
+  gap: 3px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border);
+}
+
+.pr-ab button {
+  padding: 6px 12px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-dim);
+  background: transparent;
+  border: none;
+}
+
+.pr-ab button.on {
+  color: #0b0e1b;
+  background: var(--accent, var(--gold));
+}
+
+.pr-hear {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pr-hear .btn.on {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.pr-loading {
+  display: grid;
+  place-items: center;
+  min-height: 160px;
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+/* ---------- phones ---------- */
+@media (max-width: 720px) {
+  .pr-strip {
+    flex-basis: 72px;
+  }
+  .pr-editor-pic svg.pr-eq-curve {
+    width: 220px;
+  }
+  .pr-console {
+    padding: 8px;
+  }
+}
+
+/* ---------- pictures ---------- */
+.pr-visual {
+  width: 100%;
+  max-width: 420px;
+  height: auto;
+  padding: 8px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+}
+
+.pr-vis-t {
+  fill: var(--text);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.pr-vis-s {
+  fill: var(--text-dim);
+  font-size: 10.5px;
+}
+
+.pr-vis-arrow,
+.pr-vis-axis {
+  stroke: #a4aac4;
+  stroke-width: 1.2;
+}
+
+.pr-vis-arc {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.25);
+  stroke-width: 1.5;
+}
+
+.pr-vis-curve {
+  fill: none;
+  stroke: var(--accent, var(--gold));
+  stroke-width: 2.2;
+  stroke-linejoin: round;
+}
+
+.pr-vis-dash {
+  stroke: rgba(255, 255, 255, 0.3);
+  stroke-dasharray: 3 3;
+}
+
+.pr-vis-thr {
+  stroke: #ffb74d;
+  stroke-dasharray: 3 3;
+}
+
+/* the course map's hero picture */
+.pr-hero-art line,
+.pr-hero-art path {
+  vector-effect: non-scaling-stroke;
+}
+
+/* ---------- the lesson ---------- */
+@media (min-width: 761px) {
+  .pr-shell .course-body {
+    grid-template-columns: minmax(290px, 360px) minmax(0, 1fr);
+  }
+}
+
+.pr-shell .course-work {
+  overflow: hidden;
+}
+
+.pr-shell .course-work .pr-console {
+  flex: 1;
+}
+
+.pr-shell .course-main {
+  grid-template-rows: 1fr;
+}
+
+@media (max-width: 760px) {
+  .pr-shell .course-work .pr-console {
+    overflow-y: auto;
+  }
+}
+
+/* ---------- the Mix Lab ---------- */
+.pr-lab {
+  grid-template-rows: auto 1fr;
+}
+
+.pr-lab-top {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pr-lab-title {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 200px;
+}
+
+.pr-lab-title .faint {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pr-lab-main {
+  grid-row: 2;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 12px calc(10px + var(--safe-bottom));
+}
+
+.pr-lab-main .pr-console {
+  flex: 1;
+  overflow-y: auto;
+}

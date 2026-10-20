@@ -118,6 +118,20 @@ practising")
 - The `ipad` Playwright project identifies as an iPad, so `audio-bench` measures this
   room from now on. Numbers from before this change aren't comparable for the reverb.
 
+**Production School's console** (pure TS in an AudioWorklet, `src/production`)
+
+- Measured in Node at 48 kHz on Night Drive's eight tracks (a 10 s loop): a rough mix (faders
+  only) 1.5% of a core at first, the session's finished reference mix (EQ, five
+  compressors, reverb, delay, bus compressor, limiter) 3.1%.
+- An effect nothing is sent to is skipped once its tail has died: a reverb with no sends
+  had been a third of a rough mix's cost. Rough mix 1.5% → 0.6%.
+- Compressors work out their gain every 8 samples from the peak in between and ramp it,
+  instead of a log and a power per sample; the limiter takes its meter reading once a
+  block. Reference mix 3.1% → about 2%.
+- Stems are rendered in a worker and cached track by track, so a lesson on a session
+  already heard starts at once; the judge renders and measures at half the playback rate
+  in the same worker (about 0.4 s a check in Node).
+
 ## Rules of thumb
 
 - A tempo-mode frame should paint nothing. Move things with transforms or Web Animations,

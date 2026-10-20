@@ -168,7 +168,8 @@ describe('notation: clef changes, held chord notes, 64ths', () => {
     expect(clefAt(sc.staves[0], 200)).toBe('treble');
     // a mark at the very start sets the opening clef
     expect(song([{ clef: 'bass', voices: ['[C:treble] C5/w |'] }]).staves[0]).toMatchObject({ clef: 'treble' });
-    expect(() => song([{ clef: 'bass', voices: ['[C:alto] C4/w |'] }])).toThrow(/unknown clef/);
+    expect(song([{ clef: 'bass', voices: ['[C:alto] C4/w |'] }]).staves[0]).toMatchObject({ clef: 'alto' });
+    expect(() => song([{ clef: 'bass', voices: ['[C:soprano] C4/w |'] }])).toThrow(/unknown clef/);
   });
 
   it('slices a phrase in the clef in force at its start', () => {

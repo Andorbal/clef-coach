@@ -20,7 +20,7 @@
 import type { BandPartDef } from '../music/band';
 import { chordSymbolText, parseChordSymbol } from '../music/chords';
 import { DRUM_KEYS, clampProgram, pitchesToDrumWords } from '../music/gm';
-import { type InstrumentId, TUNINGS, familyOf, instrumentDef } from '../music/instruments';
+import { type InstrumentId, TUNINGS, familyOf, instrumentDef, isBowed, tuningFor } from '../music/instruments';
 import { type KeySig, type Mode, parseKey, keyName, tonicOf } from '../music/keys';
 import type { SongDef, SongStaffDef } from '../music/parse';
 import { type Pitch, type Step, STEPS, diatonicIndex, fromDiatonic, midiOf, spellMidi } from '../music/pitch';
@@ -860,14 +860,15 @@ interface PitchPlan {
 }
 
 function defaultTuning(instrument: InstrumentId): number[] {
+  if (isBowed(instrument)) return [...tuningFor(instrument).open];
   return instrument === 'bass' ? TUNINGS.bass4.open : instrument === 'ukulele' ? TUNINGS.ukuleleHighG.open : TUNINGS.guitar.open;
 }
 
 /**
  * Decide how written pitches become app pitches for one part.
  *   mallets  – written pitch.
- *   keyboard, ukulele – sounding pitch (written + <transpose>).
- *   guitar / bass in treble / bass clef – sounding pitch an octave below what the page
+ *   keyboard, ukulele, violin, viola, cello – sounding pitch (written + <transpose>).
+ *   guitar / bass / double bass in treble / bass clef – sounding pitch an octave below what the page
  *     shows (the app draws them with treble8vb / bass8vb). String + fret marks, when
  *     present, settle which octave the file means.
  */
@@ -891,7 +892,7 @@ function pitchPlan(part: XPart, instrument: InstrumentId, w: Warnings): PitchPla
       const shift = -best[0];
       return { convert: n => octaveShift(n.written, shift), keyTranspose: () => null };
     }
-    const octaveClefInstrument = (g: XGroup) => (instrument === 'guitar' && (g.clef?.sign ?? 'G') === 'G') || (instrument === 'bass' && (g.clef?.sign ?? 'F') === 'F');
+    const octaveClefInstrument = (g: XGroup) => (instrument === 'guitar' && (g.clef?.sign ?? 'G') === 'G') || ((instrument === 'bass' || instrument === 'doublebass') && (g.clef?.sign ?? 'F') === 'F');
     const display = (n: XNote, g: XGroup) => {
       if (g.transpose && (g.transpose.octave || g.transpose.chromatic)) return transposePitch(n.written, g.transpose);
       // what the page shows, an octave down (an 8vb clef already shows it an octave up)
@@ -1013,7 +1014,7 @@ interface LyricTag {
   src: number;
 }
 
-const fingerRange: Record<InstrumentId, [number, number]> = { piano: [1, 5], guitar: [0, 4], ukulele: [0, 4], bass: [0, 4], mallets: [1, 4] };
+const fingerRange: Record<InstrumentId, [number, number]> = { piano: [1, 5], guitar: [0, 4], ukulele: [0, 4], bass: [0, 4], mallets: [1, 4], violin: [0, 4], viola: [0, 4], cello: [0, 4], doublebass: [0, 4] };
 
 /** Convert MusicXML text into a song. Throws ImportError if the file can't be read at all. */
 export function importMusicXml(xml: string, opts: MusicXmlOptions = {}): ImportResult {
@@ -1679,8 +1680,15 @@ function clefPlan(
 function appClef(instrument: InstrumentId, clef: ClefInfo | undefined, midis: number[], w: Warnings): Clef {
   const sign = clef?.sign ?? '';
   if (instrument === 'guitar') return sign === 'F' ? 'bass' : 'treble8vb';
-  if (instrument === 'bass') return 'bass8vb';
+  if (instrument === 'bass' || instrument === 'doublebass') return 'bass8vb';
   if (instrument === 'ukulele') return 'treble';
+  if (isBowed(instrument)) {
+    // the viola's alto clef and the cello's tenor clef are read as they are
+    if (sign === 'C') return clef?.line === 4 ? 'tenor' : 'alto';
+    if (sign === 'F') return 'bass';
+    if (sign === 'G') return 'treble';
+    return instrumentDef(instrument).clefs[0];
+  }
   if (sign === 'G') return 'treble';
   if (sign === 'F') return 'bass';
   if (sign === 'C') w.add('A C clef (alto / tenor) was replaced by the treble or bass clef that suits the notes.');

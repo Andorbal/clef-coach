@@ -494,8 +494,10 @@ describe('MusicXML import: parts', () => {
     const alone = importMusicXml(xml, { band: false });
     expect(alone.song).toEqual({ ...first.song, id: alone.song.id, band: undefined });
     expect(alone.warnings.join(' ')).toMatch(/Imported "Flute"; the file has 2 parts – choose others to import them instead/);
+    // a cello part is a cello now
     const second = check(importMusicXml(xml, { partIds: ['P2'] }));
-    expect(second.staves).toEqual([{ clef: 'bass', hand: 'L', voices: ['C3/w |'] }]);
+    expect(second.instrument).toBe('cello');
+    expect(second.staves).toEqual([{ clef: 'bass', voices: ['C3/w |'] }]);
     const both = check(importMusicXml(xml, { partIds: ['P1', 'P2'], instrument: 'mallets' }));
     expect(both.staves.map(s => s.name)).toEqual(['Flute', 'Cello']);
     expect(() => importMusicXml(xml, { partIds: ['nope'] })).toThrow(/None of the requested parts/);

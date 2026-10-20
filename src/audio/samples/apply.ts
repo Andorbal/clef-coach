@@ -10,7 +10,7 @@ import { synth } from '../synth';
 import { gmSampler, samplerFor } from './manager';
 import { sampleBudget, setSampleBudget } from './sampler';
 
-const VOICES: SynthVoiceId[] = ['piano', 'epiano', 'guitar', 'ukulele', 'bass', 'marimba', 'xylophone', 'glockenspiel', 'vibraphone'];
+const VOICES: SynthVoiceId[] = ['piano', 'epiano', 'guitar', 'ukulele', 'bass', 'marimba', 'xylophone', 'glockenspiel', 'vibraphone', 'violin', 'viola', 'cello', 'doublebass'];
 
 /** The GM program closest to each of the app's instruments (for "use the bank's own"). */
 export const VOICE_PROGRAM: Record<SynthVoiceId, number> = {
@@ -23,6 +23,10 @@ export const VOICE_PROGRAM: Record<SynthVoiceId, number> = {
   xylophone: 14,
   glockenspiel: 10,
   vibraphone: 12,
+  violin: 41,
+  viola: 42,
+  cello: 43,
+  doublebass: 44,
 };
 
 let applied = '';

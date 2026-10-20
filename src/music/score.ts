@@ -5,15 +5,22 @@ import { type BaseDuration, type TimeSig, durationTicks, measureTicks } from './
 
 /**
  * Clefs. The "8vb" clefs are for instruments written an octave above their sound
- * (guitar: treble8vb, bass guitar: bass8vb); scores always hold sounding pitch.
+ * (guitar: treble8vb, bass guitar and double bass: bass8vb); scores always hold sounding
+ * pitch. The C clefs put middle C on the staff's middle line (alto: the viola) or on its
+ * fourth line (tenor: the cello's and bassoon's high register).
  */
-export type Clef = 'treble' | 'bass' | 'treble8vb' | 'bass8vb';
+export type Clef = 'treble' | 'bass' | 'treble8vb' | 'bass8vb' | 'alto' | 'tenor';
 export type Hand = 'R' | 'L';
 export type Instrument = InstrumentId;
 
-/** Treble or bass, ignoring any octave transposition. */
-export function clefBase(clef: Clef): 'treble' | 'bass' {
-  return clef === 'bass' || clef === 'bass8vb' ? 'bass' : 'treble';
+/** The clef's shape, ignoring any octave transposition. */
+export function clefBase(clef: Clef): 'treble' | 'bass' | 'alto' | 'tenor' {
+  return clef === 'bass' || clef === 'bass8vb' ? 'bass' : clef === 'alto' || clef === 'tenor' ? clef : 'treble';
+}
+
+/** Lower (bass-like) clefs: the left hand's on a piano, and a lower octave for computer keys. */
+export function isLowClef(clef: Clef): boolean {
+  return clef === 'bass' || clef === 'bass8vb' || clef === 'tenor';
 }
 
 /** Octaves the written notation sits above the sound. */

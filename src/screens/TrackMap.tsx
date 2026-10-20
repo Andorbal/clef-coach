@@ -8,6 +8,7 @@ import { getTrack } from '../curriculum';
 import type { LessonDef, LessonKind } from '../curriculum/types';
 import { activityLabel } from '../engine/labels';
 import { summarizeTrack, type LessonStatus } from '../engine/progress';
+import { TheoryLinks } from '../theory/ui/Links';
 import { useApp, useProfile } from '../state/store';
 import type { TrackId } from '../state/types';
 import './trackmap.css';
@@ -222,6 +223,7 @@ export default function TrackMap() {
                   </li>
                 ))}
               </ol>
+              <TheoryLinks trackId={track.id} lessonId={selected.lesson.id} />
               {selected.status === 'locked' ? (
                 <div className="locked-note">
                   <Lock size={16} />

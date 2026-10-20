@@ -43,6 +43,8 @@ export interface NotationViewProps {
   strings?: boolean;
   /** Show note-name labels: all notes, only the focused one, or none. */
   noteNames?: 'all' | 'focus' | 'none';
+  /** Text under particular notes (by note id) in place of their names: scale degrees, intervals, numerals. */
+  labels?: Record<string, string>;
   naming?: NoteNaming;
   ghosts?: GhostNote[];
   layout?: 'scroll' | 'center';
@@ -84,10 +86,11 @@ function NotationViewImpl(props: NotationViewProps) {
     className,
     onRendered,
     labelSpace,
+    labels,
   } = props;
 
   // reserve room under the staff when note names may be shown (so labels are never clipped)
-  const labelRoom = labelSpace || noteNames !== 'none' ? 18 : 0;
+  const labelRoom = labelSpace || noteNames !== 'none' || labels ? 18 : 0;
   const wrapRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const playheadRef = useRef<HTMLDivElement>(null);
@@ -236,18 +239,22 @@ function NotationViewImpl(props: NotationViewProps) {
   // Note names don't move with the playhead: build them only when they change, so a
   // tempo-mode frame (playhead and scroll only) stays cheap.
   const nameLabels = useMemo(() => {
-    if (!result || noteNames === 'none') return null;
+    if (!result || (noteNames === 'none' && !labels)) return null;
     return [...result.notes.values()].map(pos => {
       const el = elById.get(pos.id);
       if (!el || el.rest || el.tiePrev) return null;
-      if (noteNames === 'focus' && pos.id !== focusId) return null;
+      const custom = labels?.[pos.id];
+      if (custom === undefined && (noteNames === 'none' || (noteNames === 'focus' && pos.id !== focusId))) return null;
       const geom = result.staves[pos.staff];
       const lowest = Math.max(...el.pitches.map(p => yForPitch(geom, p, el.tick)));
       const fretted = isFretted(score.instrument);
       const fingerBelow = fingering && ((isKeyboard(score.instrument) && score.staves[pos.staff].hand === 'L') || fretted);
       const extra = fingerBelow ? 16 * (fretted && strings ? 1.4 : el.pitches.length) : 0;
-      const y = Math.max(geom.bottom + 26, lowest + 24) + extra;
-      const text = el.pitches.map(p => pitchLabel(p, naming)).reverse().join(' ');
+      // a label of our own sits below a down-stem too (notes above the middle line point their stems down)
+      const highest = Math.min(...el.pitches.map(p => yForPitch(geom, p, el.tick)));
+      const stemDown = custom !== undefined && el.base !== 'w' && (lowest + highest) / 2 < (geom.top + geom.bottom) / 2;
+      const y = Math.max(geom.bottom + 26, lowest + 24 + (stemDown ? 30 : 0)) + extra;
+      const text = custom ?? el.pitches.map(p => pitchLabel(p, naming)).reverse().join(' ');
       const st = states?.[pos.id];
       return (
         <g key={pos.id} className={`note-name ${st ? `nn-${st}` : ''}`} transform={`translate(${pos.x}, ${y})`}>
@@ -258,7 +265,7 @@ function NotationViewImpl(props: NotationViewProps) {
         </g>
       );
     });
-  }, [result, noteNames, elById, focusId, score, fingering, strings, naming, states]);
+  }, [result, noteNames, elById, focusId, score, fingering, strings, naming, states, labels]);
 
   const tempoMode = playheadTick !== undefined && playheadTick !== null;
   const centerPad = layout === 'center' && result ? Math.max(0, (box.w - result.width * scale) / 2) : 0;

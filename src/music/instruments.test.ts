@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { autoFinger } from './autofinger';
-import { fingerGuitarLine, positionsFor, stringsLowToHigh } from './guitar';
-import { INSTRUMENTS, TUNINGS, inputOffsetFor, micRangeFor, tuningFor, voiceFor } from './instruments';
+import { autoFinger, positionWindow } from './autofinger';
+import { fingerFor, fingerGuitarLine, positionsFor, stringsLowToHigh } from './guitar';
+import { INSTRUMENTS, TUNINGS, inputOffsetFor, instrumentFromId, isBowed, isPluckedFretted, micRangeFor, tuningFor, voiceFor } from './instruments';
 import { scoreFromText } from './parse';
 import { midiOfString } from './pitch';
 import { malletLabel, stickLine } from './sticking';
@@ -76,6 +76,82 @@ describe('fretted fingering on other tunings', () => {
     const s = autoFinger(scoreFromText({ id: 'b', instrument: 'bass', staves: [{ clef: 'bass8vb', voices: ['E1/q A1 D2 G2 |'] }] }));
     expect(s.tuning).toEqual(TUNINGS.bass4.open);
     expect(s.staves[0].voices[0].notes.map(n => n.strings?.[0])).toEqual([4, 3, 2, 1]);
+  });
+});
+
+describe('the violin family', () => {
+  const fingered = (instrument: 'violin' | 'viola' | 'cello' | 'doublebass', notes: string, position?: number) => {
+    const sc = autoFinger(scoreFromText({ id: 't', instrument, key: 'C', time: [4, 4], staves: [{ clef: INSTRUMENTS[instrument].clefs[0], voices: [notes] }] }), positionWindow(instrument, position));
+    return sc.staves[0].voices[0].notes.map(n => `${n.strings![0]}:${n.fingers![0]}`).join(' ');
+  };
+
+  it('is fretted, bowed and tuned in fifths (the double bass in fourths)', () => {
+    expect(tuningFor('violin').open).toEqual([76, 69, 62, 55]); // E A D G
+    expect(tuningFor('viola').open).toEqual([69, 62, 55, 48]); // A D G C
+    expect(tuningFor('cello').open).toEqual([57, 50, 43, 36]); // A D G C
+    expect(tuningFor('doublebass').open).toEqual([43, 38, 33, 28]); // G D A E
+    for (const id of ['violin', 'viola', 'cello', 'doublebass'] as const) {
+      expect(isBowed(id)).toBe(true);
+      expect(isPluckedFretted(id)).toBe(false);
+      expect(INSTRUMENTS[id].fretted?.fretless).toBe(true);
+      expect(voiceFor(id)).toBe(id);
+    }
+    expect(isPluckedFretted('guitar')).toBe(true);
+    expect(INSTRUMENTS.viola.clefs[0]).toBe('alto');
+    // track ids match by prefix: viola is not violin, the double bass is not the bass guitar
+    expect(instrumentFromId('viola-alto')).toBe('viola');
+    expect(instrumentFromId('violin-treble')).toBe('violin');
+    expect(instrumentFromId('doublebass-lines')).toBe('doublebass');
+    expect(instrumentFromId('bass-lines')).toBe('bass');
+  });
+
+  it('fingers a violin D major scale in first position: 0 1 2 3 on the D and A strings', () => {
+    expect(fingered('violin', 'D4/q E4 F#4 G4 | A4 B4 C#5 D5 |')).toBe('3:0 3:1 3:2 3:3 2:0 2:1 2:2 2:3');
+    // low 2 in C major: the same finger, a semitone lower
+    expect(fingered('violin', 'A4/q B4 C5 D5 |')).toBe('2:0 2:1 2:2 2:3');
+    // the 4th finger reaches the note an open string a fifth up would play
+    expect(fingered('violin', 'E5/q F#5 G#5 A5 | B5/w |')).toBe('1:0 1:1 1:2 1:3 1:4');
+  });
+
+  it('fingers the viola like the violin, a fifth lower', () => {
+    expect(fingered('viola', 'C3/q D3 E3 F3 | G3 A3 B3 C4 |')).toBe('4:0 4:1 4:2 4:3 3:0 3:1 3:2 3:3');
+  });
+
+  it('fingers a cello C major scale: a finger per semitone in first position', () => {
+    expect(fingered('cello', 'C2/q D2 E2 F2 | G2 A2 B2 C3 |')).toBe('4:0 4:1 4:3 4:4 3:0 3:1 3:3 3:4');
+  });
+
+  it('reaches the cello forward extension without shifting', () => {
+    // F♯ on the C string: the 4th finger stretches a semitone further
+    expect(fingered('cello', 'C2/q D2 E2 F#2 |')).toBe('4:0 4:1 4:3 4:4');
+  });
+
+  it('plays double stops on neighbouring strings', () => {
+    const res = fingerGuitarLine([{ midis: [m('D4'), m('B4')] }], { tuning: TUNINGS.violin.open, fingerSystem: 'violin', preferPosition: 2, maxFret: 7, bowed: true });
+    const strings = res[0].map(p => p.string).sort();
+    expect(strings[1] - strings[0]).toBe(1);
+  });
+
+  it('shifts once for a passage up the neck, not on every note', () => {
+    const notes = 'B5 C#6 D6 E6 D6 C#6 B5 A5'.split(' ').map(n => ({ midis: [m(n)], strings: [1] }));
+    const res = fingerGuitarLine(notes, { tuning: TUNINGS.violin.open, fingerSystem: 'violin', preferPosition: 2, maxFret: 14, bowed: true });
+    // after the first shift the hand settles in fifth position: C♯ 2, D 3, E 4 and back
+    expect(res.slice(1, 7).map(r => r[0].finger)).toEqual([2, 3, 4, 3, 2, 1]);
+  });
+
+  it('keeps notes out of reach on a sensible string', () => {
+    const res = fingerGuitarLine([{ midis: [m('C#3')] }], { tuning: TUNINGS.doublebass.open, fingerSystem: 'simandl', preferPosition: 1, maxFret: 4 });
+    expect(res[0][0].fret).toBeLessThanOrEqual(10);
+  });
+
+  it('keeps Simandl fingering higher up on a double bass than on a bass guitar', () => {
+    expect(fingerFor('simandl', 9, 11)).toBe(3);
+    expect(fingerFor('simandl', 9, 11, 12)).toBe(4);
+  });
+
+  it('fingers the double bass Simandl style (1 2 4)', () => {
+    // half position on the A string: B♭ 1, B 2, C 4
+    expect(fingered('doublebass', 'A1/q Bb1 B1 C2 |')).toBe('3:0 3:1 3:2 3:4');
   });
 });
 

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { ArrowRight, AudioWaveform, Brain, Dumbbell, Flame, Plus, Snowflake, Target } from 'lucide-react';
+import { ArrowRight, AudioWaveform, BookOpen, Brain, Dumbbell, Flame, Plus, SlidersHorizontal, Snowflake, Target } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { MobileSettingsButton } from '../components/Shell';
@@ -13,7 +13,7 @@ import { dayKey, lastNDays, parseDayKey } from '../state/dates';
 import { effectiveStreak } from '../state/logic';
 import { mastery } from '../state/srs';
 import { useApp, useDevice, useProfile } from '../state/store';
-import type { SynthProgress, TrackId } from '../state/types';
+import type { CourseProgress, SynthProgress, TrackId } from '../state/types';
 import './home.css';
 import { isIOS } from '../platform';
 
@@ -48,6 +48,40 @@ function useSynthNext(sp: SynthProgress | undefined) {
   return next;
 }
 
+/** Theory School's next lesson, loaded on demand like Synth School's. */
+function useTheoryNext(tp: CourseProgress | undefined) {
+  const [next, setNext] = useState<{ id: string; title: string } | null | undefined>(undefined);
+  useEffect(() => {
+    if (!tp) return;
+    let live = true;
+    import('../theory/course').then(m => {
+      const n = m.THEORY.nextLesson(tp);
+      if (live) setNext(n ? { id: n.lesson.id, title: n.lesson.title } : null);
+    });
+    return () => {
+      live = false;
+    };
+  }, [tp]);
+  return next;
+}
+
+/** Production School's next lesson, loaded on demand. */
+function useProductionNext(pp: CourseProgress | undefined) {
+  const [next, setNext] = useState<{ id: string; title: string } | null | undefined>(undefined);
+  useEffect(() => {
+    if (!pp) return;
+    let live = true;
+    import('../production/course').then(m => {
+      const n = m.PRODUCTION.nextLesson(pp);
+      if (live) setNext(n ? { id: n.lesson.id, title: n.lesson.title } : null);
+    });
+    return () => {
+      live = false;
+    };
+  }, [pp]);
+  return next;
+}
+
 export default function Home() {
   const profile = useProfile();
   const device = useDevice();
@@ -58,6 +92,8 @@ export default function Home() {
   const today = dayKey();
   const tracks = useMemo(() => (profile?.trackOrder ?? []).map(id => getTrack(id)).filter(Boolean) as NonNullable<ReturnType<typeof getTrack>>[], [profile?.trackOrder]);
   const synthNext = useSynthNext(profile?.synth);
+  const theoryNext = useTheoryNext(profile?.theory);
+  const productionNext = useProductionNext(profile?.production);
   if (!profile) return null;
 
   const active = getTrack(profile.activeTrackId ?? tracks[0]?.id ?? '') ?? tracks[0];
@@ -250,6 +286,18 @@ export default function Home() {
           </span>
           <ArrowRight size={18} className="quick-arrow" />
         </button>
+        <button className="quick-card card" onClick={() => navigate(profile.theory && theoryNext ? `/theory/lesson/${theoryNext.id}` : '/theory')}>
+          <span className="quick-icon blue">
+            <BookOpen size={22} />
+          </span>
+          <span className="quick-text">
+            <strong>Theory School</strong>
+            <span className="dim">
+              {!profile.theory ? 'Why music works, from the notes to harmony.' : theoryNext ? `Next: ${theoryNext.title}.` : theoryNext === null ? 'Course complete. Every track links back to it.' : 'Pick up where you left off.'}
+            </span>
+          </span>
+          <ArrowRight size={18} className="quick-arrow" />
+        </button>
         <button className="quick-card card" onClick={() => navigate(profile.synth && synthNext ? `/synth/lesson/${synthNext.id}` : '/synth')}>
           <span className="quick-icon pink">
             <AudioWaveform size={22} />
@@ -258,6 +306,18 @@ export default function Home() {
             <strong>Synth School</strong>
             <span className="dim">
               {!profile.synth ? 'Learn to use synthesizers, one knob at a time.' : synthNext ? `Next: ${synthNext.title}.` : synthNext === null ? 'Course complete. The Synth Lab is yours.' : 'Pick up where you left off.'}
+            </span>
+          </span>
+          <ArrowRight size={18} className="quick-arrow" />
+        </button>
+        <button className="quick-card card" onClick={() => navigate(profile.production && productionNext ? `/production/lesson/${productionNext.id}` : '/production')}>
+          <span className="quick-icon teal">
+            <SlidersHorizontal size={22} />
+          </span>
+          <span className="quick-text">
+            <strong>Production School</strong>
+            <span className="dim">
+              {!profile.production ? 'Learn to mix: levels, EQ, compression and space.' : productionNext ? `Next: ${productionNext.title}.` : productionNext === null ? 'Course complete. The Mix Lab is yours.' : 'Pick up where you left off.'}
             </span>
           </span>
           <ArrowRight size={18} className="quick-arrow" />

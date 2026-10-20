@@ -17,6 +17,10 @@ const RANGES = {
   bass: [28, 67], // 4-string E1 .. G4
   'mallets-two': [53, 89], // F3..F6: fits xylophone, vibraphone and marimba (written)
   'mallets-four': [45, 96], // marimba A2..C7
+  violin: [55, 93], // G3 .. A6
+  viola: [48, 86], // C3 .. D6
+  cello: [36, 77], // C2 .. F5
+  doublebass: [28, 55], // E1 .. G3 (sounding)
 } as const;
 
 describe('song library', () => {

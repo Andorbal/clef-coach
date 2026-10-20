@@ -19,7 +19,7 @@
  * times, and |: :| repeats are played out.
  */
 import { chordSymbolText, parseChordSymbol } from '../music/chords';
-import { type InstrumentId, TUNINGS, familyOf, instrumentDef } from '../music/instruments';
+import { type InstrumentId, TUNINGS, familyOf, instrumentDef, isBowed } from '../music/instruments';
 import { keyName } from '../music/keys';
 import type { SongDef } from '../music/parse';
 import { type BaseDuration, type TimeSig, durationTicks, measureTicks } from '../music/rhythm';
@@ -503,7 +503,7 @@ export function importTextTab(text: string, opts: TabOptions = {}): ImportResult
   // ---- which instrument: the string count (and names) of each system
   const byStrings = new Map<number, StringLine[][]>();
   for (const r of runs) byStrings.set(r.length, [...(byStrings.get(r.length) ?? []), r]);
-  const want = opts.instrument && familyOf(opts.instrument) === 'fretted' ? (opts.instrument as Fretted) : undefined;
+  const want = opts.instrument && familyOf(opts.instrument) === 'fretted' && !isBowed(opts.instrument) ? (opts.instrument as Fretted) : undefined;
   const setOf = (n: number) => stringSet(n, byStrings.get(n)![0].map(l => l.label), want);
   const partList: ImportPart[] = [...byStrings.keys()]
     .sort((a, b) => b - a)

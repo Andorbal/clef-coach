@@ -15,7 +15,7 @@
  *   - write drum hits as a voice, and keep the parts not chosen as the song's band.
  */
 import type { BandPartDef } from '../music/band';
-import { type InstrumentId, TUNINGS } from '../music/instruments';
+import { type InstrumentId, TUNINGS, isBowed, tuningFor } from '../music/instruments';
 import { type KeySig, keyAlterations, tonicOf } from '../music/keys';
 import { type SongDef, formatVoice } from '../music/parse';
 import { type Pitch, type Step, STEPS, STEP_SEMIS, midiOf, spellMidi } from '../music/pitch';
@@ -728,6 +728,7 @@ export function writeChordLine(changes: { tick: number; symbol: string | null }[
  * (5-string bass, low-G or baritone ukulele) closest to the file's own tuning.
  */
 export function appTuningFor(instrument: InstrumentId, source?: number[]): number[] {
+  if (isBowed(instrument)) return [...tuningFor(instrument).open];
   const options =
     instrument === 'bass' ? [TUNINGS.bass4.open, TUNINGS.bass5.open] : instrument === 'ukulele' ? [TUNINGS.ukuleleHighG.open, TUNINGS.ukuleleLowG.open, TUNINGS.ukuleleBaritone.open] : [TUNINGS.guitar.open];
   if (!source?.length) return options[0];
@@ -794,7 +795,12 @@ export function guessInstrument(names: string[], program?: number): InstrumentId
   const text = names.join(' ').toLowerCase();
   if (/ukulele|\buke\b/.test(text)) return 'ukulele';
   if (/marimba|xylo|glock|vibraphone|\bvibes?\b|vibraharp|mallet|orchestra bells|\bbells\b/.test(text)) return 'mallets';
-  if (/bass ?guitar|electric bass|e-?bass|fretless|acoustic bass|double ?bass|contrabass|upright bass|string bass|bajo|basse électrique|\bbass gtr\b/.test(text)) return 'bass';
+  if (/double ?bass|contra ?bass|contrabasso|kontrabass|upright bass|string bass|\bcb\b|\bcbs?\.|contrebasse/.test(text)) return 'doublebass';
+  if (/violoncell|\bcello|\bvc\b|\bvcl?\.|violoncelle/.test(text)) return 'cello';
+  // ("Alto" alone is a singer)
+  if (/viola\b|bratsche|\bvla\.?\b/.test(text) && !/viola da gamba|viol\b/.test(text)) return 'viola';
+  if (/violin|fiddle|geige|violon|violino|\bvln?\.|\bvn\b/.test(text)) return 'violin';
+  if (/bass ?guitar|electric bass|e-?bass|fretless|acoustic bass|bajo|basse électrique|\bbass gtr\b/.test(text)) return 'bass';
   if (/guit|gtr|gitarr|chitarra|guitare/.test(text)) return 'guitar';
   if (/piano|klavier|keyboard|\bkeys\b|pianoforte|clavier|harpsichord|cembalo|organ|orgel|rhodes|celest|accordion/.test(text)) return 'piano';
   if (program !== undefined) {
@@ -802,7 +808,11 @@ export function guessInstrument(names: string[], program?: number): InstrumentId
     if ([10, 12, 13, 14].includes(program)) return 'mallets';
     if (program >= 17 && program <= 24) return 'piano';
     if (program >= 25 && program <= 32) return 'guitar';
-    if ((program >= 33 && program <= 40) || program === 44) return 'bass';
+    if (program >= 33 && program <= 40) return 'bass';
+    if (program === 41 || program === 111) return 'violin';
+    if (program === 42) return 'viola';
+    if (program === 43) return 'cello';
+    if (program === 44) return 'doublebass';
   }
   // "Bass" alone is a bass guitar in a band score but a singer in a choir
   if (/^\s*bass\s*\d*\s*$/.test(text) && program === undefined) return 'bass';

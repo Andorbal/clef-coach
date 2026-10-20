@@ -19,7 +19,11 @@ export type TrackId =
   | 'bass-lines'
   | 'bass-fretboard'
   | 'mallets-two'
-  | 'mallets-four';
+  | 'mallets-four'
+  | 'violin-treble'
+  | 'viola-alto'
+  | 'cello-bass'
+  | 'doublebass-lines';
 
 export const TRACK_IDS: TrackId[] = [
   'piano-treble',
@@ -35,6 +39,10 @@ export const TRACK_IDS: TrackId[] = [
   'bass-fretboard',
   'mallets-two',
   'mallets-four',
+  'violin-treble',
+  'viola-alto',
+  'cello-bass',
+  'doublebass-lines',
 ];
 
 export interface ItemStat {
@@ -148,14 +156,21 @@ export interface SavedPatch {
   at: number;
 }
 
-/** Synth School: lesson results and saved patches. */
-export interface SynthProgress {
+/** A course's lesson results (Synth School, Theory School, Production School). */
+export interface CourseProgress {
   startedAt: number;
   lastAt: number;
-  /** By lesson id (src/synthlab/course). */
+  /** By lesson id (each course's own ids, e.g. src/theory/course). */
   lessons: Record<string, LessonProgress>;
+}
+
+/** Synth School: lesson results and saved patches. */
+export interface SynthProgress extends CourseProgress {
   patches?: SavedPatch[];
 }
+
+/** The courses that keep only lesson results (Synth School keeps patches too). */
+export type CourseId = 'theory' | 'production';
 
 export interface Profile {
   id: string;
@@ -177,6 +192,10 @@ export interface Profile {
   songs?: Record<string, SongProgress>;
   /** Synth School progress (absent until the first synth lesson). */
   synth?: SynthProgress;
+  /** Theory School progress (absent until the first theory lesson). */
+  theory?: CourseProgress;
+  /** Production School progress (absent until the first production lesson). */
+  production?: CourseProgress;
 }
 
 export interface PersistedData {

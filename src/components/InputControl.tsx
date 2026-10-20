@@ -5,7 +5,7 @@ import { micInput } from '../audio/input/mic';
 import { unlockAudio } from '../audio/context';
 import { useApp, useDevice } from '../state/store';
 import { pitchToString, spellMidi } from '../music/pitch';
-import { type InstrumentId, familyOf, instrumentDef } from '../music/instruments';
+import { type InstrumentId, familyOf, instrumentDef, isBowed } from '../music/instruments';
 import type { InputMode } from '../state/types';
 import { Modal } from './ui';
 import './InputControl.css';
@@ -74,6 +74,12 @@ function micBody(instrument: InstrumentId): string {
       return 'Play your marimba, xylophone, glockenspiel or vibraphone near the device. Set which one in Settings so the octave is right.';
     case 'bass':
       return 'Play your bass near the device — unplugged works, or through an amp. Low notes need a quiet room.';
+    case 'violin':
+    case 'viola':
+    case 'cello':
+      return `Play your ${instrumentDef(instrument).short.toLowerCase()} near the device, bowed or plucked. One note at a time is heard best.`;
+    case 'doublebass':
+      return 'Play your double bass near the device, bowed or plucked. Low notes need a quiet room.';
     default:
       return `Play your ${instrumentDef(instrument).short.toLowerCase()} near the device — acoustic or amplified.`;
   }
@@ -117,7 +123,7 @@ export function InputPicker({ instrument, onPicked }: { instrument: InstrumentId
     {
       mode: 'touch',
       title: 'On-screen',
-      body: familyOf(instrument) === 'fretted' ? 'Tap the fretboard.' : familyOf(instrument) === 'mallet' ? 'Tap the bars (or use your computer keys: A W S E D F…).' : 'Tap the keyboard (or use your computer keys: A W S E D F…).',
+      body: familyOf(instrument) === 'fretted' ? (isBowed(instrument) ? 'Tap the fingerboard.' : 'Tap the fretboard.') : familyOf(instrument) === 'mallet' ? 'Tap the bars (or use your computer keys: A W S E D F…).' : 'Tap the keyboard (or use your computer keys: A W S E D F…).',
       icon: familyOf(instrument) === 'keyboard' ? Piano : Keyboard,
     },
   ];

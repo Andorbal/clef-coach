@@ -3,8 +3,18 @@ import type { TrackDef } from '../curriculum/types';
 /** The track's emblem: a clef glyph (Bravura) in a lit, tinted medallion. */
 export function TrackBadge({ track, size = 56 }: { track: TrackDef; size?: number }) {
   const bass = track.clef === 'bass' || track.clef === 'bass8vb';
-  const glyph =
-    bass ? (track.clef === 'bass8vb' ? '' : '') : track.clef === 'grand' || track.clef === 'fretboard' || track.clef === 'chords' ? null : track.clef === 'treble8vb' ? '' : '';
+  const cClef = track.clef === 'alto' || track.clef === 'tenor';
+  const glyph = cClef
+    ? ''
+    : bass
+      ? track.clef === 'bass8vb'
+        ? ''
+        : ''
+      : track.clef === 'grand' || track.clef === 'fretboard' || track.clef === 'chords'
+        ? null
+        : track.clef === 'treble8vb'
+          ? ''
+          : '';
   const strings = track.instrument === 'ukulele' || track.instrument === 'bass' ? 4 : 6;
   return (
     <span
@@ -18,7 +28,7 @@ export function TrackBadge({ track, size = 56 }: { track: TrackDef; size?: numbe
       aria-hidden
     >
       {glyph && (
-        <span className="track-badge-glyph" style={{ fontSize: size * (bass ? 0.5 : 0.62), marginTop: bass ? -size * 0.12 : size * 0.02 }}>
+        <span className="track-badge-glyph" style={{ fontSize: size * (bass ? 0.5 : cClef ? 0.46 : 0.62), marginTop: bass ? -size * 0.12 : cClef ? size * 0.04 : size * 0.02 }}>
           {glyph}
         </span>
       )}

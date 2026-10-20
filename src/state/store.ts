@@ -3,9 +3,12 @@ import {
   type LessonOutcome,
   type OutcomeReport,
   type SynthOutcome,
+  type CourseOutcome,
   addTrack,
+  applyCourseOutcome,
   applyOutcome,
   applySynthOutcome,
+  courseTestOut,
   deleteSynthPatch,
   saveSynthPatch,
   synthTestOut,
@@ -28,6 +31,7 @@ import {
   type ProfileSettings,
   type SavedPatch,
   type TrackId,
+  type CourseId,
 } from './types';
 
 const DATA_KEY = 'clefcoach.data.v1';
@@ -98,6 +102,10 @@ interface AppState {
   synthTestOut: (lessonIds: string[]) => void;
   saveSynthPatch: (p: SavedPatch) => void;
   deleteSynthPatch: (id: string) => void;
+  /** Record a finished Theory or Production School lesson. */
+  recordCourseOutcome: (course: CourseId, o: CourseOutcome) => OutcomeReport | null;
+  /** Mark a course's lessons done (a checkpoint passed early). */
+  courseTestOut: (course: CourseId, lessonIds: string[]) => void;
 }
 
 function initialData(): PersistedData {
@@ -236,6 +244,14 @@ export const useApp = create<AppState>((set, get) => {
     synthTestOut: ids => mutateProfile(p => synthTestOut(p, ids)),
     saveSynthPatch: patch => mutateProfile(p => saveSynthPatch(p, patch)),
     deleteSynthPatch: id => mutateProfile(p => deleteSynthPatch(p, id)),
+    recordCourseOutcome: (course, o) => {
+      const p = get().profile();
+      if (!p) return null;
+      const report = applyCourseOutcome(p, course, o);
+      mutateProfile(() => report.profile);
+      return report;
+    },
+    courseTestOut: (course, ids) => mutateProfile(p => courseTestOut(p, course, ids)),
   };
 });
 

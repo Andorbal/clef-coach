@@ -84,6 +84,12 @@
   border: 1px solid rgba(255, 126, 182, 0.35);
 }
 
+.synth-learn-badge.blue {
+  color: #7fb4ff;
+  background: radial-gradient(120% 120% at 30% 20%, rgba(127, 180, 255, 0.3), rgba(127, 180, 255, 0.08));
+  border-color: rgba(127, 180, 255, 0.35);
+}
+
 .synth-learn-badge.teal {
   color: var(--teal);
   background: radial-gradient(120% 120% at 30% 20%, rgba(60, 200, 200, 0.3), rgba(60, 200, 200, 0.08));

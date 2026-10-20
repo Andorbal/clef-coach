@@ -68,6 +68,10 @@ const DEFAULT_TRACKS: Record<InstrumentId, TrackId[]> = {
   ukulele: ['ukulele-chords', 'ukulele-treble'],
   bass: ['bass-lines', 'bass-fretboard'],
   mallets: ['mallets-two', 'mallets-four'],
+  violin: ['violin-treble'],
+  viola: ['viola-alto'],
+  cello: ['cello-bass'],
+  doublebass: ['doublebass-lines'],
 };
 
 function defaultPicks(instrs: Set<InstrumentId>): Set<TrackId> {

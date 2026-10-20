@@ -44,6 +44,8 @@ const pcLabel = (pc: number, flats = [1, 3, 6, 8, 10].includes(pc) && pc !== 6) 
 };
 
 const FRETTED: InstrumentId[] = ['guitar', 'ukulele', 'bass'];
+/** Every instrument with strings to tune. */
+const STRINGED: InstrumentId[] = ['guitar', 'ukulele', 'bass', 'violin', 'viola', 'cello', 'doublebass'];
 
 /** A track to hang a tool's practice on (the first one for the instrument). */
 function trackFor(instrument: InstrumentId, preferred?: string): TrackDef {
@@ -147,7 +149,7 @@ function tuningCaption(t: Tuning): string {
 
 export function Tuner() {
   const profile = useProfile();
-  const [instrument, setInstrument] = useState<InstrumentId>(useDefaultInstrument(FRETTED));
+  const [instrument, setInstrument] = useState<InstrumentId>(useDefaultInstrument(STRINGED));
   const [reading, setReading] = useState<{ freq: number; midi: number; cents: number; clarity: number } | null>(null);
   const [active, setActive] = useState(micInput.active);
   const [err, setErr] = useState<string | null>(null);
@@ -183,7 +185,7 @@ export function Tuner() {
   // strings from the lowest-numbered course on the left in pitch order, like a headstock read low → high
   const strings = tuning.open.map((m, i) => ({ m, n: i + 1 })).reverse();
   return (
-    <ToolShell title="Tuner" right={<InstrumentSwitch value={instrument} onChange={setInstrument} only={FRETTED} />}>
+    <ToolShell title="Tuner" right={<InstrumentSwitch value={instrument} onChange={setInstrument} only={STRINGED} />}>
       <div className="activity tuner">
         <div className={`tuner-dial card ${inTune ? 'in-tune' : ''}`}>
           <svg viewBox="-160 -150 320 170" className="tuner-svg">
@@ -255,7 +257,8 @@ interface GymKind {
   /** both hands: melody + accompaniment on a grand staff */
   grand?: boolean;
   track: TrackId;
-  ranges: { label: string; pool: string; accomp?: string }[];
+  /** `position`: the hand position to finger in (index-finger fret), when not the first */
+  ranges: { label: string; pool: string; accomp?: string; position?: number }[];
 }
 
 const GYM_KINDS: GymKind[] = [
@@ -314,6 +317,38 @@ const GYM_KINDS: GymKind[] = [
       { label: 'E and A strings', pool: 'E1 F1 G1 A1 B1 C2 D2' },
       { label: 'First position', pool: 'E1 F1 G1 A1 B1 C2 D2 E2 F2 G2 A2 B2 C3' },
       { label: 'Up to 5th position', pool: 'A1 B1 C2 D2 E2 F2 G2 A2 B2 C3 D3 E3' },
+    ],
+  },
+  {
+    id: 'violin', instrument: 'violin', label: '𝄞 Treble', clef: 'treble', track: 'violin-treble',
+    ranges: [
+      { label: 'D and A strings', pool: 'D4 E4 F4 G4 A4 B4 C5 D5' },
+      { label: 'First position', pool: 'G3 A3 B3 C4 D4 E4 F4 G4 A4 B4 C5 D5 E5 F5 G5 A5 B5' },
+      { label: 'Up to 3rd position', pool: 'G3 A3 B3 C4 D4 E4 F4 G4 A4 B4 C5 D5 E5 F5 G5 A5 B5 C6 D6', position: 5 },
+    ],
+  },
+  {
+    id: 'viola', instrument: 'viola', label: 'Alto clef', clef: 'alto', track: 'viola-alto',
+    ranges: [
+      { label: 'G and D strings', pool: 'G3 A3 B3 C4 D4 E4 F4 G4' },
+      { label: 'First position', pool: 'C3 D3 E3 F3 G3 A3 B3 C4 D4 E4 F4 G4 A4 B4 C5 D5 E5' },
+      { label: 'Up to 3rd position', pool: 'C3 D3 E3 F3 G3 A3 B3 C4 D4 E4 F4 G4 A4 B4 C5 D5 E5 F5 G5', position: 5 },
+    ],
+  },
+  {
+    id: 'cello', instrument: 'cello', label: '𝄢 Bass clef', clef: 'bass', track: 'cello-bass',
+    ranges: [
+      { label: 'G and D strings', pool: 'G2 A2 B2 C3 D3 E3 F3 G3' },
+      { label: 'First position', pool: 'C2 D2 E2 F2 G2 A2 B2 C3 D3 E3 F3 G3 A3 B3 C4 D4' },
+      { label: 'Up to 4th position', pool: 'C2 D2 E2 F2 G2 A2 B2 C3 D3 E3 F3 G3 A3 B3 C4 D4 E4 F4', position: 5 },
+    ],
+  },
+  {
+    id: 'doublebass', instrument: 'doublebass', label: '𝄢 Bass clef', clef: 'bass8vb', track: 'doublebass-lines',
+    ranges: [
+      { label: 'E and A strings', pool: 'E1 F1 G1 A1 B1 C2 D2' },
+      { label: 'Half and first position', pool: 'E1 F1 G1 A1 B1 C2 D2 E2 F2 G2 A2 B2' },
+      { label: 'Up to 4th position', pool: 'E1 F1 G1 A1 B1 C2 D2 E2 F2 G2 A2 B2 C3 D3', position: 5 },
     ],
   },
   {
@@ -388,7 +423,7 @@ export function Gym() {
       leapiness: 0.3,
       harmonic: rhythm > 0,
       fivePosition: instrument === 'piano' && pool.length === 5,
-      guitarPosition: 1,
+      guitarPosition: range.position,
       accomp: kind.grand ? { pattern: rhythm === 0 ? 'drone' : rhythm === 1 ? 'roots' : rhythm === 2 ? 'broken' : 'alberti', pool: poolInKey(range.accomp ?? 'C3 D3 E3 F3 G3 A3 B3 C4', key), fivePosition: instrument === 'piano' && rangeIdx === 0 } : undefined,
       mallets: instrument === 'mallets' ? (kind.grand ? 4 : 2) : undefined,
     };

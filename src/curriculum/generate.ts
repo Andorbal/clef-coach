@@ -4,8 +4,8 @@
  * of cells, leaps up to a limit, phrases that end on stable notes, and (for the grand
  * staff) a left-hand part that follows the harmony.
  */
-import { type InstrumentId, type InstrumentPrefs, instrumentDef } from '../music/instruments';
-import { autoFinger } from '../music/autofinger';
+import { type InstrumentId, type InstrumentPrefs, instrumentDef, isBowed } from '../music/instruments';
+import { autoFinger, positionWindow } from '../music/autofinger';
 import { fingerPianoLine, scaleFingering } from '../music/fingering';
 import { type KeySig, parseKey, scalePitches, tonicOf, keyAlterations, type ScaleKind } from '../music/keys';
 import { type Pitch, diatonicIndex, fromDiatonic, midiOf, parsePitch, pitchClass } from '../music/pitch';
@@ -568,7 +568,7 @@ export function generateScore(gen: MelodyGen, rng: Rng = makeRng(), instrument: 
       }
     });
   } else {
-    autoFinger(score, { ...prefs, guitarPosition: gen.guitarPosition ?? 1, maxFret: Math.max(5, (gen.guitarPosition ?? 1) + 4) });
+    autoFinger(score, { ...prefs, ...positionWindow(instrument, gen.guitarPosition) });
   }
   return score;
 }
@@ -604,7 +604,7 @@ export function scaleScore(opts: {
   const id = `scale${++genCounter}`;
   const time: TimeSig = [4, 4];
   const base: BaseDuration = opts.rhythm ?? 'q';
-  const rhOct = opts.octave ?? (opts.instrument === 'guitar' ? 3 : opts.instrument === 'bass' ? 2 : 4);
+  const rhOct = opts.octave ?? ({ guitar: 3, bass: 2, viola: 3, cello: 2, doublebass: 1 } as Partial<Record<InstrumentId, number>>)[opts.instrument] ?? 4;
   const mkLine = (oct: number, dir: 'up' | 'down') => {
     const up = scalePitches(tonic, oct, opts.kind, opts.octaves);
     const line = dir === 'up' ? [...up, ...up.slice(0, -1).reverse()] : [...[...up].reverse(), ...up.slice(1)];
@@ -638,7 +638,8 @@ export function scaleScore(opts: {
     staves.push({ clef, voices: [buildVoice(toSpecs(line), time, `${id}-g`)] });
     const s: Score = { id, title: '', key, time, tempo: 80, measures: 0, staves, instrument: opts.instrument, mallets: opts.instrument === 'mallets' ? opts.mallets ?? 2 : undefined };
     s.measures = Math.max(...staves[0].voices[0].notes.map(n => n.measure)) + 1;
-    return autoFinger(s, { ...opts.prefs, guitarPosition: opts.guitarPosition ?? 1, maxFret: (opts.guitarPosition ?? 1) + 5 });
+    const win = positionWindow(opts.instrument, opts.guitarPosition);
+    return autoFinger(s, { ...opts.prefs, guitarPosition: win.guitarPosition, maxFret: win.maxFret + (isBowed(opts.instrument) ? 0 : 1) });
   }
   const upDown = (hand: Hand) => {
     const up = scaleFingering(tk, opts.kind, hand, opts.octaves);
