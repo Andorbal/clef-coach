@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { analyseMix, renderMix } from './analyse';
 import { Judge, PASS_MARK } from './judge';
 import { type Mix, makeMix } from './params';
 import { getSession } from './sessions';
@@ -59,6 +60,27 @@ describe('the judge', () => {
     const j = new Judge({ stems: uneven, channels, sampleRate: SR, tempo: s.tempo, start: rough, target: at(rough, comp) });
     expect(j.score(rough).overall).toBeLessThan(PASS_MARK);
     expect(j.score(at(rough, { ...comp, 'bass:threshold': -24, 'bass:ratio': 5 })).overall).toBeGreaterThan(PASS_MARK);
+  });
+
+  it('says which way the tone is off: a low boost is too much low end, not too little of the rest', () => {
+    const j = judge(rough, at(rough, { 'guitar:lowGain': 0 }));
+    const spec = { aspects: ['tone' as const] };
+    const boomy = new Judge({ stems, channels, sampleRate: SR, tempo: s.tempo, start: at(rough, { 'guitar:lowGain': 9, 'guitar:lowFreq': 150 }), target: rough, spec });
+    expect(boomy.score(at(rough, { 'guitar:lowGain': 9, 'guitar:lowFreq': 150 })).worst?.hint).toMatch(/too much low end/);
+    const thin = new Judge({ stems, channels, sampleRate: SR, tempo: s.tempo, start: rough, target: at(rough, { 'keys:lowGain': 10, 'keys:lowFreq': 200 }), spec });
+    expect(thin.score(rough).worst?.hint).toMatch(/too little low end/);
+    void j;
+  });
+
+  it('reads dynamics smoothly: a few ms of attack moves the snare a little, not a lot', () => {
+    const comp = (attack: number) => at(rough, { 'snare:compOn': 1, 'snare:threshold': -30, 'snare:ratio': 6, 'snare:attack': attack, 'snare:makeup': 6 });
+    const ranges = [40, 43, 46, 50].map(a => analyseMix(renderMix(stems, channels, comp(a), SR, s.tempo), comp(a)).channels.snare.range);
+    for (let i = 1; i < ranges.length; i++) expect(Math.abs(ranges[i] - ranges[i - 1]), ranges.map(r => r.toFixed(1)).join(' ')).toBeLessThan(1);
+    // and a fast attack against a slow one is heard as blunted hits
+    const j = new Judge({ stems, channels, sampleRate: SR, tempo: s.tempo, start: comp(1), target: comp(30), spec: { aspects: ['dynamics'], channels: ['snare'] } });
+    expect(j.score(comp(1)).overall).toBeLessThan(PASS_MARK);
+    expect(j.score(comp(1)).worst?.hint).toMatch(/attack/);
+    expect(j.score(comp(26)).overall).toBeGreaterThan(PASS_MARK);
   });
 
   it('judges space', () => {

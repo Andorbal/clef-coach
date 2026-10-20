@@ -35,7 +35,7 @@ test('paste a text tab, read it in another time signature, hand it to Claude', a
   await page.getByRole('button', { name: /Read it with Claude/ }).click();
   await expect(page.getByRole('heading', { name: /Scan with Claude/ })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Tab as text' })).toHaveValue(TAB);
-  await expect(page.getByRole('radio', { name: /Guitar/ })).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByRole('combobox', { name: 'Instrument' })).toHaveValue('guitar');
   expect(errors).toEqual([]);
 });
 

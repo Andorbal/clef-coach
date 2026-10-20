@@ -124,6 +124,20 @@
   flex-shrink: 0;
 }
 
+.pr-strip.bare {
+  flex: 0 0 54px;
+  padding-inline: 3px;
+}
+
+.pr-strip.bare .pr-strip-name {
+  font-size: 10.5px;
+  padding-inline: 2px;
+}
+
+.pr-strip.bare .pr-fader.placeholder {
+  display: none;
+}
+
 .pr-strip.selected {
   border-color: color-mix(in srgb, var(--c) 55%, transparent);
   background: color-mix(in srgb, var(--c) 6%, rgba(255, 255, 255, 0.035));

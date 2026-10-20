@@ -22,7 +22,7 @@ measurements and history are in `docs/performance.md`. The song file format is i
 | What | Command | Notes |
 |---|---|---|
 | Dev server | `npm run dev` | http://localhost:5173. `npm run dev:lan` serves HTTPS on the LAN for a real iPad (the mic needs a secure context). |
-| Unit tests | `npm test` | Vitest, Node environment, `src/**/*.test.ts`. About 1060 tests in ~16 s. One file: `npx vitest run src/notation/scroll.test.ts`. |
+| Unit tests | `npm test` | Vitest, Node environment, `src/**/*.test.ts`. About 1350 tests in ~30 s on 4 cores (Production School's course test, which runs every mix quiz through the judge, is the longest at ~19 s). One file: `npx vitest run src/notation/scroll.test.ts`. |
 | Typecheck | `npm run typecheck` | `tsc -b` over `src` (app), `vite.config.ts` (node) and `tools/**` (tools). **`e2e/` and `playwright.config.ts` are not typechecked.** |
 | Build | `npm run build` | `tsc -b && vite build` → `dist/`. About 2 s for the Vite part. |
 | E2E | `npm run e2e` | Playwright with the `ipad` (iPad Mini landscape) and `phone` (Pixel 7) projects, both Chromium. It starts its own dev server on **5188**. About 3.5 min for the whole suite; to run one spec: `npx playwright test band --project=ipad`. |

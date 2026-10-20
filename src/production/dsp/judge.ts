@@ -101,20 +101,29 @@ const REGIONS: { name: string; from: number; to: number }[] = [
 ];
 
 function toneError(mine: Float32Array, target: Float32Array): { err: number; region: string; more: boolean } {
+  // the bands carrying energy (in either) matter; a band 40 dB down hardly does
+  const w = new Float64Array(BAND_FREQS.length);
+  const d = new Float64Array(BAND_FREQS.length);
   let sw = 0;
+  let sd = 0;
+  for (let b = 0; b < BAND_FREQS.length; b++) {
+    w[b] = Math.pow(10, Math.max(target[b], mine[b]) / 20);
+    d[b] = mine[b] - target[b];
+    sw += w[b];
+    sd += w[b] * d[b];
+  }
+  // shapes, not levels: each spectrum is measured against its loudest band, so a boost in
+  // the lows pulls everything else down with it; take the average difference out, and the
+  // boost reads as too much low end rather than too little everything else
+  const mean = sw > 0 ? sd / sw : 0;
   let se = 0;
   const regionDiff = REGIONS.map(() => ({ w: 0, d: 0 }));
   for (let b = 0; b < BAND_FREQS.length; b++) {
-    const t = target[b];
-    const m = mine[b];
-    // the bands carrying energy (in either) matter; a band 40 dB down hardly does
-    const w = Math.pow(10, Math.max(t, m) / 20);
-    const d = Math.max(-15, Math.min(15, m - t));
-    sw += w;
-    se += w * d * d;
-    const r = REGIONS.findIndex(x => BAND_FREQS[b] >= x.from && BAND_FREQS[b] < x.to);
-    regionDiff[r].w += w;
-    regionDiff[r].d += w * d;
+    const x = Math.max(-15, Math.min(15, d[b] - mean));
+    se += w[b] * x * x;
+    const r = REGIONS.findIndex(g => BAND_FREQS[b] >= g.from && BAND_FREQS[b] < g.to);
+    regionDiff[r].w += w[b];
+    regionDiff[r].d += w[b] * x;
   }
   let worst = 0;
   let worstVal = 0;
@@ -182,7 +191,7 @@ export function compareMixes(mine: MixFeatures, target: MixFeatures | null, spec
         const e = toneError(m.bands, t.bands);
         items.push({ aspect: 'tone', where: id, score: score(e.err, TOL.tone), hint: `${name(id)} ${has(id)} too ${e.more ? 'much' : 'little'} ${e.region}.` });
       }
-      if (want.has('dynamics')) items.push(dynamicsItem(id, m, t, name, is(id)));
+      if (want.has('dynamics')) items.push(dynamicsItem(id, m, t, name, is(id), attackOff(mine.mix, target.mix, id)));
       if (want.has('space')) {
         for (const fx of ['reverb', 'delay'] as const) {
           const wm = finite(wetLevel(mine.mix, id, fx), -40);
@@ -212,11 +221,25 @@ export function compareMixes(mine: MixFeatures, target: MixFeatures | null, spec
   return { overall, aspects, items, worst };
 }
 
-function dynamicsItem(id: string, m: ChannelFeatures, t: ChannelFeatures, name: (id: string) => string, is: string): Item {
+/**
+ * Is the compressor's attack what's different (both on, the same amount of squeeze, an
+ * attack far from the target's)? A fast attack flattens the level as well as the hits, so
+ * the sound alone can't tell the two apart; the hint then names the attack.
+ */
+function attackOff(mine: Mix, target: Mix, id: string): boolean {
+  const g = (m: Mix, p: string) => m[`${id}:${p}`] ?? 0;
+  if (g(mine, 'compOn') < 0.5 || g(target, 'compOn') < 0.5) return false;
+  const ratio = Math.max(g(mine, 'attack'), 0.1) / Math.max(g(target, 'attack'), 0.1);
+  return (ratio > 1.6 || ratio < 1 / 1.6) && Math.abs(g(mine, 'threshold') - g(target, 'threshold')) < 4 && Math.abs(Math.log(g(mine, 'ratio') / g(target, 'ratio'))) < 0.4;
+}
+
+function dynamicsItem(id: string, m: ChannelFeatures, t: ChannelFeatures, name: (id: string) => string, is: string, attack: boolean): Item {
   const dr = m.range - t.range;
   const dc = m.crest - t.crest;
   const sr = score(dr, TOL.range);
   const sc = score(dc, TOL.crest);
+  if (attack && Math.abs(dc) > TOL.crest * 0.5)
+    return { aspect: 'dynamics', where: id, score: Math.min(sr, sc), hint: dc > 0 ? `${name(id)}’s hits are sharper than the target’s: a faster attack catches more of each one.` : `${name(id)}’s hits are blunter than the target’s: a slower attack lets the start of each one through.` };
   if (sr <= sc)
     return { aspect: 'dynamics', where: id, score: sr, hint: dr > 0 ? `${name(id)}’s level still jumps around more than the target’s: compress it harder (a lower threshold, or a higher ratio).` : `${name(id)} ${is} squashed flatter than the target: ease off the compression.` };
   return { aspect: 'dynamics', where: id, score: sc, hint: dc > 0 ? `${name(id)}’s hits are sharper than the target’s: a faster attack catches more of each one.` : `${name(id)}’s hits are blunter than the target’s: a slower attack lets the start of each one through.` };
@@ -240,6 +263,8 @@ function fxItems(mine: Mix, target: Mix): Item[] {
     out.push({ aspect: 'space', where: 'fx', score: score(db, TOL.beats), hint: `The echoes come ${db > 0 ? 'later' : 'sooner'} than the target’s (delay time).` });
     const df = v(mine, 'fx:delayFeedback') - v(target, 'fx:delayFeedback');
     out.push({ aspect: 'space', where: 'fx', score: score(df, TOL.feedback), hint: `The echoes repeat ${df > 0 ? 'more' : 'less'} than the target’s (feedback).` });
+    const dt = v(mine, 'fx:delayTone') - v(target, 'fx:delayTone');
+    out.push({ aspect: 'space', where: 'fx', score: score(dt, TOL.fxTone), hint: `The echoes are ${dt > 0 ? 'brighter' : 'darker'} than the target’s (delay tone).` });
   }
   return out;
 }

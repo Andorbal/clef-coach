@@ -20,7 +20,7 @@ export interface ChannelFeatures {
   loud: number;
   /** Spectrum shape: third-octave band levels (dB) relative to the loudest band. */
   bands: Float32Array;
-  /** How much the level moves: the spread (dB) of 100 ms windows between the 10th and 90th percentile, over the playing parts. */
+  /** How much the level moves: the loudness-weighted spread (dB) of its 100 ms windows. */
   range: number;
   /** Peak over RMS (dB) of the playing parts: sharp transients make it high. */
   crest: number;
@@ -67,13 +67,14 @@ function windows(pow: Float32Array, sr: number): number[] {
   return out;
 }
 
-function percentile(xs: number[], p: number): number {
-  if (!xs.length) return 0;
-  const s = [...xs].sort((a, b) => a - b);
-  return s[Math.min(s.length - 1, Math.max(0, Math.round(p * (s.length - 1))))];
-}
-
-/** Dynamics of a signal: spread of its playing windows, and its crest factor. */
+/**
+ * Dynamics of a signal: how much its level moves, and its crest factor.
+ *
+ * The movement is the spread of 100 ms window levels, each window weighted by its
+ * loudness (as amplitude): the notes and hits count, the tails between them hardly do.
+ * A gate and percentiles did the same job but jumped as windows crossed the gate (a
+ * snare's attack moved 3 ms and its reading by 2 dB).
+ */
 function dynamics(x: Float32Array, sr: number): { range: number; crest: number } {
   const sq = new Float32Array(x.length);
   let peak = 0;
@@ -84,10 +85,24 @@ function dynamics(x: Float32Array, sr: number): { range: number; crest: number }
   }
   const win = windows(sq, sr);
   const top = Math.max(...win);
-  // the playing parts: windows within 30 dB of the loudest (rests and tails don't count)
-  const active = win.filter(v => v > top - 30);
-  const ms = active.reduce((s, v) => s + Math.pow(10, v / 10), 0) / Math.max(1, active.length);
-  return { range: percentile(active, 0.9) - percentile(active, 0.1), crest: peak > 0 ? 20 * Math.log10(peak) - db(ms) : 0 };
+  let sw = 0;
+  let sl = 0;
+  let sp = 0;
+  for (const v of win) {
+    if (v < top - 60) continue;
+    const w = Math.pow(10, (v - top) / 20);
+    sw += w;
+    sl += w * v;
+    sp += w * Math.pow(10, v / 10);
+  }
+  const mean = sw > 0 ? sl / sw : 0;
+  let sv = 0;
+  for (const v of win) {
+    if (v < top - 60) continue;
+    sv += Math.pow(10, (v - top) / 20) * (v - mean) ** 2;
+  }
+  // twice the standard deviation: about the spread from the quieter notes to the louder
+  return { range: sw > 0 ? 2 * Math.sqrt(sv / sw) : 0, crest: peak > 0 && sp > 0 ? 20 * Math.log10(peak) - db(sp / sw) : 0 };
 }
 
 /** Third-octave spectrum shape (dB relative to its loudest band). */

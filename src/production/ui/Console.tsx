@@ -56,6 +56,13 @@ export function Console({ api, visible, fresh, ghost, highlight, transport, auto
   };
   // every track keeps its strip (its meter is part of the picture), controls or not
   const showStrips = api.tracks;
+  const anyChannel = [...visible].some(k => !k.startsWith('master:') && !k.startsWith('fx:'));
+  const stripsRef = useRef<HTMLDivElement>(null);
+  // a lesson on the master or the effects: bring them into view (they sit at the end, as on a desk)
+  useEffect(() => {
+    const el = stripsRef.current;
+    if (el && !anyChannel && (showFx || showMaster)) el.scrollLeft = el.scrollWidth;
+  }, [anyChannel, showFx, showMaster]);
   const mix = api.mix;
   const isFresh = (k: string) => !!fresh?.has(k);
   return (
@@ -82,7 +89,7 @@ export function Console({ api, visible, fresh, ghost, highlight, transport, auto
           )}
         </div>
       )}
-      <div className="pr-strips">
+      <div className="pr-strips" ref={stripsRef}>
         {showStrips.map(t => (
           <Strip key={t.id} track={t} mix={mix} set={api.set} visible={visible} fresh={fresh} ghost={ghost} api={api} hint={highlight === t.id} selected={t.id === sel} onSelect={editable(t.id) ? () => select(t.id) : undefined} />
         ))}
@@ -318,9 +325,11 @@ const Strip = memo(
     const anySolo = Object.keys(mix).some(x => x.endsWith(':solo') && mix[x] > 0.5);
     const silenced = mix[k('mute')] > 0.5 || (anySolo && !(mix[k('solo')] > 0.5));
     const read = useMemo(() => (m: MeterSnapshot): [number, number] => [m.channels[id]?.peak ?? 0, 0], [id]);
+    // nothing to touch on this strip in this lesson: just its name and meter, narrow
+    const bare = !Object.keys(CHANNEL_PARAMS).some(p => has(p));
     const readIn = useMemo(() => (m: MeterSnapshot): [number, number] => [m.channels[id]?.input ?? 0, 0], [id]);
     return (
-      <div className={`pr-strip ${hint ? 'is-hint' : ''} ${selected ? 'selected' : ''} ${silenced ? 'silenced' : ''}`} style={{ ['--c' as string]: c }} data-strip={id}>
+      <div className={`pr-strip ${hint ? 'is-hint' : ''} ${selected ? 'selected' : ''} ${silenced ? 'silenced' : ''} ${bare ? 'bare' : ''}`} style={{ ['--c' as string]: c }} data-strip={id}>
         <button className="pr-strip-name" onClick={onSelect} disabled={!onSelect} title={track.name}>
           {track.short ?? track.name}
         </button>
