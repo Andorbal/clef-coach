@@ -70,12 +70,14 @@ function stickingBreaks(pp: NoteEl | null, p: NoteEl, n: NoteEl): boolean {
  * positions: bass guitar fingered without a third finger anywhere, and the double bass);
  * or the violin's, where the 2nd and 3rd fingers each have a low and a high place.
  */
-type HandSystem = 'one-per-fret' | 'simandl' | 'violin';
+type HandSystem = 'one-per-fret' | 'simandl' | 'simandl-12' | 'violin';
 
 function handSystem(score: Score, notes: NoteEl[]): HandSystem {
   const bowed = instrumentDef(score.instrument).bowed;
   if (bowed?.fingers === 'violin') return 'violin';
-  if (score.instrument === 'doublebass' || (score.instrument === 'bass' && !notes.some(n => n.fingers?.includes(3)))) return 'simandl';
+  // the double bass keeps 1-2-4 up to thumb position, the bass guitar up to the 7th
+  if (score.instrument === 'doublebass') return 'simandl-12';
+  if (score.instrument === 'bass' && !notes.some(n => n.fingers?.includes(3))) return 'simandl';
   return 'one-per-fret';
 }
 
@@ -88,7 +90,7 @@ function indexFrets(fret: number, finger: number, system: HandSystem): [number, 
     const [lo, hi] = VIOLIN_OFFSETS[finger] ?? [finger - 1, finger - 1];
     return [fret - hi, fret - lo];
   }
-  if (system === 'simandl' && finger === 4 && fret - 2 < 7) return [fret - 2, fret - 2];
+  if ((system === 'simandl' || system === 'simandl-12') && finger === 4 && fret - 2 < (system === 'simandl' ? 7 : 12)) return [fret - 2, fret - 2];
   return [fret - finger + 1, fret - finger + 1];
 }
 

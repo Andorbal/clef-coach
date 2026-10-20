@@ -1,6 +1,6 @@
 import { fingerPianoLine } from './fingering';
 import { type FingerSystem, fingerFor, fingerGuitarLine } from './guitar';
-import { type InstrumentId, type InstrumentPrefs, familyOf, instrumentDef, tuningFor } from './instruments';
+import { type InstrumentId, type InstrumentPrefs, familyOf, instrumentDef, isBowed, tuningFor } from './instruments';
 import { midiOf } from './pitch';
 import type { Score } from './score';
 import { stickLine } from './sticking';
@@ -31,7 +31,7 @@ export function defaultPosition(instrument: InstrumentId): number {
 
 /** The finger for a fret in the instrument's first position (a violin's 2nd fret is its 1st finger). */
 export function firstPositionFinger(instrument: InstrumentId, fret: number): number {
-  return fingerFor(fingerSystemFor(instrument), defaultPosition(instrument), fret);
+  return fingerFor(fingerSystemFor(instrument), defaultPosition(instrument), fret, instrument === 'doublebass' ? 12 : 7);
 }
 
 /**
@@ -43,7 +43,7 @@ export function positionWindow(instrument: InstrumentId, position?: number): { g
   const pos = position ?? defaultPosition(instrument);
   const bowed = instrumentDef(instrument).bowed;
   if (!bowed) return { guitarPosition: pos, maxFret: Math.max(5, pos + 4) };
-  const reach = bowed.fingers === 'violin' ? 5 : bowed.fingers === 'one-per-fret' ? 4 : 3;
+  const reach = bowed.fingers === 'violin' ? 5 : bowed.fingers === 'cello' ? 4 : 3;
   return { guitarPosition: pos, maxFret: pos + reach };
 }
 
@@ -89,7 +89,14 @@ export function autoFinger(score: Score, opts: AutoFingerOptions = {}): Score {
         if (complete) return;
         const res = fingerGuitarLine(
           notes.map(n => ({ midis: n.pitches.map(midiOf), strings: n.strings })),
-          { preferPosition: opts.guitarPosition ?? defaultPosition(score.instrument), maxFret: opts.maxFret ?? 15, tuning: score.tuning, fingerSystem },
+          {
+            preferPosition: opts.guitarPosition ?? defaultPosition(score.instrument),
+            maxFret: opts.maxFret ?? 15,
+            tuning: score.tuning,
+            fingerSystem,
+            simandlUntil: score.instrument === 'doublebass' ? 12 : 7,
+            bowed: isBowed(score.instrument),
+          },
         );
         notes.forEach((n, i) => {
           n.strings = res[i].map(r => r.string);

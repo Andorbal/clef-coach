@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { autoFinger, positionWindow } from './autofinger';
-import { fingerGuitarLine, positionsFor, stringsLowToHigh } from './guitar';
+import { fingerFor, fingerGuitarLine, positionsFor, stringsLowToHigh } from './guitar';
 import { INSTRUMENTS, TUNINGS, inputOffsetFor, instrumentFromId, isBowed, isPluckedFretted, micRangeFor, tuningFor, voiceFor } from './instruments';
 import { scoreFromText } from './parse';
 import { midiOfString } from './pitch';
@@ -119,6 +119,34 @@ describe('the violin family', () => {
 
   it('fingers a cello C major scale: a finger per semitone in first position', () => {
     expect(fingered('cello', 'C2/q D2 E2 F2 | G2 A2 B2 C3 |')).toBe('4:0 4:1 4:3 4:4 3:0 3:1 3:3 3:4');
+  });
+
+  it('reaches the cello forward extension without shifting', () => {
+    // F♯ on the C string: the 4th finger stretches a semitone further
+    expect(fingered('cello', 'C2/q D2 E2 F#2 |')).toBe('4:0 4:1 4:3 4:4');
+  });
+
+  it('plays double stops on neighbouring strings', () => {
+    const res = fingerGuitarLine([{ midis: [m('D4'), m('B4')] }], { tuning: TUNINGS.violin.open, fingerSystem: 'violin', preferPosition: 2, maxFret: 7, bowed: true });
+    const strings = res[0].map(p => p.string).sort();
+    expect(strings[1] - strings[0]).toBe(1);
+  });
+
+  it('shifts once for a passage up the neck, not on every note', () => {
+    const notes = 'B5 C#6 D6 E6 D6 C#6 B5 A5'.split(' ').map(n => ({ midis: [m(n)], strings: [1] }));
+    const res = fingerGuitarLine(notes, { tuning: TUNINGS.violin.open, fingerSystem: 'violin', preferPosition: 2, maxFret: 14, bowed: true });
+    // after the first shift the hand settles in fifth position: C♯ 2, D 3, E 4 and back
+    expect(res.slice(1, 7).map(r => r[0].finger)).toEqual([2, 3, 4, 3, 2, 1]);
+  });
+
+  it('keeps notes out of reach on a sensible string', () => {
+    const res = fingerGuitarLine([{ midis: [m('C#3')] }], { tuning: TUNINGS.doublebass.open, fingerSystem: 'simandl', preferPosition: 1, maxFret: 4 });
+    expect(res[0][0].fret).toBeLessThanOrEqual(10);
+  });
+
+  it('keeps Simandl fingering higher up on a double bass than on a bass guitar', () => {
+    expect(fingerFor('simandl', 9, 11)).toBe(3);
+    expect(fingerFor('simandl', 9, 11, 12)).toBe(4);
   });
 
   it('fingers the double bass Simandl style (1 2 4)', () => {

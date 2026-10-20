@@ -156,6 +156,9 @@ export function inferChords(score: Score, extra: Score[] = []): ChordSpan[] {
   // what sounds in each segment
   const sounding: Weighted[][] = segs.map(() => []);
   const addScore = (sc: Score, weight: number) => {
+    // a violin, viola or cello playing one line is playing a tune, however low it goes:
+    // its notes say whether they belong to a chord, not which chord's root they are
+    const tune = (sc.instrument === 'violin' || sc.instrument === 'viola' || sc.instrument === 'cello') && sc.staves.every(st => st.voices.every(v => v.notes.every(n => n.pitches.length <= 1)));
     for (const st of sc.staves)
       for (const v of st.voices)
         for (const n of v.notes) {
@@ -172,7 +175,7 @@ export function inferChords(score: Score, extra: Score[] = []): ChordSpan[] {
             const w = (overlap / (sg.end - sg.start)) * metric * weight * (n.tiePrev ? 0.6 : 1);
             for (const p of n.pitches) {
               const m = midiOf(p);
-              sounding[s].push({ pc: ((m % 12) + 12) % 12, w, bass: m === lowest && m < 57 });
+              sounding[s].push({ pc: ((m % 12) + 12) % 12, w, bass: !tune && m === lowest && m < 57 });
             }
           }
         }

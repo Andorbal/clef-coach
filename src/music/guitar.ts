@@ -36,8 +36,10 @@ export interface FingeredPos extends FretPos {
  *                   frets (the ring finger helps the pinky); the double bass's system
  *  'violin'       – violin and viola: four fingers over a fourth (six semitones), the
  *                   2nd and 3rd fingers moving between a "low" and a "high" place
+ *  'cello'        – a semitone per finger, and the 4th finger's forward extension a
+ *                   semitone further (five semitones without shifting)
  */
-export type FingerSystem = 'one-per-fret' | 'simandl' | 'violin';
+export type FingerSystem = 'one-per-fret' | 'simandl' | 'violin' | 'cello';
 
 export function openMidi(string: number, tuning: TuningNotes = STANDARD_TUNING): number {
   return tuning[string - 1] ?? tuning[tuning.length - 1];
@@ -97,12 +99,17 @@ function handShape(system: FingerSystem): { span: number; finger: (offset: numbe
   if (system === 'simandl') return { span: 3, finger: o => (o <= 0 ? 1 : o === 1 ? 2 : 4) };
   // 1 | low 2, high 2 | 3, high 3 | 4: first position on the A string is B, C/C♯, D/D♯, E
   if (system === 'violin') return { span: 6, finger: o => (o <= 0 ? 1 : o <= 2 ? 2 : o <= 4 ? 3 : 4) };
+  if (system === 'cello') return { span: 5, finger: o => Math.min(4, Math.max(1, o + 1)) };
   return { span: 4, finger: o => Math.min(4, Math.max(1, o + 1)) };
 }
 
-/** The finger that plays a fret with the index finger at `handPos` (0 for an open string). */
-export function fingerFor(system: FingerSystem, handPos: number, fret: number): number {
-  return fret === 0 ? 0 : handShape(system === 'simandl' && handPos >= 7 ? 'one-per-fret' : system).finger(fret - handPos);
+/**
+ * The finger that plays a fret with the index finger at `handPos` (0 for an open string).
+ * Simandl fingering holds below `simandlUntil` (the bass guitar opens its hand from the
+ * 7th position; the double bass keeps 1-2-4 up to thumb position).
+ */
+export function fingerFor(system: FingerSystem, handPos: number, fret: number, simandlUntil = 7): number {
+  return fret === 0 ? 0 : handShape(system === 'simandl' && handPos >= simandlUntil ? 'one-per-fret' : system).finger(fret - handPos);
 }
 
 /**
@@ -112,14 +119,25 @@ export function fingerFor(system: FingerSystem, handPos: number, fret: number): 
  */
 export function fingerGuitarLine(
   events: { midis: number[]; strings?: (number | undefined)[] }[],
-  opts: { preferPosition?: number; maxFret?: number; allowOpen?: boolean; tuning?: TuningNotes; fingerSystem?: FingerSystem } = {},
+  opts: {
+    preferPosition?: number;
+    maxFret?: number;
+    allowOpen?: boolean;
+    tuning?: TuningNotes;
+    fingerSystem?: FingerSystem;
+    /** Simandl up to this index-finger fret (default 7; a double bass keeps it to 12). */
+    simandlUntil?: number;
+    /** Bowed: notes played together must lie on neighbouring strings (a bow can't skip one). */
+    bowed?: boolean;
+  } = {},
 ): FingeredPos[][] {
   const tuning = opts.tuning ?? STANDARD_TUNING;
   const maxFret = opts.maxFret ?? 15;
   const prefer = opts.preferPosition ?? 1;
   const allowOpen = opts.allowOpen ?? true;
+  const simandlUntil = opts.simandlUntil ?? 7;
   // Simandl fingering is for the low positions; up the neck the hand opens up again
-  const systemAt = (pos: number): FingerSystem => (opts.fingerSystem === 'simandl' ? (pos < 7 ? 'simandl' : 'one-per-fret') : opts.fingerSystem ?? 'one-per-fret');
+  const systemAt = (pos: number): FingerSystem => (opts.fingerSystem === 'simandl' ? (pos < simandlUntil ? 'simandl' : 'one-per-fret') : opts.fingerSystem ?? 'one-per-fret');
   const reach = handShape(systemAt(prefer)).span - 1;
   const lowestString = stringsLowToHigh(tuning)[0];
 
@@ -130,6 +148,8 @@ export function fingerGuitarLine(
       if (fixed && fixed <= tuning.length) return [{ string: fixed, fret: m - openMidi(fixed, tuning) }];
       let c = positionsFor(m, maxFret, 0, tuning);
       if (!allowOpen) c = c.filter(p => p.fret > 0 || positionsFor(m, maxFret, 0, tuning).length === 1);
+      // out of the hand's reach: the places the note has higher up the neck, not a wild fret on the lowest string
+      if (!c.length) c = positionsFor(m, MAX_FRET + 2, 0, tuning).sort((a, b) => a.fret - b.fret).slice(0, 2);
       return c.length ? c : [{ string: lowestString, fret: Math.max(0, m - openMidi(lowestString, tuning)) }];
     });
     // cartesian product with distinct strings, limited
@@ -143,6 +163,13 @@ export function fingerGuitarLine(
         }
       }
       combos = next.slice(0, 200);
+    }
+    if (opts.bowed && perNote.length > 1) {
+      const neighbours = combos.filter(c => {
+        const ss = c.map(x => x.string).sort((a, b) => a - b);
+        return ss[ss.length - 1] - ss[0] === ss.length - 1;
+      });
+      if (neighbours.length) combos = neighbours;
     }
     return combos.length ? combos : [perNote.map(o => o[0])];
   });
@@ -213,17 +240,45 @@ export function fingerGuitarLine(
   }
 
   // Assign fingers using a running hand position (index-finger fret).
+  const hands = chosen.map(handOf);
+  /**
+   * Where to shift to: of the places the index finger can go and still reach this note
+   * (or chord), the one that keeps the most of the notes after it in reach, so a passage
+   * up the neck is one shift, not a shift on every note; then the smallest move.
+   */
+  const shiftTo = (idx: number, from: number): number => {
+    const h = hands[idx]!;
+    const top = handShape(systemAt(h.lo)).span - 1;
+    const lo = Math.max(1, h.hi - top);
+    if (lo > h.lo) return h.lo;
+    let best = h.lo;
+    let bestScore = -Infinity;
+    for (let p = lo; p <= h.lo; p++) {
+      const t = handShape(systemAt(p)).span - 1;
+      let fit = 0;
+      for (let k = idx; k < Math.min(hands.length, idx + 8); k++) {
+        const f = hands[k];
+        if (f && (f.lo < p || f.hi > p + t)) break;
+        fit++;
+      }
+      const score = fit * 100 - Math.abs(p - from);
+      if (score > bestScore) {
+        bestScore = score;
+        best = p;
+      }
+    }
+    return best;
+  };
   let handPos = Math.max(1, prefer);
-  return chosen.map(combo => {
-    const h = handOf(combo);
+  return chosen.map((combo, idx) => {
+    const h = hands[idx];
     let shape = handShape(systemAt(handPos));
     if (h) {
       const top = shape.span - 1;
       // a one-fret stretch below the position (index finger reaches back) is not a shift
       const stretch = h.lo === handPos - 1 && h.hi <= handPos + top - 1 && h.lo >= 1;
       if (!stretch && (h.lo < handPos || h.hi > handPos + top)) {
-        // shift: keep index finger at the lowest fretted note when possible
-        handPos = h.hi - h.lo <= top ? (h.hi > handPos + top ? Math.max(h.lo, h.hi - top) : h.lo) : h.lo;
+        handPos = shiftTo(idx, handPos);
         shape = handShape(systemAt(handPos));
       }
     }

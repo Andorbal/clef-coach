@@ -11,7 +11,7 @@ import type { FretMark, KeyMark, MarkColor } from '../../instruments';
 import { positionsFor } from '../../music/guitar';
 import { instrumentDef, isFretted, isMallet } from '../../music/instruments';
 import { firstPositionFinger } from '../../music/autofinger';
-import { midiOf, parsePitch, pitchLabel, pitchToString, stepLabel } from '../../music/pitch';
+import { midiOf, parsePitch, pitchLabel, pitchToString, spellMidi, stepLabel } from '../../music/pitch';
 import { NotationView } from '../../notation/NotationView';
 import { type ActivityProps, ctxTuning } from '../context';
 import { InstrumentPanel, pianoRangeFor } from '../InstrumentPanel';
@@ -120,10 +120,16 @@ export function Meet({ def, ctx, onDone }: ActivityProps<MeetDef>) {
           <motion.div key={i} className="meet-tip card" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
             <div className="meet-name display">{pitchLabel(note, ctx.settings.naming)}<sub>{note.octave}</sub></div>
             {tipText && <p className="dim">{tipText}</p>}
-            {fretted && fret && (
+            {fretted && fret && !look?.fretless && (
               <p className="meet-loc">
                 String {fret.string} · {fret.fret === 0 ? 'open' : `fret ${fret.fret}`}
                 {fret.finger ? ` · finger ${fret.finger}` : ''}
+              </p>
+            )}
+            {fretted && fret && look?.fretless && (
+              // no frets to count: the string by its name, and the finger
+              <p className="meet-loc">
+                {pitchLabel(spellMidi(ctxTuning(ctx)[fret.string - 1] ?? 60), ctx.settings.naming)} string · {fret.fret === 0 ? 'open' : `finger ${fret.finger || '?'}`}
               </p>
             )}
             <div className="rep-dots" aria-label={`${count} of ${reps}`}>

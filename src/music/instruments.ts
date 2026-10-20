@@ -86,11 +86,12 @@ export interface FrettedLook {
  * How a bowed instrument's left hand covers the fingerboard.
  *  'violin'       – violin and viola: four fingers over a fourth, tones and semitones
  *                   (1st finger a tone above the open string in first position)
- *  'one-per-fret' – cello: a semitone per finger (1st finger a tone above the open string)
+ *  'cello'        – a semitone per finger (1st finger a tone above the open string), the
+ *                   4th reaching a semitone further in the forward extension
  *  'simandl'      – double bass: index, middle and pinky over a whole tone
  */
 export interface BowedDef {
-  fingers: 'violin' | 'one-per-fret' | 'simandl';
+  fingers: 'violin' | 'cello' | 'simandl';
   /** The index finger's semitone above the open string in the first position a beginner learns. */
   firstPosition: number;
 }
@@ -221,12 +222,11 @@ const DOUBLEBASS_LOOK: FrettedLook = {
   defaultWindow: [0, 7],
   wood: EBONY,
   fretless: true,
-  // half position (1, 2 and 4 over a tone), then first position's 1st finger
+  // half position, where a bassist starts: 1, 2 and 4 over a tone
   tapes: [
-    { fret: 1, label: '½' },
-    { fret: 2, label: 'I' },
-    { fret: 4, label: '' },
-    { fret: 5, label: 'III' },
+    { fret: 1, label: '1' },
+    { fret: 2, label: '2' },
+    { fret: 3, label: '4' },
   ],
   silverWound: true,
 };
@@ -239,7 +239,7 @@ export const INSTRUMENTS: Record<InstrumentId, InstrumentDef> = {
   mallets: { id: 'mallets', name: 'Mallet percussion', short: 'Mallets', family: 'mallet', blurb: 'Marimba, xylophone, glockenspiel or vibraphone', clefs: ['treble', 'bass'], range: [45, 108], voice: 'marimba', icon: 'Drum' },
   violin: { id: 'violin', name: 'Violin', short: 'Violin', family: 'fretted', blurb: 'Or fiddle: any size, acoustic or electric', clefs: ['treble'], range: [55, 100], voice: 'violin', icon: 'Music2', fretted: VIOLIN_LOOK, bowed: { fingers: 'violin', firstPosition: 2 } },
   viola: { id: 'viola', name: 'Viola', short: 'Viola', family: 'fretted', blurb: 'Reads the alto clef, a fifth below the violin', clefs: ['alto'], range: [48, 91], voice: 'viola', icon: 'Music2', fretted: VIOLA_LOOK, bowed: { fingers: 'violin', firstPosition: 2 } },
-  cello: { id: 'cello', name: 'Cello', short: 'Cello', family: 'fretted', blurb: 'Bass clef first, then tenor and treble', clefs: ['bass'], range: [36, 81], voice: 'cello', icon: 'Music2', fretted: CELLO_LOOK, bowed: { fingers: 'one-per-fret', firstPosition: 2 } },
+  cello: { id: 'cello', name: 'Cello', short: 'Cello', family: 'fretted', blurb: 'Bass clef first, then tenor and treble', clefs: ['bass'], range: [36, 81], voice: 'cello', icon: 'Music2', fretted: CELLO_LOOK, bowed: { fingers: 'cello', firstPosition: 2 } },
   doublebass: { id: 'doublebass', name: 'Double bass', short: 'D. bass', family: 'fretted', blurb: 'Upright or string bass, bowed or plucked', clefs: ['bass8vb'], range: [28, 62], voice: 'doublebass', icon: 'AudioLines', fretted: DOUBLEBASS_LOOK, bowed: { fingers: 'simandl', firstPosition: 1 } },
 };
 
