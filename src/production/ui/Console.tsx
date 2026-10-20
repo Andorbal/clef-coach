@@ -35,11 +35,13 @@ export interface ConsoleProps {
   transport?: ReactNode;
   /** Open the first strip's EQ or compressor straight away (lessons); otherwise only when tapped (the Mix Lab). */
   autoOpen?: boolean;
+  /** Ear training: the meters and the loudness readout would give the answer away. */
+  blind?: boolean;
 }
 
 const strip = (id: string, keys: ReadonlySet<string>, section: readonly string[]) => section.some(p => keys.has(`${id}:${p}`));
 
-export function Console({ api, visible, fresh, ghost, highlight, transport, autoOpen = true }: ConsoleProps) {
+export function Console({ api, visible, fresh, ghost, highlight, transport, autoOpen = true, blind = false }: ConsoleProps) {
   const channelKeys = useMemo(() => [...visible].filter(k => !k.startsWith('master:') && !k.startsWith('fx:')), [visible]);
   const showFx = [...visible].some(k => k.startsWith('fx:'));
   const showMaster = [...visible].some(k => k.startsWith('master:'));
@@ -57,7 +59,7 @@ export function Console({ api, visible, fresh, ghost, highlight, transport, auto
   const mix = api.mix;
   const isFresh = (k: string) => !!fresh?.has(k);
   return (
-    <div className={`pr-console ${api.audition ? 'auditioning' : ''}`}>
+    <div className={`pr-console ${api.audition ? 'auditioning' : ''} ${blind ? 'blind' : ''}`}>
       <div className="pr-transport">
         <button className={`btn ${api.playing ? '' : 'btn-primary'} pr-play`} onClick={() => (api.playing ? api.stop() : api.play())} disabled={!api.ready} aria-label={api.playing ? 'Stop' : 'Play'}>
           {api.playing ? <Pause size={18} /> : <Play size={18} />} {api.ready ? (api.playing ? 'Stop' : 'Play') : 'Loading…'}

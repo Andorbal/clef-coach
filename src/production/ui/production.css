@@ -19,6 +19,17 @@
   opacity: 0.55;
 }
 
+/* ear training: listen, don't look (the meters would show which part changed) */
+.pr-console.blind .pr-meter,
+.pr-console.blind .pr-loud,
+.pr-console.blind .pr-gr {
+  visibility: hidden;
+}
+
+.pr-console.blind.auditioning .pr-strips {
+  opacity: 1;
+}
+
 /* ---------- transport ---------- */
 .pr-transport {
   display: flex;

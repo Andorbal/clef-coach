@@ -179,7 +179,7 @@ function LessonRun({ lesson }: { lesson: Lesson }) {
               {step?.type === 'mix' && <MixCoach step={step} {...coach} judgeKey={`${lesson.id}#${stepIdx}`} onGhost={setGhost} onHighlight={setHighlight} setTransport={setTransport} />}
             </motion.aside>
             <div className="course-work">
-              {api.error ? <div className="course-feedback bad">{api.error}</div> : <Console api={api} visible={visible} fresh={fresh} ghost={ghost} highlight={highlight} transport={transport} />}
+              {api.error ? <div className="course-feedback bad">{api.error}</div> : <Console api={api} visible={visible} fresh={fresh} ghost={ghost} highlight={highlight} transport={transport} blind={step?.type === 'listen'} />}
             </div>
           </div>
         </main>
