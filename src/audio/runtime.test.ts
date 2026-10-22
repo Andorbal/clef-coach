@@ -47,8 +47,8 @@ class FakeNode {
     this.outputs.push(n);
     return n;
   }
-  disconnect() {
-    this.outputs = [];
+  disconnect(n?: FakeNode) {
+    this.outputs = n ? this.outputs.filter((o) => o !== n) : [];
   }
   get context() {
     return this.ctx;
@@ -446,6 +446,79 @@ describe('runtime with a fake AudioContext', () => {
     } finally {
       vi.unstubAllGlobals();
       vi.useRealTimers();
+    }
+  });
+
+  it('mic: listens with the chosen interface, and only ever plays a cable input back', async () => {
+    let irigPlugged = false;
+    const devices = () => [
+      { kind: 'audioinput', deviceId: 'mac', label: 'MacBook Pro Microphone' },
+      ...(irigPlugged ? [{ kind: 'audioinput', deviceId: 'irig', label: 'iRig USB' }] : []),
+    ];
+    const streamOf = (deviceId: string, label: string) => {
+      const track = { label, stop: vi.fn(), addEventListener: vi.fn(), getSettings: () => ({ deviceId }) };
+      return { getTracks: () => [track], getAudioTracks: () => [track] };
+    };
+    const getUserMedia = vi.fn(async (c: { audio: boolean | { deviceId?: { exact: string } } }) => {
+      const want = typeof c.audio === 'object' ? c.audio.deviceId?.exact : undefined;
+      if (want === 'irig' && irigPlugged) return streamOf('irig', 'iRig USB');
+      if (want) throw Object.assign(new Error('no such device'), { name: 'OverconstrainedError' });
+      return streamOf('mac', 'MacBook Pro Microphone');
+    });
+    let onDeviceChange = () => {};
+    vi.stubGlobal('navigator', {
+      mediaDevices: { getUserMedia, enumerateDevices: async () => devices(), addEventListener: (_: string, cb: () => void) => (onDeviceChange = cb) },
+    });
+    vi.stubGlobal('document', { addEventListener: vi.fn(), removeEventListener: vi.fn(), visibilityState: 'visible' });
+    try {
+      const a = await audio();
+      const mic = a.micInput;
+      const c = ctx();
+      // gains made since `from` that feed the speakers directly (the mic's own muted sink does too, but is never moved)
+      const playedBack = (from: number) => c.gains.slice(from).filter((g) => g.outputs.includes(c.destination) && g.gain.calls.some((x) => x[0] === 'target'));
+      mic.setDevice({ id: 'irig', label: 'iRig USB' });
+      mic.setMonitor(true, 0.5);
+
+      // the iRig isn't plugged in: the built-in mic, which must never be played back
+      expect((await mic.start()).ok).toBe(true);
+      expect(mic.inputDevice?.label).toBe('MacBook Pro Microphone');
+      expect(mic.choiceMissing).toBe(true);
+      expect(mic.direct).toBe(false);
+      expect(mic.monitoring).toBe(false);
+
+      // plugging it in switches over, and a cable input can be heard
+      const g0 = c.gains.length;
+      irigPlugged = true;
+      onDeviceChange();
+      await vi.waitFor(() => expect(mic.inputDevice?.label).toBe('iRig USB'));
+      expect(mic.choiceMissing).toBe(false);
+      expect(mic.direct).toBe(true);
+      expect(mic.monitoring).toBe(true);
+      const [monitor] = playedBack(g0);
+      expect(monitor.gain.calls.at(-1)).toEqual(['target', 0.5, c.currentTime, 0.02]);
+      expect(a.inputManager.status.micDirect).toBe(true);
+
+      // saying it isn't plugged in with a cable stops the playback without reopening it
+      const opens = getUserMedia.mock.calls.length;
+      mic.setDevice({ id: 'irig', label: 'iRig USB', direct: false });
+      expect(getUserMedia.mock.calls.length).toBe(opens);
+      expect(mic.monitoring).toBe(false);
+      expect(monitor.outputs).toEqual([]);
+
+      // a saved id gone stale is found again by name
+      mic.stop();
+      mic.setDevice({ id: 'old-id', label: 'iRig USB', direct: true });
+      expect((await mic.start()).ok).toBe(true);
+      expect(mic.inputDevice?.id).toBe('irig');
+      expect(mic.direct).toBe(true);
+      mic.stop();
+      expect(mic.monitoring).toBe(false);
+    } finally {
+      const { micInput } = await audio();
+      micInput.stop();
+      micInput.setDevice(null);
+      micInput.setMonitor(false, 0.8);
+      vi.unstubAllGlobals();
     }
   });
 

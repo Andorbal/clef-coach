@@ -33,6 +33,20 @@
  * metronome clicks merely delay confirmation and can't fake re-attacks), so a
  * student playing over the "correct!" chime or the metronome isn't ignored.
  * setSelfSoundMode('strict') blocks every new note while any app sound plays.
+ *
+ * Audio interfaces (devices.ts): the player can choose the input (an iRig, a
+ * Scarlett…) instead of the system default. One plugged in with a cable is
+ * "direct": it can't hear the speakers, so none of the self-hearing guards
+ * apply, and it can be played back to the player ("hear yourself") without
+ * feedback, since an electric guitar into an interface makes no sound in
+ * the room:
+ *
+ *   high-pass ─→ monitor gain ─→ destination   (direct inputs only, when asked)
+ *
+ * Whether an input is direct is decided by the device actually opened, never
+ * by the choice alone: when the chosen interface is unplugged the stream falls
+ * back to the default (usually the built-in mic), and playing that back would
+ * howl.
  */
 import {
   appClickActive,
@@ -44,6 +58,7 @@ import {
   setRecordingSession,
 } from '../context';
 import { ChordTracker } from './chord';
+import { type AudioInputInfo, type InputDevicePref, audioInputs, isDirectInput, resolveInputDevice, sameDeviceLabel } from './devices';
 import { AssistRouter, buildAssistFrame, computeSpectrum, FrameAnalyzer, harmonicPeak, NoteTracker, rms, verifyChord } from './pitch';
 import type { PitchResult, TrackerControl, TrackerEvent } from './pitch';
 import type { InputResult, NoteInputEvent } from './types';
@@ -101,6 +116,21 @@ function describeMicError(err: unknown): string {
 
 const midiOf = (freq: number) => 69 + 12 * Math.log2(freq / 440);
 
+const errorName = (err: unknown): string => (err as { name?: string } | null)?.name ?? '';
+
+/** No echo cancellation, noise suppression or gain control: they flatten the attacks onsets are found by. */
+const RAW_AUDIO: MediaTrackConstraints = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 };
+
+/** Is an opened input the chosen one? */
+function isChosen(opened: AudioInputInfo | null, pref: InputDevicePref): boolean {
+  return !!opened && (opened.id === pref.id || sameDeviceLabel(opened.label, pref.label));
+}
+
+function trackDevice(track: MediaStreamTrack | undefined): AudioInputInfo | null {
+  if (!track) return null;
+  return { id: track.getSettings?.().deviceId ?? '', label: track.label ?? '' };
+}
+
 export class MicInput {
   private ctx: AudioContext | null = null;
   private stream: MediaStream | null = null;
@@ -138,6 +168,16 @@ export class MicInput {
   private lastCtxTime = -1;
   private inputLatencyMs = 12;
   private selfSoundMode: 'pitch-aware' | 'strict' = 'pitch-aware';
+  /** The input chosen on this device (null: the system default). */
+  private pref: InputDevicePref | null = null;
+  /** The input actually open. */
+  private opened: AudioInputInfo | null = null;
+  private monitor: GainNode | null = null;
+  private monitorOn = false;
+  private monitorVolume = 0.8;
+  private watchingDevices = false;
+  /** The open input was unplugged: start again when the chosen one comes back. */
+  private unplugged = false;
   private _lastError: string | undefined;
   private readonly noteListeners = new Set<(e: NoteInputEvent) => void>();
   private readonly stateListeners = new Set<() => void>();
@@ -213,23 +253,28 @@ export class MicInput {
     const ctx = getAudioContext();
     const resumed = (ctx.state as string) === 'running' ? null : ctx.resume().catch(() => {});
 
+    const pref = this.pref;
     let stream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 },
-      });
+      stream = await this.openStream(pref?.id);
     } catch (err) {
-      const name = (err as { name?: string } | null)?.name;
-      if (name === 'NotAllowedError' || name === 'SecurityError') {
-        setRecordingSession(false);
-        return fail(describeMicError(err));
-      }
-      try {
-        // Some devices reject the processing constraints – fall back.
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      } catch (err2) {
-        setRecordingSession(false);
-        return fail(describeMicError(err2));
+      setRecordingSession(false);
+      return fail(describeMicError(err));
+    }
+    let opened = trackDevice(stream.getAudioTracks()[0]);
+    if (pref && !isChosen(opened, pref)) {
+      // the saved id has gone stale (Safari renews ids when site data is cleared): now that
+      // the labels can be read, look for the chosen device by name
+      const found = resolveInputDevice(await this.listInputs(), pref);
+      if (found && found.id !== opened?.id) {
+        try {
+          const again = await navigator.mediaDevices.getUserMedia({ audio: { ...RAW_AUDIO, deviceId: { exact: found.id } } });
+          stream.getTracks().forEach(t => t.stop());
+          stream = again;
+          opened = trackDevice(stream.getAudioTracks()[0]);
+        } catch {
+          /* keep the default */
+        }
       }
     }
     if (resumed) await resumed;
@@ -257,6 +302,8 @@ export class MicInput {
       this.filter = filter;
       this.analyser = analyser;
       this.sink = sink;
+      this.opened = opened;
+      this.updateMonitor();
     } catch (err) {
       stream.getTracks().forEach((t) => t.stop());
       setRecordingSession(false);
@@ -266,11 +313,15 @@ export class MicInput {
     for (const track of stream.getAudioTracks()) {
       track.addEventListener('ended', () => {
         if (this.stream !== stream) return;
+        const name = this.opened?.label;
         this.stop();
-        this._lastError = 'The microphone was disconnected.';
+        this.unplugged = true;
+        this._lastError = name ? `${name} was disconnected.` : 'The microphone was disconnected.';
         this.notifyState();
       });
     }
+    this.watchDevices();
+    this.unplugged = false;
     // Background tabs are throttled to ~1 Hz: close notes rather than mangle them.
     this.visHandler = () => {
       if (document.visibilityState === 'hidden') this.flush(performance.now());
@@ -339,9 +390,13 @@ export class MicInput {
       this.filter?.disconnect();
       this.analyser?.disconnect();
       this.sink?.disconnect();
+      this.monitor?.disconnect();
     } catch {
       /* ignore */
     }
+    this.monitor = null;
+    this.opened = null;
+    this.unplugged = false;
     this.stream?.getTracks().forEach((t) => t.stop());
     if (this.visHandler) document.removeEventListener('visibilitychange', this.visHandler);
     this.visHandler = null;
@@ -417,6 +472,135 @@ export class MicInput {
   setSelfSoundMode = (mode: 'pitch-aware' | 'strict'): void => {
     this.selfSoundMode = mode;
   };
+
+  /**
+   * Listen to this input (null: the system default). If the mic is open on a
+   * different device it reopens on the new one; a change of `direct` alone
+   * applies at once.
+   */
+  setDevice = (pref: InputDevicePref | null): void => {
+    const prev = this.pref;
+    this.pref = pref ? { ...pref } : null;
+    const reopen = !!this.stream && (pref ? !isChosen(this.opened, pref) : prev !== null);
+    if (reopen) {
+      this.restart();
+      return;
+    }
+    this.updateMonitor();
+    if ((prev?.id ?? null) !== (pref?.id ?? null) || prev?.direct !== pref?.direct) this.notifyState();
+  };
+
+  /** Play a direct input back to the player ("hear yourself"). Never plays a microphone back. */
+  setMonitor = (on: boolean, volume: number): void => {
+    this.monitorOn = on;
+    if (Number.isFinite(volume)) this.monitorVolume = Math.min(1, Math.max(0, volume));
+    this.updateMonitor();
+  };
+
+  /** The inputs the browser offers (their names are blank until mic permission is granted). */
+  listInputs = async (): Promise<AudioInputInfo[]> => {
+    try {
+      if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) return [];
+      return audioInputs(await navigator.mediaDevices.enumerateDevices());
+    } catch {
+      return [];
+    }
+  };
+
+  /** The input that is open, or null while the mic is off. */
+  get inputDevice(): AudioInputInfo | null {
+    return this.stream ? this.opened : null;
+  }
+
+  /** Is the open input plugged in with a cable (see the file header)? */
+  get direct(): boolean {
+    return !!this.stream && isDirectInput(this.opened, this.pref);
+  }
+
+  /** The chosen input isn't connected, so the system default is open instead. */
+  get choiceMissing(): boolean {
+    return !!this.stream && !!this.pref && !isChosen(this.opened, this.pref);
+  }
+
+  /** Is the open input being played back? */
+  get monitoring(): boolean {
+    return this.monitor !== null;
+  }
+
+  /**
+   * The chosen device first (an unplugged one is skipped quickly: the browser
+   * rejects an exact id it doesn't have), then the default. Some devices reject
+   * the processing constraints, so each is tried without them as well.
+   */
+  private async openStream(deviceId: string | undefined): Promise<MediaStream> {
+    const attempts: MediaStreamConstraints[] = [];
+    if (deviceId) attempts.push({ audio: { ...RAW_AUDIO, deviceId: { exact: deviceId } } }, { audio: { deviceId: { exact: deviceId } } });
+    attempts.push({ audio: RAW_AUDIO }, { audio: true });
+    let last: unknown;
+    for (const c of attempts) {
+      try {
+        return await navigator.mediaDevices.getUserMedia(c);
+      } catch (err) {
+        const name = errorName(err);
+        if (name === 'NotAllowedError' || name === 'SecurityError') throw err;
+        last = err;
+      }
+    }
+    throw last;
+  }
+
+  /** Reopen on the chosen device. The retains survive, so a running lesson keeps listening. */
+  private restart(): void {
+    if (!this.stream) return;
+    this.stop();
+    void this.start();
+  }
+
+  private updateMonitor(): void {
+    const ctx = this.ctx;
+    const from = this.filter;
+    const want = this.monitorOn && this.direct && !!ctx && !!from;
+    if (!want) {
+      if (this.monitor) {
+        try {
+          from?.disconnect(this.monitor);
+          this.monitor.disconnect();
+        } catch {
+          /* ignore */
+        }
+        this.monitor = null;
+        this.notifyState();
+      }
+      return;
+    }
+    if (!this.monitor) {
+      // straight to the destination: the master compressor's look-ahead would add delay
+      // to what the player hears of their own playing
+      const g = ctx.createGain();
+      g.gain.value = 0;
+      from.connect(g);
+      g.connect(ctx.destination);
+      this.monitor = g;
+      this.notifyState();
+    }
+    this.monitor.gain.setTargetAtTime(this.monitorVolume, ctx.currentTime, 0.02);
+  }
+
+  /** Follow the chosen input: switch to it when it's plugged in, start again when it comes back. */
+  private watchDevices(): void {
+    const md = navigator.mediaDevices;
+    if (this.watchingDevices || !md?.addEventListener) return;
+    this.watchingDevices = true;
+    md.addEventListener('devicechange', () => {
+      const pref = this.pref;
+      if (!pref || this.starting) return;
+      void this.listInputs().then(inputs => {
+        if (!resolveInputDevice(inputs, pref) || this.starting) return;
+        if (this.stream && !isChosen(this.opened, pref)) this.restart();
+        else if (!this.stream && this.unplugged) void this.start();
+      });
+    });
+  }
 
   /** 0..1 input level for a meter (fast attack, smooth release). */
   getLevel = (): number => this.level;
@@ -504,7 +688,8 @@ export class MicInput {
       this.setFloor(median(this.calib) * 1.1);
       this.calib = [];
     }
-    if (this.tracker.activeNote !== null || this.chord.busy || appSoundActive()) return;
+    // a direct input can't hear the app, so the band playing needn't hold the floor still
+    if (this.tracker.activeNote !== null || this.chord.busy || (!this.direct && appSoundActive())) return;
     if (!(level > 0)) return;
     if (voiced) {
       this.unvoicedSince = now;
@@ -531,6 +716,7 @@ export class MicInput {
     m >= this.noteRange[0] - 1 && m <= this.noteRange[1] + 1 && this.analyzer.hasSupport(m);
 
   private control(): TrackerControl {
+    if (this.direct) return { confirmPitch: this.confirmPitch, vetoPitch: this.analyzer.isPhantom };
     if (this.selfSoundMode === 'strict') {
       const busy = appSoundActive();
       return { allowNoteOn: busy ? () => false : undefined, allowReattack: !busy, confirmPitch: this.confirmPitch, vetoPitch: this.analyzer.isPhantom };

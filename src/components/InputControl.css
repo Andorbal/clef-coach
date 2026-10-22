@@ -131,3 +131,36 @@
   width: 80px;
   margin-left: auto;
 }
+
+.input-setup {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 14px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.input-setup-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 10px 0;
+}
+
+.input-setup-row select {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.input-setup-row input[type='range'] {
+  width: min(220px, 100%);
+  accent-color: var(--gold);
+}
+
+.input-setup > p {
+  font-size: 14px;
+  padding: 6px 0 10px;
+}

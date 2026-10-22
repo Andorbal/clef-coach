@@ -86,6 +86,11 @@ avoid "hearing" the app's own notes (`appSoundBlocksNote`). Band notes pass `int
   `NoteTracker`, `ChordTracker`, `assist.ts`) **only runs while something listens for notes**
   (`retain()`, with a 1.5 s grace period). Otherwise a 12 Hz tick only measures the level. The
   stream stays open between screens, so there are no new permission prompts.
+- **Audio interfaces** (`devices.ts`, pure): the player picks the input (`DeviceSettings.micDevice`,
+  matched by id, then by name). An input plugged in with a cable is *direct*: no self-hearing
+  guards, and it can be played back ("hear yourself", a gain straight to the destination).
+  Direct is judged on the device **actually opened**: if the chosen iRig is unplugged the
+  stream falls back to the built-in mic, and playing that back would feed back.
 - `midi.ts` (Web MIDI input, sustain pedal), `keyboard.ts` (computer keys, A = C4).
 - `dsp/fft.ts` is a radix-4 FFT; `dsp/util.ts` has seeded RNGs, interpolation and RMS.
 
