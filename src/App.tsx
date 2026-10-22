@@ -90,6 +90,12 @@ function AudioSettingsSync() {
     micInput.setSensitivity(device.micSensitivity);
   }, [device.volume, device.sfxVolume, device.micSensitivity]);
   useEffect(() => {
+    micInput.setDevice(device.micDevice ?? null);
+  }, [device.micDevice]);
+  useEffect(() => {
+    micInput.setMonitor(device.monitor ?? false, device.monitorVolume ?? 0.8);
+  }, [device.monitor, device.monitorVolume]);
+  useEffect(() => {
     setSfxEnabled(sfxOn !== false);
   }, [sfxOn]);
   // sampled instruments chosen for this device (their banks open when first needed)

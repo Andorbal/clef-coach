@@ -42,6 +42,13 @@ export interface InputStatus {
   sustain: boolean;
   micActive: boolean;
   micError?: string;
+  /** Name of the open audio input. */
+  micInputName?: string;
+  /** The open input is plugged in with a cable (an audio interface). */
+  micDirect?: boolean;
+  /** The chosen input isn't connected: the system default is open instead. */
+  micChoiceMissing?: boolean;
+  micMonitoring?: boolean;
   /** Source of the most recent note event. */
   lastSource?: InputSource;
 }
@@ -256,6 +263,10 @@ class InputManager {
       sustain: getSustain(),
       micActive: micInput.active,
       micError: micInput.lastError,
+      micInputName: micInput.inputDevice?.label || undefined,
+      micDirect: micInput.direct,
+      micChoiceMissing: micInput.choiceMissing,
+      micMonitoring: micInput.monitoring,
     });
   }
 

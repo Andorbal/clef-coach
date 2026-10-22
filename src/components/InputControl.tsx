@@ -1,5 +1,6 @@
-import { Keyboard, Mic, MicOff, Piano, Usb } from 'lucide-react';
+import { Cable, Keyboard, Mic, MicOff, Piano, Usb } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { type AudioInputInfo, resolveInputDevice } from '../audio/input/devices';
 import { inputManager } from '../audio/input/manager';
 import { micInput } from '../audio/input/mic';
 import { unlockAudio } from '../audio/context';
@@ -7,7 +8,7 @@ import { useApp, useDevice } from '../state/store';
 import { pitchToString, spellMidi } from '../music/pitch';
 import { type InstrumentId, familyOf, instrumentDef, isBowed } from '../music/instruments';
 import type { InputMode } from '../state/types';
-import { Modal } from './ui';
+import { Modal, Toggle } from './ui';
 import './InputControl.css';
 
 /**
@@ -48,8 +49,8 @@ export function InputChip({ instrument }: { instrument: InstrumentId }) {
   const [open, setOpen] = useState(false);
   const level = useMicLevel(status.micActive);
   const mode = device.inputMode;
-  const label = mode === 'mic' ? (status.micActive ? 'Listening' : 'Mic off') : mode === 'midi' ? (status.midiDevices.length ? status.midiDevices[0].name : 'MIDI') : 'On-screen';
-  const Icon = mode === 'mic' ? (status.micActive ? Mic : MicOff) : mode === 'midi' ? Usb : familyOf(instrument) === 'keyboard' ? Piano : Keyboard;
+  const label = mode === 'mic' ? (status.micActive ? (status.micDirect ? 'Plugged in' : 'Listening') : 'Mic off') : mode === 'midi' ? (status.midiDevices.length ? status.midiDevices[0].name : 'MIDI') : 'On-screen';
+  const Icon = mode === 'mic' ? (status.micActive ? (status.micDirect ? Cable : Mic) : MicOff) : mode === 'midi' ? Usb : familyOf(instrument) === 'keyboard' ? Piano : Keyboard;
   return (
     <>
       <button className={`input-chip ${mode}`} onClick={() => setOpen(true)} aria-label="Input settings">
@@ -73,13 +74,15 @@ function micBody(instrument: InstrumentId): string {
     case 'mallets':
       return 'Play your marimba, xylophone, glockenspiel or vibraphone near the device. Set which one in Settings so the octave is right.';
     case 'bass':
-      return 'Play your bass near the device — unplugged works, or through an amp. Low notes need a quiet room.';
+      return 'Play your bass near the device — unplugged works, or through an amp. Low notes need a quiet room. Or plug in through an audio interface such as an iRig.';
     case 'violin':
     case 'viola':
     case 'cello':
       return `Play your ${instrumentDef(instrument).short.toLowerCase()} near the device, bowed or plucked. One note at a time is heard best.`;
     case 'doublebass':
       return 'Play your double bass near the device, bowed or plucked. Low notes need a quiet room.';
+    case 'guitar':
+      return 'Play your guitar near the device — acoustic or amplified. Or plug in through an audio interface such as an iRig.';
     default:
       return `Play your ${instrumentDef(instrument).short.toLowerCase()} near the device — acoustic or amplified.`;
   }
@@ -141,6 +144,7 @@ export function InputPicker({ instrument, onPicked }: { instrument: InstrumentId
         </button>
       ))}
       {err && <p className="input-error">{err}</p>}
+      {device.inputMode === 'mic' && status.micActive && <AudioInputSetup />}
       <LiveReadout />
       {device.inputMode === 'midi' && status.midiDevices.length > 0 && (
         <p className="faint">Connected: {status.midiDevices.map(d => d.name).join(', ')}</p>
@@ -174,11 +178,84 @@ function LiveReadout() {
     <div className="live-readout">
       <span className="faint">Test it:</span>
       <strong className="display">{last ? last.name : 'play a note…'}</strong>
-      {last && <span className="pill">{last.source === 'mic' ? 'microphone' : last.source === 'midi' ? 'MIDI' : last.source === 'keyboard' ? 'computer keys' : 'on-screen'}</span>}
+      {last && <span className="pill">{last.source === 'mic' ? (status.micDirect ? 'audio input' : 'microphone') : last.source === 'midi' ? 'MIDI' : last.source === 'keyboard' ? 'computer keys' : 'on-screen'}</span>}
       {status.micActive && (
         <span className="mic-meter wide" aria-hidden>
           <span style={{ transform: `scaleX(${Math.min(1, level * 1.6)})` }} />
         </span>
+      )}
+    </div>
+  );
+}
+
+/** The audio inputs on offer, kept up to date as devices come and go (their names are only readable once the mic is open). */
+function useAudioInputs(active: boolean): AudioInputInfo[] {
+  const [list, setList] = useState<AudioInputInfo[]>([]);
+  useEffect(() => {
+    if (!active) return;
+    let live = true;
+    const load = () => void micInput.listInputs().then(l => live && setList(l));
+    load();
+    const md = typeof navigator === 'undefined' ? undefined : navigator.mediaDevices;
+    md?.addEventListener?.('devicechange', load);
+    return () => {
+      live = false;
+      md?.removeEventListener?.('devicechange', load);
+    };
+  }, [active]);
+  return list;
+}
+
+/**
+ * Which input to listen with, and for one plugged in with a cable, hearing
+ * yourself through the app. Browsers open the system default, which on a Mac
+ * stays the built-in mic with an iRig plugged in.
+ */
+function AudioInputSetup() {
+  const device = useDevice();
+  const update = useApp(s => s.updateDevice);
+  const status = useInputStatus();
+  const inputs = useAudioInputs(status.micActive);
+  const pref = device.micDevice;
+  const chosen = resolveInputDevice(inputs, pref);
+  const choose = (id: string) => {
+    const d = inputs.find(i => i.id === id);
+    update({ micDevice: d ? { id: d.id, label: d.label } : undefined });
+  };
+  const setDirect = (direct: boolean) => {
+    // "plugged in" belongs to a device, so the system default becomes a choice of the input it opened
+    const base = pref ?? micInput.inputDevice;
+    if (base) update({ micDevice: { id: base.id, label: base.label, direct } });
+  };
+  return (
+    <div className="input-setup">
+      <label className="input-setup-row">
+        <span>Listen with</span>
+        <select className="set-select" value={pref ? (chosen?.id ?? pref.id) : ''} onChange={e => choose(e.target.value)}>
+          <option value="">System default{!pref && status.micInputName ? ` (${status.micInputName})` : ''}</option>
+          {pref && !chosen && <option value={pref.id}>{pref.label} (not connected)</option>}
+          {inputs.map(i => (
+            <option key={i.id} value={i.id}>
+              {i.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      {status.micChoiceMissing ? (
+        <p className="faint">
+          {pref?.label} isn’t connected, so the app is listening with {status.micInputName ?? 'the default input'}. Plug it in and it switches over.
+        </p>
+      ) : (
+        <Toggle checked={!!status.micDirect} onChange={setDirect} label="Plugged in with a cable" sub="For an audio interface such as an iRig. The app can’t hear itself through a cable, so it never mistakes the band for you." />
+      )}
+      {status.micDirect && (
+        <Toggle checked={device.monitor ?? false} onChange={v => update({ monitor: v })} label="Hear yourself" sub="Plays your instrument through the app, for an electric guitar or bass with no amp. Use headphones." />
+      )}
+      {status.micDirect && device.monitor && (
+        <label className="input-setup-row">
+          <span>Your volume</span>
+          <input type="range" min={0} max={1} step={0.05} value={device.monitorVolume ?? 0.8} onChange={e => update({ monitorVolume: Number(e.target.value) })} />
+        </label>
       )}
     </div>
   );

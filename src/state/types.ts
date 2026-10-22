@@ -5,6 +5,7 @@ import type { BandMix } from '../perform/performer';
 import type { SoundChoice, SoundSettings } from '../perform/sinks';
 import type { NoteNaming } from '../music/pitch';
 import type { SongDef } from '../music/parse';
+import type { InputDevicePref } from '../audio/input/devices';
 
 export type TrackId =
   | 'piano-treble'
@@ -216,6 +217,12 @@ export interface DeviceSettings {
   inputMode: InputMode;
   midiDeviceId: string | 'all';
   micSensitivity: number;
+  /** The audio input to listen to (an audio interface such as an iRig); unset: the system default. */
+  micDevice?: InputDevicePref;
+  /** Play a direct input back through the app, so an electric instrument can be heard. */
+  monitor?: boolean;
+  /** 0..1 */
+  monitorVolume?: number;
   volume: number;
   sfxVolume: number;
   /** Extra latency compensation for tempo exercises (ms) */
